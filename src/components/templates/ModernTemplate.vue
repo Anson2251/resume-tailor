@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { splitComma, splitLines } from '../../data/resume.js'
+import { splitComma, splitLines, visibleItems } from '../../data/resume.js'
 
 const props = defineProps({
 	resume: { type: Object, required: true },
@@ -16,6 +16,13 @@ const contactLine = computed(() =>
 const linksLine = computed(() =>
 	[props.resume.contact.website, props.resume.contact.linkedin].filter(Boolean).join('  ·  ')
 )
+
+// Only items ticked "Show" in the form appear on the resume.
+const shown = computed(() => ({
+	experience: visibleItems(props.resume.experience),
+	education: visibleItems(props.resume.education),
+	skills: visibleItems(props.resume.skills)
+}))
 
 function dateRange(start, end, current) {
 	const s = (start || '').trim()
@@ -45,7 +52,7 @@ function dateRange(start, end, current) {
 				<section class="mb-7">
 					<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Experience</h2>
 					<div class="space-y-5">
-						<article v-for="job in resume.experience" :key="job.id" class="avoid-break">
+						<article v-for="job in shown.experience" :key="job.id" class="avoid-break">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[15px] font-bold text-slate-900">{{ job.role || 'Role' }}</h3>
 								<span class="shrink-0 pl-3 text-xs font-medium text-slate-500">{{
@@ -65,7 +72,7 @@ function dateRange(start, end, current) {
 				<section>
 					<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Education</h2>
 					<div class="space-y-4">
-						<article v-for="edu in resume.education" :key="edu.id" class="avoid-break">
+						<article v-for="edu in shown.education" :key="edu.id" class="avoid-break">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[15px] font-bold text-slate-900">{{ edu.school || 'School' }}</h3>
 								<span class="shrink-0 pl-3 text-xs font-medium text-slate-500">{{
@@ -85,7 +92,7 @@ function dateRange(start, end, current) {
 				<section class="avoid-break">
 					<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Skills</h2>
 					<div class="space-y-4">
-						<div v-for="group in resume.skills" :key="group.id">
+						<div v-for="group in shown.skills" :key="group.id">
 							<h3 class="text-[13px] font-bold text-slate-900">{{ group.category || 'Category' }}</h3>
 							<div class="mt-1.5">
 								<span

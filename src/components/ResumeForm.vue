@@ -80,13 +80,18 @@ function addSkillGroup() {
 				<article
 					v-for="(job, i) in resume.experience"
 					:key="job.id"
-					class="rounded-lg border border-slate-200 bg-slate-50/60 p-4"
+					class="rounded-lg border border-slate-200 bg-slate-50/60 p-4 transition"
+					:class="{ 'opacity-60': !job.visible, 'saturate-0': !job.visible }"
 				>
 					<div class="mb-3 flex items-center justify-between gap-2">
-						<p class="text-sm font-semibold text-slate-700">
+						<p class="text-sm font-semibold text-slate-700" :class="!job.visible ? 'text-slate-400 line-through decoration-black decoration-2' : ''">
 							{{ job.role || job.company ? `${job.role || 'New role'}${job.company ? ` · ${job.company}` : ''}` : `Position ${i + 1}` }}
 						</p>
 						<div class="flex items-center gap-1">
+							<label class="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700" title="Show this item on the resume">
+							<input v-model="job.visible" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
+								Show
+							</label>
 							<button class="icon-btn" title="Move up" :disabled="i === 0" @click="move(resume.experience, i, -1)">↑</button>
 							<button
 								class="icon-btn"
@@ -163,13 +168,18 @@ function addSkillGroup() {
 					v-for="(edu, i) in resume.education"
 					:key="edu.id"
 					class="rounded-lg border border-slate-200 bg-slate-50/60 p-4"
+					:class="{ 'opacity-60': !edu.visible }"
 				>
 					<div class="mb-3 flex items-center justify-between gap-2">
-						<p class="text-sm font-semibold text-slate-700">
+						<p class="text-sm font-semibold text-slate-700" :class="!edu.visible ? 'text-slate-400 line-through decoration-red-400 decoration-2' : ''">
 							{{ edu.school || `School ${i + 1}` }}{{ edu.degree ? ` · ${edu.degree}` : '' }}
 						</p>
 						<div class="flex items-center gap-1">
-							<button class="icon-btn" title="Move up" :disabled="i === 0" @click="move(resume.education, i, -1)">↑</button>
+							<label class="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700" title="Show this item on the resume">
+															<input v-model="edu.visible" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
+															Show
+														</label>
+														<button class="icon-btn" title="Move up" :disabled="i === 0" @click="move(resume.education, i, -1)">↑</button>
 							<button
 								class="icon-btn"
 								title="Move down"
@@ -236,11 +246,16 @@ function addSkillGroup() {
 					v-for="(group, i) in resume.skills"
 					:key="group.id"
 					class="rounded-lg border border-slate-200 bg-slate-50/60 p-4"
+					:class="{ 'opacity-60': !group.visible }"
 				>
 					<div class="mb-3 flex items-center justify-between gap-2">
-						<p class="text-sm font-semibold text-slate-700">{{ group.category || `Skill group ${i + 1}` }}</p>
+						<p class="text-sm font-semibold text-slate-700" :class="!group.visible ? 'text-slate-400 line-through decoration-red-400 decoration-2' : ''">{{ group.category || `Skill group ${i + 1}` }}</p>
 						<div class="flex items-center gap-1">
-							<button class="icon-btn" title="Move up" :disabled="i === 0" @click="move(resume.skills, i, -1)">↑</button>
+							<label class="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700" title="Show this item on the resume">
+															<input v-model="group.visible" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
+															Show
+														</label>
+														<button class="icon-btn" title="Move up" :disabled="i === 0" @click="move(resume.skills, i, -1)">↑</button>
 							<button
 								class="icon-btn"
 								title="Move down"

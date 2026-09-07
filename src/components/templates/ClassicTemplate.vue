@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { splitComma, splitLines } from '../../data/resume.js'
+import { splitComma, splitLines, visibleItems } from '../../data/resume.js'
 
 const props = defineProps({
 	resume: { type: Object, required: true },
@@ -23,6 +23,13 @@ function dateRange(start, end, current) {
 	if (s && e) return `${s} – ${e}`
 	return s || e || ''
 }
+
+// Only items ticked "Show" in the form appear on the resume.
+const shown = computed(() => ({
+	experience: visibleItems(props.resume.experience),
+	education: visibleItems(props.resume.education),
+	skills: visibleItems(props.resume.skills)
+}))
 </script>
 
 <template>
@@ -56,7 +63,7 @@ function dateRange(start, end, current) {
 				Professional Experience
 			</h2>
 			<div class="mt-3 space-y-5">
-				<article v-for="job in resume.experience" :key="job.id" class="avoid-break">
+				<article v-for="job in shown.experience" :key="job.id" class="avoid-break">
 					<div class="flex items-baseline justify-between">
 						<h3 class="text-[15px] font-bold">{{ job.role || 'Role' }}, {{ job.company || 'Company' }}</h3>
 						<span class="shrink-0 pl-3 text-[12.5px] italic text-slate-500">{{
@@ -79,7 +86,7 @@ function dateRange(start, end, current) {
 				Education
 			</h2>
 			<div class="mt-3 space-y-3">
-				<article v-for="edu in resume.education" :key="edu.id" class="avoid-break">
+				<article v-for="edu in shown.education" :key="edu.id" class="avoid-break">
 					<div class="flex items-baseline justify-between">
 						<h3 class="text-[15px] font-bold">{{ edu.school || 'School' }}</h3>
 						<span class="shrink-0 pl-3 text-[12.5px] italic text-slate-500">{{
@@ -102,7 +109,7 @@ function dateRange(start, end, current) {
 				Skills
 			</h2>
 			<div class="mt-2 space-y-1.5">
-				<p v-for="group in resume.skills" :key="group.id" class="text-[13.5px]">
+				<p v-for="group in shown.skills" :key="group.id" class="text-[13.5px]">
 					<strong>{{ group.category || 'Category' }}:</strong> {{ splitComma(group.items).join(', ') }}
 				</p>
 			</div>

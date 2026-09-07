@@ -7,6 +7,7 @@ A simple resume-tailoring tool built with Vue 3 + Tailwind CSS v4 + Vite.
 - **Live preview** with 3 templates: Modern, Classic, Minimal — plus an accent-color picker.
 - **Export PDF** button — opens the print dialog; choose “Save as PDF” with margins set to None for an edge-to-edge A4 file with selectable vector text.
 - Draft **auto-saves to localStorage**; Load sample / Clear helpers in the top bar.
+- **Import / Export** buttons — move your resume between browsers as a minified JSON file (same shape as the auto-save: `{ resume, template, accent }`). Import validates the file and asks before replacing your current content.
 
 ## Run it
 

@@ -5,6 +5,7 @@ export function uid() {
 
 export const blankExperience = () => ({
 	id: uid(),
+	visible: true,
 	role: '',
 	company: '',
 	location: '',
@@ -16,6 +17,7 @@ export const blankExperience = () => ({
 
 export const blankEducation = () => ({
 	id: uid(),
+	visible: true,
 	school: '',
 	degree: '',
 	field: '',
@@ -27,6 +29,7 @@ export const blankEducation = () => ({
 
 export const blankSkillGroup = () => ({
 	id: uid(),
+	visible: true,
 	category: '',
 	items: ''
 })
@@ -62,6 +65,7 @@ export const sampleResume = () => ({
 	experience: [
 		{
 			id: uid(),
+			visible: true,
 			role: 'Senior Frontend Engineer',
 			company: 'Acme Corp',
 			location: 'San Francisco, CA',
@@ -73,6 +77,7 @@ export const sampleResume = () => ({
 		},
 		{
 			id: uid(),
+			visible: true,
 			role: 'Frontend Developer',
 			company: 'Bright Studio',
 			location: 'Remote',
@@ -86,6 +91,7 @@ export const sampleResume = () => ({
 	education: [
 		{
 			id: uid(),
+			visible: true,
 			school: 'State University',
 			degree: 'B.S.',
 			field: 'Computer Science',
@@ -96,11 +102,20 @@ export const sampleResume = () => ({
 		}
 	],
 	skills: [
-		{ id: uid(), category: 'Languages', items: 'JavaScript, TypeScript, HTML, CSS' },
-		{ id: uid(), category: 'Frameworks', items: 'Vue 3, React, Tailwind CSS, Vite' },
-		{ id: uid(), category: 'Tools', items: 'Git, Figma, Playwright, Docker' }
+		{ id: uid(), visible: true, category: 'Languages', items: 'JavaScript, TypeScript, HTML, CSS' },
+		{ id: uid(), visible: true, category: 'Frameworks', items: 'Vue 3, React, Tailwind CSS, Vite' },
+		{ id: uid(), visible: true, category: 'Tools', items: 'Git, Figma, Playwright, Docker' }
 	]
 })
+
+/** Items without an explicit flag (e.g. saved before this feature) count as visible. */
+export function isVisible(item) {
+	return item.visible !== false
+}
+
+export function visibleItems(list) {
+	return (list || []).filter(isVisible)
+}
 
 /** Split a textarea (one item per line) into a clean string array. */
 export function splitLines(text) {

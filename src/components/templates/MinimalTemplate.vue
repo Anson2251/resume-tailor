@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { splitComma, splitLines } from '../../data/resume.js'
+import { splitComma, splitLines, visibleItems } from '../../data/resume.js'
 
 const props = defineProps({
 	resume: { type: Object, required: true },
@@ -23,6 +23,13 @@ function dateRange(start, end, current) {
 	if (s && e) return `${s} — ${e}`
 	return s || e || ''
 }
+
+// Only items ticked "Show" in the form appear on the resume.
+const shown = computed(() => ({
+	experience: visibleItems(props.resume.experience),
+	education: visibleItems(props.resume.education),
+	skills: visibleItems(props.resume.skills)
+}))
 </script>
 
 <template>
@@ -49,7 +56,7 @@ function dateRange(start, end, current) {
 		<section class="mt-8">
 			<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">Experience</h2>
 			<div class="mt-4 space-y-6">
-				<article v-for="job in resume.experience" :key="job.id" class="avoid-break">
+				<article v-for="job in shown.experience" :key="job.id" class="avoid-break">
 					<div class="flex items-baseline justify-between">
 						<h3 class="text-[16px] font-semibold text-slate-900">{{ job.role || 'Role' }}</h3>
 						<span class="shrink-0 pl-4 text-[12px] font-medium tracking-wide text-slate-400 uppercase">{{
@@ -79,7 +86,7 @@ function dateRange(start, end, current) {
 			<section class="w-1/2 min-w-0 pr-5">
 				<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">Education</h2>
 				<div class="mt-4 space-y-4">
-					<article v-for="edu in resume.education" :key="edu.id" class="avoid-break">
+					<article v-for="edu in shown.education" :key="edu.id" class="avoid-break">
 						<h3 class="text-[14px] font-semibold text-slate-900">{{ edu.school || 'School' }}</h3>
 						<p class="text-[13px] text-slate-600">{{ [edu.degree, edu.field].filter(Boolean).join(' · ') }}</p>
 						<p class="mt-0.5 text-[12px] text-slate-400">
@@ -93,7 +100,7 @@ function dateRange(start, end, current) {
 			<section class="avoid-break w-1/2 min-w-0 pl-5">
 				<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">Skills</h2>
 				<div class="mt-4 space-y-3">
-					<div v-for="group in resume.skills" :key="group.id">
+					<div v-for="group in shown.skills" :key="group.id">
 						<h3 class="text-[13px] font-semibold text-slate-900">{{ group.category || 'Category' }}</h3>
 						<p class="mt-0.5 text-[13px] leading-relaxed text-slate-600">{{ splitComma(group.items).join('  ·  ') }}</p>
 					</div>
