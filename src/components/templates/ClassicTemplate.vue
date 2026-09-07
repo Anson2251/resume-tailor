@@ -1,0 +1,111 @@
+<script setup>
+import { computed } from 'vue'
+import { splitComma, splitLines } from '../../data/resume.js'
+
+const props = defineProps({
+	resume: { type: Object, required: true },
+	accent: { type: String, default: '#1e3a5f' }
+})
+
+const contactLine = computed(() =>
+	[
+		props.resume.contact.email,
+		props.resume.contact.phone,
+		props.resume.contact.location,
+		props.resume.contact.website,
+		props.resume.contact.linkedin
+	].filter(Boolean)
+)
+
+function dateRange(start, end, current) {
+	const s = (start || '').trim()
+	const e = current ? 'Present' : (end || '').trim()
+	if (s && e) return `${s} – ${e}`
+	return s || e || ''
+}
+</script>
+
+<template>
+	<!-- Single-column classic layout, centered serif header. -->
+	<div class="min-h-full px-12 py-10 font-serif text-slate-800">
+		<header class="avoid-break border-b-2 pb-5 text-center" :style="{ borderColor: accent }">
+			<h1 class="text-4xl font-bold tracking-wide uppercase">{{ resume.contact.fullName || 'Your Name' }}</h1>
+			<p v-if="resume.contact.title" class="mt-1 text-lg italic" :style="{ color: accent }">
+				{{ resume.contact.title }}
+			</p>
+			<p v-if="contactLine.length" class="mt-2 text-[12.5px] text-slate-600">
+				{{ contactLine.join('  |  ') }}
+			</p>
+		</header>
+
+		<section v-if="resume.contact.summary" class="avoid-break mt-6">
+			<h2
+				class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
+				:style="{ color: accent, borderColor: `${accent}55` }"
+			>
+				Summary
+			</h2>
+			<p class="mt-2 text-[13.5px] leading-relaxed">{{ resume.contact.summary }}</p>
+		</section>
+
+		<section class="mt-6">
+			<h2
+				class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
+				:style="{ color: accent, borderColor: `${accent}55` }"
+			>
+				Professional Experience
+			</h2>
+			<div class="mt-3 space-y-5">
+				<article v-for="job in resume.experience" :key="job.id" class="avoid-break">
+					<div class="flex items-baseline justify-between">
+						<h3 class="text-[15px] font-bold">{{ job.role || 'Role' }}, {{ job.company || 'Company' }}</h3>
+						<span class="shrink-0 pl-3 text-[12.5px] italic text-slate-500">{{
+							dateRange(job.startDate, job.endDate, job.current)
+						}}</span>
+					</div>
+					<p v-if="job.location" class="text-[12.5px] italic text-slate-500">{{ job.location }}</p>
+					<ul class="mt-1.5 list-disc space-y-1 pl-5 text-[13.5px] leading-relaxed">
+						<li v-for="(b, bi) in splitLines(job.bullets)" :key="bi">{{ b }}</li>
+					</ul>
+				</article>
+			</div>
+		</section>
+
+		<section class="mt-6">
+			<h2
+				class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
+				:style="{ color: accent, borderColor: `${accent}55` }"
+			>
+				Education
+			</h2>
+			<div class="mt-3 space-y-3">
+				<article v-for="edu in resume.education" :key="edu.id" class="avoid-break">
+					<div class="flex items-baseline justify-between">
+						<h3 class="text-[15px] font-bold">{{ edu.school || 'School' }}</h3>
+						<span class="shrink-0 pl-3 text-[12.5px] italic text-slate-500">{{
+							dateRange(edu.startDate, edu.endDate, false)
+						}}</span>
+					</div>
+					<p class="text-[13px] italic text-slate-600">
+						{{ [edu.degree, edu.field].filter(Boolean).join(' in ') }}{{ edu.gpa ? `, GPA: ${edu.gpa}` : '' }}
+					</p>
+					<p v-if="edu.details" class="mt-0.5 text-[13px]">{{ edu.details }}</p>
+				</article>
+			</div>
+		</section>
+
+		<section class="avoid-break mt-6">
+			<h2
+				class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
+				:style="{ color: accent, borderColor: `${accent}55` }"
+			>
+				Skills
+			</h2>
+			<div class="mt-2 space-y-1.5">
+				<p v-for="group in resume.skills" :key="group.id" class="text-[13.5px]">
+					<strong>{{ group.category || 'Category' }}:</strong> {{ splitComma(group.items).join(', ') }}
+				</p>
+			</div>
+		</section>
+	</div>
+</template>

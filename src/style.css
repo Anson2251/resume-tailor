@@ -1,0 +1,135 @@
+@import 'tailwindcss';
+
+/* Hex overrides for the slate scale (Tailwind v4 defaults to oklch).
+   Only palettes used inside the resume need overrides. */
+@theme {
+	--color-slate-50: #f8fafc;
+	--color-slate-100: #f1f5f9;
+	--color-slate-200: #e2e8f0;
+	--color-slate-300: #cbd5e1;
+	--color-slate-400: #94a3b8;
+	--color-slate-500: #64748b;
+	--color-slate-600: #475569;
+	--color-slate-700: #334155;
+	--color-slate-800: #1e293b;
+	--color-slate-900: #0f172a;
+	--color-slate-950: #020617;
+}
+
+@layer components {
+	.label {
+		@apply mb-1 block text-xs font-semibold tracking-wide text-slate-500 uppercase;
+	}
+	.input {
+		@apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm transition outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200;
+	}
+	.textarea {
+		@apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm leading-relaxed text-slate-900 placeholder-slate-400 shadow-sm transition outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200;
+	}
+	.btn {
+		@apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition select-none;
+	}
+	.btn-primary {
+		@apply bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 active:bg-indigo-800;
+	}
+	.btn-secondary {
+		@apply border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 active:bg-slate-100;
+	}
+	.btn-ghost {
+		@apply text-slate-500 hover:bg-slate-100 hover:text-slate-800;
+	}
+	.btn-danger-ghost {
+		@apply text-slate-400 hover:bg-red-50 hover:text-red-600;
+	}
+	.card {
+		@apply rounded-xl border border-slate-200 bg-white shadow-sm;
+	}
+	.section-title {
+		@apply text-sm font-bold tracking-widest text-slate-400 uppercase;
+	}
+	.icon-btn {
+		@apply inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400;
+	}
+}
+
+/* ---------- Screen preview: exact A4 size (210 × 297 mm) ---------- */
+.resume-page {
+	width: 210mm;
+	min-height: 297mm;
+	margin: 0 auto;
+	background: #fff;
+	flex-shrink: 0;
+}
+
+/* ---------- Print / Export PDF ---------- */
+@page {
+	size: A4;
+	margin: 0;
+}
+
+@media print {
+	html,
+	body {
+		margin: 0 !important;
+		padding: 0 !important;
+		background: #fff !important;
+	}
+
+	.no-print {
+		display: none !important;
+	}
+
+	/* Flatten the app chrome (header/main/wrappers) so the resume page
+	   is the only box on the printed page — their screen padding is what
+	   showed up as a white frame and forced Chrome to shrink-to-fit. */
+	#app,
+	#app > div,
+	main {
+		display: block !important;
+		width: auto !important;
+		height: auto !important;
+		max-width: none !important;
+		min-height: 0 !important;
+		max-height: none !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		gap: 0 !important;
+		background: #fff !important;
+		overflow: visible !important;
+		position: static !important;
+	}
+
+	/* The SPA scroll containers must release their content when printing */
+	main > div {
+		overflow: visible !important;
+		height: auto !important;
+		max-height: none !important;
+	}
+
+	#print-area {
+		display: block !important;
+		position: static !important;
+		padding: 0 !important;
+		margin: 0 !important;
+		background: #fff !important;
+		overflow: visible !important;
+	}
+
+	.resume-page {
+		width: 210mm !important;
+		min-height: 297mm !important;
+		margin: 0 !important;
+		border-radius: 0 !important;
+		box-shadow: none !important;
+		border: none !important;
+		/* Keep accent colors even if "Background graphics" is unchecked */
+		-webkit-print-color-adjust: exact !important;
+		print-color-adjust: exact !important;
+	}
+
+	/* Avoid awkward splits inside entries */
+	.avoid-break {
+		break-inside: avoid;
+		page-break-inside: avoid;
+	}
+}
