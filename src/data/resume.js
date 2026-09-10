@@ -64,13 +64,13 @@ export const blankResume = () => ({
 
 export const sampleResume = () => ({
 	contact: {
-		fullName: 'Alex Morgan',
+		fullName: 'Bob Smith',
 		title: 'Frontend Engineer',
-		email: 'alex.morgan@example.com',
-		phone: '+1 (555) 123-4567',
-		location: 'San Francisco, CA',
-		website: 'alexmorgan.dev',
-		linkedin: 'linkedin.com/in/alexmorgan',
+		email: 'bob.smith@example.com',
+		phone: '+33 6 12 34 56 78',
+		location: 'Paris, France',
+		website: 'bobsmith.example.com',
+		linkedin: 'linkedin.com/in/bob-smith-example',
 		summary:
 			'Frontend engineer with 5 years of experience building responsive web apps with Vue and React. Passionate about design systems, performance, and turning ambiguous product ideas into polished user experiences.'
 	},
@@ -80,7 +80,7 @@ export const sampleResume = () => ({
 			visible: true,
 			role: 'Senior Frontend Engineer',
 			company: 'Acme Corp',
-			location: 'San Francisco, CA',
+			location: 'Paris, France',
 			startDate: 'Jan 2022',
 			endDate: '',
 			current: true,
@@ -105,7 +105,7 @@ export const sampleResume = () => ({
 			id: uid(),
 			visible: true,
 			name: 'Portfolio Site',
-			link: 'alexmorgan.dev',
+			link: 'bobsmith.example.com',
 			tech: 'Vue 3, Tailwind CSS, Vite',
 			startDate: '2023',
 			endDate: '',

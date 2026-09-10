@@ -35,7 +35,7 @@ function addSkillGroup() {
 			<div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<div>
 					<label class="label" for="f-name">Full name</label>
-					<input id="f-name" v-model="resume.contact.fullName" class="input" placeholder="Alex Morgan" />
+					<input id="f-name" v-model="resume.contact.fullName" class="input" placeholder="Bob Smith" />
 				</div>
 				<div>
 					<label class="label" for="f-title">Job title</label>
@@ -47,11 +47,11 @@ function addSkillGroup() {
 				</div>
 				<div>
 					<label class="label" for="f-phone">Phone</label>
-					<input id="f-phone" v-model="resume.contact.phone" type="tel" class="input" placeholder="+1 (555) 000-0000" />
+					<input id="f-phone" v-model="resume.contact.phone" type="tel" class="input" placeholder="+33 6 12 34 56 78" />
 				</div>
 				<div>
 					<label class="label" for="f-location">Location</label>
-					<input id="f-location" v-model="resume.contact.location" class="input" placeholder="City, State" />
+					<input id="f-location" v-model="resume.contact.location" class="input" placeholder="City, Country" />
 				</div>
 				<div>
 					<label class="label" for="f-website">Website</label>
