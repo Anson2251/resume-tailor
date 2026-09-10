@@ -22,7 +22,7 @@ function persist() {
 
 function normalizeVisibility() {
 	// Items saved before the visibility toggle existed default to shown.
-	for (const key of ['experience', 'education', 'skills']) {
+	for (const key of ['experience', 'projects', 'education', 'skills']) {
 		for (const item of resume[key] || []) {
 			if (item.visible === undefined) item.visible = true
 		}
@@ -102,6 +102,8 @@ async function handleImportFile(event) {
 	}
 	if (!confirm(`Import resume from "${file.name}"? Your current content will be replaced.`)) return
 	Object.assign(resume, incoming)
+	// Projects were added later — old exports simply have none.
+	resume.projects = Array.isArray(incoming.projects) ? incoming.projects : []
 	if (parsed.template) template.value = parsed.template
 	if (parsed.accent) accent.value = parsed.accent
 	normalizeVisibility()

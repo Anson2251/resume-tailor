@@ -1,5 +1,5 @@
 <script setup>
-import { blankEducation, blankExperience, blankSkillGroup } from '../data/resume.js'
+import { blankEducation, blankExperience, blankProject, blankSkillGroup } from '../data/resume.js'
 
 const resume = defineModel({ required: true })
 
@@ -12,6 +12,10 @@ function move(list, index, delta) {
 
 function addExperience() {
 	resume.value.experience.push(blankExperience())
+}
+
+function addProject() {
+	resume.value.projects.push(blankProject())
 }
 
 function addEducation() {
@@ -156,6 +160,87 @@ function addSkillGroup() {
 
 			<button class="btn btn-secondary mt-4 w-full border-dashed" @click="addExperience">
 				<span class="text-lg leading-none">+</span> Add experience
+			</button>
+		</section>
+
+		<!-- Projects -->
+		<section class="card p-5">
+			<h2 class="section-title">Projects · {{ resume.projects.length }}</h2>
+
+			<div class="mt-4 space-y-3">
+				<article
+					v-for="(project, i) in resume.projects"
+					:key="project.id"
+					class="rounded-lg border border-slate-200 bg-slate-50/60 p-4"
+					:class="{ 'opacity-60': !project.visible }"
+				>
+					<div class="mb-3 flex items-center justify-between gap-2">
+						<p class="text-sm font-semibold text-slate-700" :class="!project.visible ? 'text-slate-400 line-through decoration-red-400 decoration-2' : ''">
+							{{ project.name || `Project ${i + 1}` }}
+						</p>
+						<div class="flex items-center gap-1">
+							<label class="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700" title="Show this item on the resume">
+								<input v-model="project.visible" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
+								Show
+							</label>
+							<button class="icon-btn" title="Move up" :disabled="i === 0" @click="move(resume.projects, i, -1)">↑</button>
+							<button
+								class="icon-btn"
+								title="Move down"
+								:disabled="i === resume.projects.length - 1"
+								@click="move(resume.projects, i, 1)"
+							>
+								↓
+							</button>
+							<button
+								class="icon-btn hover:!bg-red-50 hover:!text-red-600"
+								title="Remove"
+								:disabled="resume.projects.length === 1"
+								@click="resume.projects.splice(i, 1)"
+							>
+								✕
+							</button>
+						</div>
+					</div>
+
+					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+						<div>
+							<label class="label">Project name</label>
+							<input v-model="project.name" class="input" placeholder="Portfolio Site" />
+						</div>
+						<div>
+							<label class="label">Link</label>
+							<input v-model="project.link" class="input" placeholder="github.com/you/project" />
+						</div>
+						<div>
+							<label class="label">Technologies</label>
+							<input v-model="project.tech" class="input" placeholder="Vue 3, Tailwind CSS" />
+						</div>
+						<div class="grid grid-cols-2 gap-3">
+							<div>
+								<label class="label">Start</label>
+								<input v-model="project.startDate" class="input" placeholder="2023" />
+							</div>
+							<div>
+								<label class="label">End</label>
+								<input v-model="project.endDate" class="input" placeholder="2024" />
+							</div>
+						</div>
+						<div class="sm:col-span-2">
+							<label class="label">Highlights · one per line</label>
+							<textarea
+								v-model="project.bullets"
+								class="textarea font-mono"
+								rows="3"
+								placeholder="What it does, your role, outcome…"
+							/>
+						</div>
+					</div>
+				</article>
+			</div>
+
+			<button class="btn btn-secondary mt-4 w-full border-dashed" @click="addProject">
+				<span class="text-lg leading-none">+</span> Add project
 			</button>
 		</section>
 

@@ -27,6 +27,7 @@ function dateRange(start, end, current) {
 // Only items ticked "Show" in the form appear on the resume.
 const shown = computed(() => ({
 	experience: visibleItems(props.resume.experience),
+	projects: visibleItems(props.resume.projects),
 	education: visibleItems(props.resume.education),
 	skills: visibleItems(props.resume.skills)
 }))
@@ -53,7 +54,7 @@ const shown = computed(() => ({
 			<p class="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-slate-600">{{ resume.contact.summary }}</p>
 		</section>
 
-		<section class="mt-8">
+		<section v-if="shown.experience.length" class="mt-8">
 			<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">Experience</h2>
 			<div class="mt-4 space-y-6">
 				<article v-for="job in shown.experience" :key="job.id" class="avoid-break">
@@ -80,10 +81,37 @@ const shown = computed(() => ({
 			</div>
 		</section>
 
+		<section v-if="shown.projects.length" class="mt-8">
+			<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">Projects</h2>
+			<div class="mt-4 space-y-6">
+				<article v-for="project in shown.projects" :key="project.id" class="avoid-break">
+					<div class="flex items-baseline justify-between">
+						<h3 class="text-[16px] font-semibold text-slate-900">{{ project.name || 'Project' }}</h3>
+						<span class="shrink-0 pl-4 text-[12px] font-medium tracking-wide text-slate-400 uppercase">{{
+							dateRange(project.startDate, project.endDate, false)
+						}}</span>
+					</div>
+					<p class="mt-0.5 text-[13px]" :style="{ color: accent }">
+						{{ [project.tech, project.link].filter(Boolean).join('  ·  ') }}
+					</p>
+					<ul class="mt-2 space-y-1.5">
+						<li
+							v-for="(b, bi) in splitLines(project.bullets)"
+							:key="bi"
+							class="flex text-[13.5px] leading-relaxed text-slate-600"
+						>
+							<span class="mt-[9px] mr-2.5 h-1 w-1 shrink-0 rounded-full" :style="{ backgroundColor: accent }" />
+							<span>{{ b }}</span>
+						</li>
+					</ul>
+				</article>
+			</div>
+		</section>
+
 		<div class="mt-8 h-px bg-slate-200" />
 
 		<div class="mt-8 flex">
-			<section class="w-1/2 min-w-0 pr-5">
+			<section v-if="shown.education.length" class="min-w-0 flex-1 pr-5">
 				<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">Education</h2>
 				<div class="mt-4 space-y-4">
 					<article v-for="edu in shown.education" :key="edu.id" class="avoid-break">
@@ -97,7 +125,7 @@ const shown = computed(() => ({
 				</div>
 			</section>
 
-			<section class="avoid-break w-1/2 min-w-0 pl-5">
+			<section v-if="shown.skills.length" class="avoid-break min-w-0 flex-1 pl-5">
 				<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">Skills</h2>
 				<div class="mt-4 space-y-3">
 					<div v-for="group in shown.skills" :key="group.id">

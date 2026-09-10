@@ -2,8 +2,8 @@
 
 A simple resume-tailoring tool built with Vue 3 + Tailwind CSS v4 + Vite.
 
-- **Form mirrors the resume**: contact info, experience, education, and skills sections.
-- **Repeatable fields are editable lists**: each experience / education / skill-group entry is a card with add, remove, and reorder (↑/↓) controls.
+- **Form mirrors the resume**: contact info, experience, projects, education, and skills sections.
+- **Repeatable fields are editable lists**: each experience / project / education / skill-group entry is a card with add, remove, reorder (↑/↓), and a Show toggle. Empty or hidden sections leave no heading behind.
 - **Live preview** with 3 templates: Modern, Classic, Minimal — plus an accent-color picker.
 - **Export PDF** button — opens the print dialog; choose “Save as PDF” with margins set to None for an edge-to-edge A4 file with selectable vector text.
 - Draft **auto-saves to localStorage**; Load sample / Clear helpers in the top bar.

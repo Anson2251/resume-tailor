@@ -15,6 +15,17 @@ export const blankExperience = () => ({
 	bullets: ''
 })
 
+export const blankProject = () => ({
+	id: uid(),
+	visible: true,
+	name: '',
+	link: '',
+	tech: '',
+	startDate: '',
+	endDate: '',
+	bullets: ''
+})
+
 export const blankEducation = () => ({
 	id: uid(),
 	visible: true,
@@ -46,6 +57,7 @@ export const blankResume = () => ({
 		summary: ''
 	},
 	experience: [blankExperience()],
+	projects: [blankProject()],
 	education: [blankEducation()],
 	skills: [blankSkillGroup()]
 })
@@ -86,6 +98,19 @@ export const sampleResume = () => ({
 			current: false,
 			bullets:
 				'Shipped marketing site and checkout flow serving 200k monthly visitors\nImproved Lighthouse performance score from 62 to 94\nCollaborated with designers to implement a Tailwind-based design system'
+		}
+	],
+	projects: [
+		{
+			id: uid(),
+			visible: true,
+			name: 'Portfolio Site',
+			link: 'alexmorgan.dev',
+			tech: 'Vue 3, Tailwind CSS, Vite',
+			startDate: '2023',
+			endDate: '',
+			bullets:
+				'Designed and built a personal portfolio with blog and dark mode\nTop post on frontend performance reached 15k readers'
 		}
 	],
 	education: [

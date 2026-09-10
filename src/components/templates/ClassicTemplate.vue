@@ -27,6 +27,7 @@ function dateRange(start, end, current) {
 // Only items ticked "Show" in the form appear on the resume.
 const shown = computed(() => ({
 	experience: visibleItems(props.resume.experience),
+	projects: visibleItems(props.resume.projects),
 	education: visibleItems(props.resume.education),
 	skills: visibleItems(props.resume.skills)
 }))
@@ -55,7 +56,7 @@ const shown = computed(() => ({
 			<p class="mt-2 text-[13.5px] leading-relaxed">{{ resume.contact.summary }}</p>
 		</section>
 
-		<section class="mt-6">
+		<section v-if="shown.experience.length" class="mt-6">
 			<h2
 				class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
 				:style="{ color: accent, borderColor: `${accent}55` }"
@@ -78,7 +79,32 @@ const shown = computed(() => ({
 			</div>
 		</section>
 
-		<section class="mt-6">
+		<section v-if="shown.projects.length" class="mt-6">
+			<h2
+				class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
+				:style="{ color: accent, borderColor: `${accent}55` }"
+			>
+				Projects
+			</h2>
+			<div class="mt-3 space-y-5">
+				<article v-for="project in shown.projects" :key="project.id" class="avoid-break">
+					<div class="flex items-baseline justify-between">
+						<h3 class="text-[15px] font-bold">{{ project.name || 'Project' }}</h3>
+						<span class="shrink-0 pl-3 text-[12.5px] italic text-slate-500">{{
+							dateRange(project.startDate, project.endDate, false)
+						}}</span>
+					</div>
+					<p v-if="project.tech || project.link" class="text-[12.5px] italic text-slate-500">
+						{{ [project.tech, project.link].filter(Boolean).join('  ·  ') }}
+					</p>
+					<ul class="mt-1.5 list-disc space-y-1 pl-5 text-[13.5px] leading-relaxed">
+						<li v-for="(b, bi) in splitLines(project.bullets)" :key="bi">{{ b }}</li>
+					</ul>
+				</article>
+			</div>
+		</section>
+
+		<section v-if="shown.education.length" class="mt-6">
 			<h2
 				class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
 				:style="{ color: accent, borderColor: `${accent}55` }"
@@ -101,7 +127,7 @@ const shown = computed(() => ({
 			</div>
 		</section>
 
-		<section class="avoid-break mt-6">
+		<section v-if="shown.skills.length" class="avoid-break mt-6">
 			<h2
 				class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
 				:style="{ color: accent, borderColor: `${accent}55` }"
