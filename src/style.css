@@ -111,6 +111,10 @@
 		position: static !important;
 		padding: 0 !important;
 		margin: 0 !important;
+		/* The screen styles add a 1px border + radius; left in place they make the
+		   print area 2px taller than the page and force a blank second sheet. */
+		border: none !important;
+		border-radius: 0 !important;
 		background: #fff !important;
 		overflow: visible !important;
 	}
@@ -122,6 +126,7 @@
 		border-radius: 0 !important;
 		box-shadow: none !important;
 		border: none !important;
+		overflow: visible !important;
 		/* Keep accent colors even if "Background graphics" is unchecked */
 		-webkit-print-color-adjust: exact !important;
 		print-color-adjust: exact !important;
@@ -132,4 +137,125 @@
 		break-inside: avoid;
 		page-break-inside: avoid;
 	}
+}
+
+/* ---------- Resume body columns ----------
+   Two columns means the body content (summary, experience, projects, education,
+   skills) flows across two columns newspaper-style — not a sidebar. Entries
+   (.avoid-break) stay whole, and headings stay with the content they introduce. */
+.resume-columns {
+	column-count: 2;
+	column-gap: 2.25rem;
+}
+
+.resume-columns h2 {
+	break-after: avoid;
+}
+
+/* Spacing between list entries. Uses padding (not margin) so the gap survives
+   a column/page break, where margins are truncated at the fragment boundary.
+   `> * + *` keeps the first entry flush against the section heading. */
+.entry-stack > * + * {
+	padding-top: 1rem;
+}
+
+.entry-stack-sm > * + * {
+	padding-top: 0.75rem;
+}
+
+.entry-stack-xs > * + * {
+	padding-top: 0.375rem;
+}
+
+/* ---------- Markdown content ----------
+   Unlayered so it beats Tailwind Preflight, which strips list styles.
+   Rhythm: no margins by default (the surrounding template spacing already
+   separates entries); a small gap only *between* adjacent top-level blocks,
+   so a single paragraph/list sits as tight as plain text used to. */
+.md {
+	overflow-wrap: anywhere;
+}
+
+.md :where(p, ul, ol, li, blockquote, pre, h1, h2, h3, h4, h5, h6) {
+	margin: 0;
+}
+
+.md > * + * {
+	margin-top: 0.4em;
+}
+
+.md li + li {
+	margin-top: 0.2em;
+}
+
+/* Loose lists wrap each item in a <p>; keep those as tight as the list itself. */
+.md li > * + *,
+.md li > ul,
+.md li > ol {
+	margin-top: 0.2em;
+}
+
+.md ul,
+.md ol {
+	padding-left: 1.15em;
+}
+
+.md ul {
+	list-style: disc;
+}
+
+.md ol {
+	list-style: decimal;
+}
+
+.md a {
+	text-decoration: underline;
+}
+
+.md strong {
+	font-weight: 600;
+}
+
+.md em {
+	font-style: italic;
+}
+
+.md code {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 0.9em;
+}
+
+.md blockquote {
+	padding-left: 0.75em;
+	border-left: 2px solid currentColor;
+	opacity: 0.85;
+}
+
+.md hr {
+	margin: 0.6em 0;
+	border: 0;
+	border-top: 1px solid currentColor;
+	opacity: 0.25;
+}
+
+/* Dot-marker variant used by the Minimal template. */
+.md-dot ul {
+	list-style: none;
+	padding-left: 0;
+}
+
+.md-dot li {
+	position: relative;
+	padding-left: 0.95em;
+}
+
+.md-dot li::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 0.62em;
+	width: 4px;
+	height: 4px;
+	border-radius: 9999px;
+	background: var(--md-dot-color, currentColor);
 }

@@ -3,9 +3,10 @@ export function uid() {
 	return `id-${Date.now()}-${Math.floor(Math.random() * 1e9)}`
 }
 
+// --- Content items (master resume). Visibility & order live on the profile. ---
+
 export const blankExperience = () => ({
 	id: uid(),
-	visible: true,
 	role: '',
 	company: '',
 	location: '',
@@ -17,7 +18,6 @@ export const blankExperience = () => ({
 
 export const blankProject = () => ({
 	id: uid(),
-	visible: true,
 	name: '',
 	link: '',
 	tech: '',
@@ -28,7 +28,6 @@ export const blankProject = () => ({
 
 export const blankEducation = () => ({
 	id: uid(),
-	visible: true,
 	school: '',
 	degree: '',
 	field: '',
@@ -40,22 +39,71 @@ export const blankEducation = () => ({
 
 export const blankSkillGroup = () => ({
 	id: uid(),
-	visible: true,
 	category: '',
 	items: ''
 })
 
-export const blankResume = () => ({
-	contact: {
-		fullName: '',
-		title: '',
-		email: '',
-		phone: '',
-		location: '',
-		website: '',
-		linkedin: '',
-		summary: ''
+/** Repeatable sections, in the order they render on the form. */
+export const SECTION_KEYS = ['experience', 'projects', 'education', 'skills']
+
+/** Factory for a new item in a given section. */
+export const SECTION_FACTORY = {
+	experience: blankExperience,
+	projects: blankProject,
+	education: blankEducation,
+	skills: blankSkillGroup
+}
+
+/** Editable fields per section — used for per-profile content overrides. */
+export const SECTION_FIELDS = {
+	experience: ['role', 'company', 'location', 'startDate', 'endDate', 'current', 'bullets'],
+	projects: ['name', 'link', 'tech', 'startDate', 'endDate', 'bullets'],
+	education: ['school', 'degree', 'field', 'startDate', 'endDate', 'gpa', 'details'],
+	skills: ['category', 'items']
+}
+
+/** Human labels for overridden fields, shown in the "customized" badge. */
+export const SECTION_FIELD_LABELS = {
+	experience: {
+		role: 'role',
+		company: 'company',
+		location: 'location',
+		startDate: 'start',
+		endDate: 'end',
+		current: 'current',
+		bullets: 'achievements'
 	},
+	projects: {
+		name: 'name',
+		link: 'link',
+		tech: 'technologies',
+		startDate: 'start',
+		endDate: 'end',
+		bullets: 'highlights'
+	},
+	education: {
+		school: 'school',
+		degree: 'degree',
+		field: 'field',
+		startDate: 'start',
+		endDate: 'end',
+		gpa: 'GPA',
+		details: 'details'
+	},
+	skills: { category: 'category', items: 'skills' }
+}
+
+export const blankContact = () => ({
+	fullName: '',
+	email: '',
+	phone: '',
+	location: '',
+	website: '',
+	linkedin: ''
+})
+
+export const blankResume = () => ({
+	contact: blankContact(),
 	experience: [blankExperience()],
 	projects: [blankProject()],
 	education: [blankEducation()],
@@ -65,19 +113,15 @@ export const blankResume = () => ({
 export const sampleResume = () => ({
 	contact: {
 		fullName: 'Bob Smith',
-		title: 'Frontend Engineer',
 		email: 'bob.smith@example.com',
 		phone: '+33 6 12 34 56 78',
 		location: 'Paris, France',
 		website: 'bobsmith.example.com',
-		linkedin: 'linkedin.com/in/bob-smith-example',
-		summary:
-			'Frontend engineer with 5 years of experience building responsive web apps with Vue and React. Passionate about design systems, performance, and turning ambiguous product ideas into polished user experiences.'
+		linkedin: 'linkedin.com/in/bob-smith-example'
 	},
 	experience: [
 		{
 			id: uid(),
-			visible: true,
 			role: 'Senior Frontend Engineer',
 			company: 'Acme Corp',
 			location: 'Paris, France',
@@ -85,11 +129,10 @@ export const sampleResume = () => ({
 			endDate: '',
 			current: true,
 			bullets:
-				'Led migration of a legacy jQuery dashboard to Vue 3, cutting page load time by 45%\nBuilt a reusable component library adopted by 4 product teams\nMentored 3 junior engineers through onboarding and code reviews'
+				'- Led migration of a legacy jQuery dashboard to Vue 3, cutting page load time by **45%**\n- Built a reusable component library adopted by 4 product teams\n- Mentored 3 junior engineers through onboarding and code reviews'
 		},
 		{
 			id: uid(),
-			visible: true,
 			role: 'Frontend Developer',
 			company: 'Bright Studio',
 			location: 'Remote',
@@ -97,39 +140,37 @@ export const sampleResume = () => ({
 			endDate: 'Dec 2021',
 			current: false,
 			bullets:
-				'Shipped marketing site and checkout flow serving 200k monthly visitors\nImproved Lighthouse performance score from 62 to 94\nCollaborated with designers to implement a Tailwind-based design system'
+				'- Shipped marketing site and checkout flow serving **200k** monthly visitors\n- Improved Lighthouse performance score from 62 to **94**\n- Collaborated with designers to implement a Tailwind-based design system'
 		}
 	],
 	projects: [
 		{
 			id: uid(),
-			visible: true,
 			name: 'Portfolio Site',
 			link: 'bobsmith.example.com',
 			tech: 'Vue 3, Tailwind CSS, Vite',
 			startDate: '2023',
 			endDate: '',
 			bullets:
-				'Designed and built a personal portfolio with blog and dark mode\nTop post on frontend performance reached 15k readers'
+				'- Designed and built a personal portfolio with blog and dark mode\n- Top post on frontend performance reached **15k** readers'
 		}
 	],
 	education: [
 		{
 			id: uid(),
-			visible: true,
 			school: 'State University',
 			degree: 'B.S.',
 			field: 'Computer Science',
 			startDate: '2016',
 			endDate: '2020',
 			gpa: '3.8',
-			details: 'Relevant coursework: Data Structures, Web Development, HCI'
+			details: 'Relevant coursework: **Data Structures**, Web Development, HCI'
 		}
 	],
 	skills: [
-		{ id: uid(), visible: true, category: 'Languages', items: 'JavaScript, TypeScript, HTML, CSS' },
-		{ id: uid(), visible: true, category: 'Frameworks', items: 'Vue 3, React, Tailwind CSS, Vite' },
-		{ id: uid(), visible: true, category: 'Tools', items: 'Git, Figma, Playwright, Docker' }
+		{ id: uid(), category: 'Languages', items: 'JavaScript, TypeScript, HTML, CSS' },
+		{ id: uid(), category: 'Frameworks', items: 'Vue 3, React, Tailwind CSS, Vite' },
+		{ id: uid(), category: 'Tools', items: 'Git, Figma, Playwright, Docker' }
 	]
 })
 
@@ -142,14 +183,6 @@ export function visibleItems(list) {
 	return (list || []).filter(isVisible)
 }
 
-/** Split a textarea (one item per line) into a clean string array. */
-export function splitLines(text) {
-	return (text || '')
-		.split('\n')
-		.map((s) => s.trim())
-		.filter(Boolean)
-}
-
 /** Split comma-separated skills into a clean array. */
 export function splitComma(text) {
 	return (text || '')
@@ -157,5 +190,3 @@ export function splitComma(text) {
 		.map((s) => s.trim())
 		.filter(Boolean)
 }
-
-export const STORAGE_KEY = 'resume-tailor-data-v1'

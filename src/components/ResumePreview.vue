@@ -1,9 +1,12 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { Icon } from '@vicons/utils'
 import ModernTemplate from './templates/ModernTemplate.vue'
 import ClassicTemplate from './templates/ClassicTemplate.vue'
 import MinimalTemplate from './templates/MinimalTemplate.vue'
-import { ACCENTS, TEMPLATES } from '../data/options.js'
+import Popover from './Popover.vue'
+import { ACCENTS, COLUMNS, FONTS, TEMPLATES, fontStack } from '../data/options.js'
+import { Checkmark16Regular, Color16Regular, PaintBrush16Regular, TextFont16Regular } from '../data/icons.js'
 
 const props = defineProps({
 	resume: { type: Object, required: true }
@@ -11,6 +14,8 @@ const props = defineProps({
 
 const template = defineModel('template', { default: 'modern' })
 const accent = defineModel('accent', { default: '#4f46e5' })
+const font = defineModel('font', { default: 'sans' })
+const columns = defineModel('columns', { default: 1 })
 
 const activeComponent = computed(() => {
 	switch (template.value) {
@@ -38,24 +43,92 @@ const zoom = ref(1)
 					:key="t.id"
 					:title="t.hint"
 					class="btn px-3 py-1.5 text-[13px]"
-					:class="template === t.id ? 'bg-slate-900 font-semibold text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'"
+					:class="template === t.id ? 'font-semibold text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'"
+					:style="template === t.id ? { backgroundColor: accent } : null"
 					@click="template = t.id"
 				>
 					{{ t.name }}
 				</button>
 			</div>
-			<!-- Accent picker -->
-			<div class="flex items-center gap-1.5" aria-label="Accent color">
+			<!-- Columns -->
+			<div class="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm ring-1 ring-slate-200" role="group" aria-label="Columns">
 				<button
-					v-for="c in ACCENTS"
+					v-for="c in COLUMNS"
 					:key="c"
-					:title="c"
-					class="h-6 w-6 rounded-full ring-2 ring-offset-2 transition"
-					:class="accent === c ? 'ring-slate-400' : 'ring-transparent hover:ring-slate-300'"
-					:style="{ backgroundColor: c }"
-					@click="accent = c"
-				/>
+					:title="c === 1 ? 'Single column' : 'Two columns'"
+					class="btn px-3 py-1.5 text-[13px]"
+					:class="columns === c ? 'font-semibold text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'"
+					:style="columns === c ? { backgroundColor: accent } : null"
+					@click="columns = c"
+				>
+					{{ c }} col{{ c > 1 ? 's' : '' }}
+				</button>
 			</div>
+			<!-- Style: accent color + font -->
+			<Popover align="start" width="17rem">
+				<template #trigger="{ open, toggle }">
+					<button
+						type="button"
+						class="btn gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] shadow-sm ring-1 ring-slate-200"
+						:class="open ? 'font-semibold text-slate-900' : 'text-slate-500 hover:text-slate-800'"
+						:aria-expanded="open"
+						title="Accent color and font"
+						@click="toggle"
+					>
+						<Icon size="16"><PaintBrush16Regular /></Icon>
+						Style
+						<span
+							class="h-3.5 w-3.5 rounded-full ring-1 ring-slate-900/15"
+							:style="{ backgroundColor: accent }"
+						/>
+					</button>
+				</template>
+
+				<div class="space-y-4">
+					<div>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+							<Icon size="14"><Color16Regular /></Icon> Accent color
+						</p>
+						<div class="flex flex-wrap items-center gap-2">
+							<button
+								v-for="c in ACCENTS"
+								:key="c"
+								type="button"
+								:title="c"
+								class="h-6 w-6 rounded-full ring-2 ring-offset-2 transition"
+								:class="accent === c ? 'ring-slate-400' : 'ring-transparent hover:ring-slate-300'"
+								:style="{ backgroundColor: c }"
+								@click="accent = c"
+							/>
+						</div>
+					</div>
+
+					<div>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+							<Icon size="14"><TextFont16Regular /></Icon> Font
+						</p>
+						<div class="grid gap-1.5">
+							<button
+								v-for="f in FONTS"
+								:key="f.id"
+								type="button"
+								class="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left transition"
+								:class="font === f.id ? 'border-slate-900 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'"
+								:style="{ fontFamily: fontStack(f.id) }"
+								@click="font = f.id"
+							>
+								<span class="min-w-0">
+									<span class="block text-[13px] font-medium text-slate-800">{{ f.name }}</span>
+									<span class="block text-[11px] text-slate-400">{{ f.hint }}</span>
+								</span>
+								<Icon v-if="font === f.id" size="14" class="shrink-0 text-slate-900" aria-hidden="true">
+									<Checkmark16Regular />
+								</Icon>
+							</button>
+						</div>
+					</div>
+				</div>
+			</Popover>
 			<!-- Zoom -->
 			<div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-slate-500">
 				<button
@@ -74,7 +147,7 @@ const zoom = ref(1)
 				class="resume-page overflow-hidden rounded-sm shadow-xl ring-1 ring-slate-900/10"
 				:style="{ zoom }"
 			>
-				<component :is="activeComponent" :resume="resume" :accent="accent" />
+				<component :is="activeComponent" :resume="resume" :accent="accent" :font="font" :columns="columns" />
 			</div>
 		</div>
 	</div>

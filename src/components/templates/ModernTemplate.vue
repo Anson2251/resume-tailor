@@ -1,11 +1,17 @@
 <script setup>
 import { computed } from 'vue'
-import { splitComma, splitLines, visibleItems } from '../../data/resume.js'
+import MarkdownText from '../MarkdownText.vue'
+import { splitComma, visibleItems } from '../../data/resume.js'
+import { fontStack } from '../../data/options.js'
 
 const props = defineProps({
 	resume: { type: Object, required: true },
-	accent: { type: String, default: '#4f46e5' }
+	accent: { type: String, default: '#4f46e5' },
+	font: { type: String, default: 'sans' },
+	columns: { type: Number, default: 1 }
 })
+
+const fontFamily = computed(() => fontStack(props.font))
 
 const contactLine = computed(() =>
 	[props.resume.contact.email, props.resume.contact.phone, props.resume.contact.location]
@@ -34,101 +40,101 @@ function dateRange(start, end, current) {
 </script>
 
 <template>
-	<!-- Two-column modern layout with accent header and skills sidebar. -->
-	<div class="min-h-full font-sans text-slate-800">
-		<header class="px-10 pt-10 pb-8 text-white" :style="{ backgroundColor: accent }">
+	<!-- Modern layout: accent header; the body flows in one or two columns. -->
+	<div class="min-h-full text-slate-800" :style="{ fontFamily }">
+		<header class="px-10 pt-7 pb-5 text-white" :style="{ backgroundColor: accent }">
 			<h1 class="text-4xl font-extrabold tracking-tight">{{ resume.contact.fullName || 'Your Name' }}</h1>
 			<p v-if="resume.contact.title" class="mt-1 text-lg font-medium opacity-90">{{ resume.contact.title }}</p>
 			<div v-if="contactLine" class="mt-3 text-[13px] opacity-90">{{ contactLine }}</div>
 			<div v-if="linksLine" class="mt-1 text-[13px] opacity-90">{{ linksLine }}</div>
 		</header>
 
-		<div class="flex">
-			<div class="min-w-0 flex-1 px-10 py-8">
-				<section v-if="resume.contact.summary" class="avoid-break mb-7">
-					<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Summary</h2>
-					<p class="text-[13.5px] leading-relaxed text-slate-600">{{ resume.contact.summary }}</p>
-				</section>
+		<div class="px-10 py-6" :class="columns === 2 ? 'resume-columns' : ''">
+			<section v-if="resume.contact.summary" class="avoid-break">
+				<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Summary</h2>
+				<MarkdownText :source="resume.contact.summary" class="text-[13.5px] leading-relaxed text-slate-600" />
+			</section>
 
-				<section v-if="shown.experience.length" class="mb-7">
-					<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Experience</h2>
-					<div class="space-y-5">
-						<article v-for="job in shown.experience" :key="job.id" class="avoid-break">
-							<div class="flex items-baseline justify-between">
-								<h3 class="text-[15px] font-bold text-slate-900">{{ job.role || 'Role' }}</h3>
-								<span class="shrink-0 pl-3 text-xs font-medium text-slate-500">{{
-									dateRange(job.startDate, job.endDate, job.current)
-								}}</span>
-							</div>
-							<p class="text-[13px] font-medium text-slate-500">
-								{{ [job.company, job.location].filter(Boolean).join(' · ') }}
-							</p>
-							<ul class="mt-1.5 list-disc space-y-1 pl-5 text-[13.5px] leading-relaxed text-slate-600">
-								<li v-for="(b, bi) in splitLines(job.bullets)" :key="bi">{{ b }}</li>
-							</ul>
-						</article>
-					</div>
-				</section>
+			<section v-if="shown.education.length" class="pt-6">
+				<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Education</h2>
+				<div class="entry-stack-sm">
+					<article v-for="edu in shown.education" :key="edu.id" class="avoid-break">
+						<div class="flex items-baseline justify-between">
+							<h3 class="text-[15px] font-bold text-slate-900">{{ edu.school || 'School' }}</h3>
+							<span class="shrink-0 pl-3 text-xs font-medium text-slate-500">{{
+								dateRange(edu.startDate, edu.endDate, false)
+							}}</span>
+						</div>
+						<p class="text-[13px] font-medium text-slate-500">
+							{{ [edu.degree, edu.field].filter(Boolean).join(' in ') }}{{ edu.gpa ? ` · GPA ${edu.gpa}` : '' }}
+						</p>
+						<MarkdownText v-if="edu.details" :source="edu.details" class="mt-1 text-[13px] text-slate-600" />
+					</article>
+				</div>
+			</section>
 
-				<section v-if="shown.projects.length" class="mb-7">
-					<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Projects</h2>
-					<div class="space-y-5">
-						<article v-for="project in shown.projects" :key="project.id" class="avoid-break">
-							<div class="flex items-baseline justify-between">
-								<h3 class="text-[15px] font-bold text-slate-900">{{ project.name || 'Project' }}</h3>
-								<span class="shrink-0 pl-3 text-xs font-medium text-slate-500">{{
-									dateRange(project.startDate, project.endDate, false)
-								}}</span>
-							</div>
-							<p class="text-[13px] font-medium text-slate-500">
-								{{ [project.tech, project.link].filter(Boolean).join(' · ') }}
-							</p>
-							<ul class="mt-1.5 list-disc space-y-1 pl-5 text-[13.5px] leading-relaxed text-slate-600">
-								<li v-for="(b, bi) in splitLines(project.bullets)" :key="bi">{{ b }}</li>
-							</ul>
-						</article>
-					</div>
-				</section>
+			<section v-if="shown.experience.length" class="pt-6">
+				<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Experience</h2>
+				<div class="entry-stack">
+					<article v-for="job in shown.experience" :key="job.id" class="avoid-break">
+						<div class="flex items-baseline justify-between">
+							<h3 class="text-[15px] font-bold text-slate-900">{{ job.role || 'Role' }}</h3>
+							<span class="shrink-0 pl-3 text-xs font-medium text-slate-500">{{
+								dateRange(job.startDate, job.endDate, job.current)
+							}}</span>
+						</div>
+						<p class="text-[13px] font-medium text-slate-500">
+							{{ [job.company, job.location].filter(Boolean).join(' · ') }}
+						</p>
+						<MarkdownText
+							v-if="job.bullets"
+							:source="job.bullets"
+							class="mt-1.5 text-[13.5px] leading-relaxed text-slate-600"
+						/>
+					</article>
+				</div>
+			</section>
 
-				<section v-if="shown.education.length">
-					<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Education</h2>
-					<div class="space-y-4">
-						<article v-for="edu in shown.education" :key="edu.id" class="avoid-break">
-							<div class="flex items-baseline justify-between">
-								<h3 class="text-[15px] font-bold text-slate-900">{{ edu.school || 'School' }}</h3>
-								<span class="shrink-0 pl-3 text-xs font-medium text-slate-500">{{
-									dateRange(edu.startDate, edu.endDate, false)
-								}}</span>
-							</div>
-							<p class="text-[13px] font-medium text-slate-500">
-								{{ [edu.degree, edu.field].filter(Boolean).join(' in ') }}{{ edu.gpa ? ` · GPA ${edu.gpa}` : '' }}
-							</p>
-							<p v-if="edu.details" class="mt-1 text-[13px] text-slate-600">{{ edu.details }}</p>
-						</article>
-					</div>
-				</section>
-			</div>
+			<section v-if="shown.projects.length" class="pt-6">
+				<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Projects</h2>
+				<div class="entry-stack">
+					<article v-for="project in shown.projects" :key="project.id" class="avoid-break">
+						<div class="flex items-baseline justify-between">
+							<h3 class="text-[15px] font-bold text-slate-900">{{ project.name || 'Project' }}</h3>
+							<span class="shrink-0 pl-3 text-xs font-medium text-slate-500">{{
+								dateRange(project.startDate, project.endDate, false)
+							}}</span>
+						</div>
+						<p class="text-[13px] font-medium text-slate-500">
+							{{ [project.tech, project.link].filter(Boolean).join(' · ') }}
+						</p>
+						<MarkdownText
+							v-if="project.bullets"
+							:source="project.bullets"
+							class="mt-1.5 text-[13.5px] leading-relaxed text-slate-600"
+						/>
+					</article>
+				</div>
+			</section>
 
-			<aside v-if="shown.skills.length" class="w-[220px] shrink-0 bg-slate-50 px-6 py-8">
-				<section class="avoid-break">
-					<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Skills</h2>
-					<div class="space-y-4">
-						<div v-for="group in shown.skills" :key="group.id">
-							<h3 class="text-[13px] font-bold text-slate-900">{{ group.category || 'Category' }}</h3>
-							<div class="mt-1.5">
-								<span
-									v-for="(skill, si) in splitComma(group.items)"
-									:key="si"
-									class="mr-1.5 mb-1.5 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
-									:style="{ backgroundColor: accent }"
-								>
-									{{ skill }}
-								</span>
-							</div>
+			<section v-if="shown.skills.length" class="pt-6">
+				<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Skills</h2>
+				<div class="entry-stack">
+					<div v-for="group in shown.skills" :key="group.id" class="avoid-break">
+						<h3 class="text-[13px] font-bold text-slate-900">{{ group.category || 'Category' }}</h3>
+						<div class="mt-1.5">
+							<span
+								v-for="(skill, si) in splitComma(group.items)"
+								:key="si"
+								class="mr-1.5 mb-1.5 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
+								:style="{ backgroundColor: accent }"
+							>
+								{{ skill }}
+							</span>
 						</div>
 					</div>
-				</section>
-			</aside>
+				</div>
+			</section>
 		</div>
 	</div>
 </template>

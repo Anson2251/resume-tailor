@@ -1,29 +1,56 @@
 <script setup>
-import { blankEducation, blankExperience, blankProject, blankSkillGroup } from '../data/resume.js'
+import RepeatableList from './RepeatableList.vue'
+import { SECTION_FIELD_LABELS, SECTION_FIELDS } from '../data/resume.js'
 
-const resume = defineModel({ required: true })
+// The shared master content is edited here; the active profile decides what
+// shows, in which order, and can override individual fields.
+const master = defineModel({ required: true })
+const props = defineProps({
+	profile: { type: Object, required: true }
+})
+const emit = defineEmits(['add', 'remove'])
 
-function move(list, index, delta) {
-	const target = index + delta
-	if (target < 0 || target >= list.length) return
-	const [item] = list.splice(index, 1)
-	list.splice(target, 0, item)
+const add = (key) => emit('add', { key })
+const remove = (key, id) => emit('remove', { key, id })
+
+const readOverrides = () => props.profile.overrides || {}
+
+function ensureOverrides() {
+	if (!props.profile.overrides) props.profile.overrides = {}
+	return props.profile.overrides
 }
 
-function addExperience() {
-	resume.value.experience.push(blankExperience())
+function setField(item, field, value) {
+	const map = ensureOverrides()
+	const existing = map[item.id]
+	if (value === item[field]) {
+		// Back to the master value — drop the override so it follows master again.
+		if (!existing) return
+		delete existing[field]
+		if (!Object.keys(existing).length) delete map[item.id]
+		return
+	}
+	map[item.id] = { ...existing, [field]: value }
 }
 
-function addProject() {
-	resume.value.projects.push(blankProject())
+/**
+ * Per-item field accessor for v-model: reads the active profile's override when
+ * present (otherwise the master value) and writes copy-on-write overrides.
+ */
+function fieldModel(item, section) {
+	const model = {}
+	for (const field of SECTION_FIELDS[section]) {
+		Object.defineProperty(model, field, {
+			enumerable: true,
+			get: () => readOverrides()[item.id]?.[field] ?? item[field],
+			set: (value) => setField(item, field, value)
+		})
+	}
+	return model
 }
 
-function addEducation() {
-	resume.value.education.push(blankEducation())
-}
-
-function addSkillGroup() {
-	resume.value.skills.push(blankSkillGroup())
+function resetOverrides(id) {
+	if (props.profile.overrides) delete props.profile.overrides[id]
 }
 </script>
 
@@ -31,351 +58,266 @@ function addSkillGroup() {
 	<div class="space-y-4">
 		<!-- Contact information -->
 		<section class="card p-5">
-			<h2 class="section-title">Contact Information</h2>
+			<div class="flex items-baseline justify-between gap-3">
+				<h2 class="section-title">Contact Information</h2>
+				<span class="shrink-0 text-xs text-slate-400">shared on every profile</span>
+			</div>
 			<div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<div>
 					<label class="label" for="f-name">Full name</label>
-					<input id="f-name" v-model="resume.contact.fullName" class="input" placeholder="Bob Smith" />
-				</div>
-				<div>
-					<label class="label" for="f-title">Job title</label>
-					<input id="f-title" v-model="resume.contact.title" class="input" placeholder="Frontend Engineer" />
+					<input id="f-name" v-model="master.contact.fullName" class="input" placeholder="Bob Smith" />
 				</div>
 				<div>
 					<label class="label" for="f-email">Email</label>
-					<input id="f-email" v-model="resume.contact.email" type="email" class="input" placeholder="you@example.com" />
+					<input id="f-email" v-model="master.contact.email" type="email" class="input" placeholder="you@example.com" />
 				</div>
 				<div>
 					<label class="label" for="f-phone">Phone</label>
-					<input id="f-phone" v-model="resume.contact.phone" type="tel" class="input" placeholder="+33 6 12 34 56 78" />
+					<input id="f-phone" v-model="master.contact.phone" type="tel" class="input" placeholder="+33 6 12 34 56 78" />
 				</div>
 				<div>
 					<label class="label" for="f-location">Location</label>
-					<input id="f-location" v-model="resume.contact.location" class="input" placeholder="City, Country" />
+					<input id="f-location" v-model="master.contact.location" class="input" placeholder="City, Country" />
 				</div>
 				<div>
 					<label class="label" for="f-website">Website</label>
-					<input id="f-website" v-model="resume.contact.website" class="input" placeholder="your-site.dev" />
+					<input id="f-website" v-model="master.contact.website" class="input" placeholder="your-site.dev" />
 				</div>
-				<div class="sm:col-span-2">
+				<div>
 					<label class="label" for="f-linkedin">LinkedIn</label>
-					<input id="f-linkedin" v-model="resume.contact.linkedin" class="input" placeholder="linkedin.com/in/username" />
+					<input id="f-linkedin" v-model="master.contact.linkedin" class="input" placeholder="linkedin.com/in/username" />
 				</div>
-				<div class="sm:col-span-2">
-					<label class="label" for="f-summary">Professional summary</label>
+			</div>
+		</section>
+
+		<!-- Job title + summary: tailored per profile -->
+		<section class="card border-indigo-200 p-5">
+			<div class="flex items-baseline justify-between gap-3">
+				<h2 class="section-title text-indigo-400">Tailoring</h2>
+				<span class="shrink-0 text-xs text-indigo-400">saved on “{{ props.profile.name }}” only</span>
+			</div>
+			<div class="mt-4 space-y-3">
+				<div>
+					<label class="label" for="f-title">Job title <span class="font-normal normal-case">(this profile)</span></label>
+					<input id="f-title" v-model="profile.title" class="input" placeholder="Frontend Engineer" />
+				</div>
+				<div>
+					<label class="label" for="f-summary">
+						Professional summary <span class="font-normal normal-case">(this profile · markdown)</span>
+					</label>
 					<textarea
 						id="f-summary"
-						v-model="resume.contact.summary"
+						v-model="profile.summary"
 						class="textarea"
-						rows="4"
-						placeholder="2–3 sentences tailoring yourself to the role…"
+						rows="5"
+						placeholder="**Frontend engineer** with 5 years…&#10;&#10;- Shipped a design system used by 4 teams&#10;- Cut page load by **45%**"
 					/>
 				</div>
+				<p class="text-xs text-slate-400">
+					Long-form fields (summary, achievements, highlights, details) render as <strong class="font-semibold">markdown</strong> —
+					use <code class="rounded bg-slate-100 px-1">-</code> for bullets, <code class="rounded bg-slate-100 px-1">**bold**</code>,
+					<code class="rounded bg-slate-100 px-1">*italic*</code>, <code class="rounded bg-slate-100 px-1">[links](url)</code>.
+					Edits are <strong class="font-semibold">saved on this profile only</strong>; other profiles keep the master wording.
+				</p>
 			</div>
 		</section>
 
 		<!-- Experience -->
-		<section class="card p-5">
-			<div class="flex items-center justify-between">
-				<h2 class="section-title">Experience · {{ resume.experience.length }}</h2>
-			</div>
-
-			<div class="mt-4 space-y-3">
-				<article
-					v-for="(job, i) in resume.experience"
-					:key="job.id"
-					class="rounded-lg border border-slate-200 bg-slate-50/60 p-4 transition"
-					:class="{ 'opacity-60': !job.visible, 'saturate-0': !job.visible }"
-				>
-					<div class="mb-3 flex items-center justify-between gap-2">
-						<p class="text-sm font-semibold text-slate-700" :class="!job.visible ? 'text-slate-400 line-through decoration-black decoration-2' : ''">
-							{{ job.role || job.company ? `${job.role || 'New role'}${job.company ? ` · ${job.company}` : ''}` : `Position ${i + 1}` }}
-						</p>
-						<div class="flex items-center gap-1">
-							<label class="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700" title="Show this item on the resume">
-							<input v-model="job.visible" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
-								Show
-							</label>
-							<button class="icon-btn" title="Move up" :disabled="i === 0" @click="move(resume.experience, i, -1)">↑</button>
-							<button
-								class="icon-btn"
-								title="Move down"
-								:disabled="i === resume.experience.length - 1"
-								@click="move(resume.experience, i, 1)"
-							>
-								↓
-							</button>
-							<button
-								class="icon-btn hover:!bg-red-50 hover:!text-red-600"
-								title="Remove"
-								:disabled="resume.experience.length === 1"
-								@click="resume.experience.splice(i, 1)"
-							>
-								✕
-							</button>
-						</div>
+		<RepeatableList
+			title="Experience"
+			add-label="Add experience"
+			:items="master.experience"
+			:can-remove="master.experience.length > 1"
+			:overrides="profile.overrides"
+			:field-labels="SECTION_FIELD_LABELS.experience"
+			v-model:order="profile.view.experience"
+			@add="add('experience')"
+			@remove="remove('experience', $event)"
+			@reset="resetOverrides"
+		>
+			<template #heading="{ item, index }">
+				{{ item.role || item.company ? `${item.role || 'New role'}${item.company ? ` · ${item.company}` : ''}` : `Position ${index + 1}` }}
+			</template>
+			<template #fields="{ item }">
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					<div>
+						<label class="label">Role</label>
+						<input v-model="fieldModel(item, 'experience').role" class="input" placeholder="Senior Frontend Engineer" />
 					</div>
-
-					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					<div>
+						<label class="label">Company</label>
+						<input v-model="fieldModel(item, 'experience').company" class="input" placeholder="Acme Corp" />
+					</div>
+					<div>
+						<label class="label">Location</label>
+						<input v-model="fieldModel(item, 'experience').location" class="input" placeholder="Remote" />
+					</div>
+					<div class="grid grid-cols-2 gap-3">
 						<div>
-							<label class="label">Role</label>
-							<input v-model="job.role" class="input" placeholder="Senior Frontend Engineer" />
+							<label class="label">Start</label>
+							<input v-model="fieldModel(item, 'experience').startDate" class="input" placeholder="Jan 2022" />
 						</div>
 						<div>
-							<label class="label">Company</label>
-							<input v-model="job.company" class="input" placeholder="Acme Corp" />
-						</div>
-						<div>
-							<label class="label">Location</label>
-							<input v-model="job.location" class="input" placeholder="Remote" />
-						</div>
-						<div class="grid grid-cols-2 gap-3">
-							<div>
-								<label class="label">Start</label>
-								<input v-model="job.startDate" class="input" placeholder="Jan 2022" />
-							</div>
-							<div>
-								<label class="label">End</label>
-								<input v-model="job.endDate" class="input" placeholder="Dec 2023" :disabled="job.current" />
-							</div>
-						</div>
-						<div class="sm:col-span-2">
-							<label class="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-								<input v-model="job.current" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
-								I currently work here
-							</label>
-						</div>
-						<div class="sm:col-span-2">
-							<label class="label">Achievements · one per line</label>
-							<textarea
-								v-model="job.bullets"
-								class="textarea font-mono"
-								rows="4"
-								placeholder="Shipped X, improving Y by Z%&#10;Led …&#10;Built …"
+							<label class="label">End</label>
+							<input
+								v-model="fieldModel(item, 'experience').endDate"
+								class="input"
+								placeholder="Dec 2023"
+								:disabled="fieldModel(item, 'experience').current"
 							/>
 						</div>
 					</div>
-				</article>
-			</div>
-
-			<button class="btn btn-secondary mt-4 w-full border-dashed" @click="addExperience">
-				<span class="text-lg leading-none">+</span> Add experience
-			</button>
-		</section>
+					<div class="sm:col-span-2">
+						<label class="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+							<input v-model="fieldModel(item, 'experience').current" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
+							I currently work here
+						</label>
+					</div>
+					<div class="sm:col-span-2">
+						<label class="label">Achievements <span class="font-normal normal-case">(markdown)</span></label>
+						<textarea
+							v-model="fieldModel(item, 'experience').bullets"
+							class="textarea"
+							rows="5"
+							placeholder="- Shipped X, improving Y by **Z%**&#10;- Led …&#10;- Built …"
+						/>
+					</div>
+				</div>
+			</template>
+		</RepeatableList>
 
 		<!-- Projects -->
-		<section class="card p-5">
-			<h2 class="section-title">Projects · {{ resume.projects.length }}</h2>
-
-			<div class="mt-4 space-y-3">
-				<article
-					v-for="(project, i) in resume.projects"
-					:key="project.id"
-					class="rounded-lg border border-slate-200 bg-slate-50/60 p-4"
-					:class="{ 'opacity-60': !project.visible }"
-				>
-					<div class="mb-3 flex items-center justify-between gap-2">
-						<p class="text-sm font-semibold text-slate-700" :class="!project.visible ? 'text-slate-400 line-through decoration-red-400 decoration-2' : ''">
-							{{ project.name || `Project ${i + 1}` }}
-						</p>
-						<div class="flex items-center gap-1">
-							<label class="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700" title="Show this item on the resume">
-								<input v-model="project.visible" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
-								Show
-							</label>
-							<button class="icon-btn" title="Move up" :disabled="i === 0" @click="move(resume.projects, i, -1)">↑</button>
-							<button
-								class="icon-btn"
-								title="Move down"
-								:disabled="i === resume.projects.length - 1"
-								@click="move(resume.projects, i, 1)"
-							>
-								↓
-							</button>
-							<button
-								class="icon-btn hover:!bg-red-50 hover:!text-red-600"
-								title="Remove"
-								:disabled="resume.projects.length === 1"
-								@click="resume.projects.splice(i, 1)"
-							>
-								✕
-							</button>
+		<RepeatableList
+			title="Projects"
+			add-label="Add project"
+			:items="master.projects"
+			:can-remove="master.projects.length > 1"
+			:overrides="profile.overrides"
+			:field-labels="SECTION_FIELD_LABELS.projects"
+			v-model:order="profile.view.projects"
+			@add="add('projects')"
+			@remove="remove('projects', $event)"
+			@reset="resetOverrides"
+		>
+			<template #heading="{ item, index }">{{ item.name || `Project ${index + 1}` }}</template>
+			<template #fields="{ item }">
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					<div>
+						<label class="label">Project name</label>
+						<input v-model="fieldModel(item, 'projects').name" class="input" placeholder="Portfolio Site" />
+					</div>
+					<div>
+						<label class="label">Link</label>
+						<input v-model="fieldModel(item, 'projects').link" class="input" placeholder="github.com/you/project" />
+					</div>
+					<div>
+						<label class="label">Technologies</label>
+						<input v-model="fieldModel(item, 'projects').tech" class="input" placeholder="Vue 3, Tailwind CSS" />
+					</div>
+					<div class="grid grid-cols-2 gap-3">
+						<div>
+							<label class="label">Start</label>
+							<input v-model="fieldModel(item, 'projects').startDate" class="input" placeholder="2023" />
+						</div>
+						<div>
+							<label class="label">End</label>
+							<input v-model="fieldModel(item, 'projects').endDate" class="input" placeholder="2024" />
 						</div>
 					</div>
-
-					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-						<div>
-							<label class="label">Project name</label>
-							<input v-model="project.name" class="input" placeholder="Portfolio Site" />
-						</div>
-						<div>
-							<label class="label">Link</label>
-							<input v-model="project.link" class="input" placeholder="github.com/you/project" />
-						</div>
-						<div>
-							<label class="label">Technologies</label>
-							<input v-model="project.tech" class="input" placeholder="Vue 3, Tailwind CSS" />
-						</div>
-						<div class="grid grid-cols-2 gap-3">
-							<div>
-								<label class="label">Start</label>
-								<input v-model="project.startDate" class="input" placeholder="2023" />
-							</div>
-							<div>
-								<label class="label">End</label>
-								<input v-model="project.endDate" class="input" placeholder="2024" />
-							</div>
-						</div>
-						<div class="sm:col-span-2">
-							<label class="label">Highlights · one per line</label>
-							<textarea
-								v-model="project.bullets"
-								class="textarea font-mono"
-								rows="3"
-								placeholder="What it does, your role, outcome…"
-							/>
-						</div>
+					<div class="sm:col-span-2">
+						<label class="label">Highlights <span class="font-normal normal-case">(markdown)</span></label>
+						<textarea
+							v-model="fieldModel(item, 'projects').bullets"
+							class="textarea"
+							rows="4"
+							placeholder="- What it does, your role, outcome…&#10;- [Repo](https://github.com/you/project)"
+						/>
 					</div>
-				</article>
-			</div>
-
-			<button class="btn btn-secondary mt-4 w-full border-dashed" @click="addProject">
-				<span class="text-lg leading-none">+</span> Add project
-			</button>
-		</section>
+				</div>
+			</template>
+		</RepeatableList>
 
 		<!-- Education -->
-		<section class="card p-5">
-			<h2 class="section-title">Education · {{ resume.education.length }}</h2>
-
-			<div class="mt-4 space-y-3">
-				<article
-					v-for="(edu, i) in resume.education"
-					:key="edu.id"
-					class="rounded-lg border border-slate-200 bg-slate-50/60 p-4"
-					:class="{ 'opacity-60': !edu.visible }"
-				>
-					<div class="mb-3 flex items-center justify-between gap-2">
-						<p class="text-sm font-semibold text-slate-700" :class="!edu.visible ? 'text-slate-400 line-through decoration-red-400 decoration-2' : ''">
-							{{ edu.school || `School ${i + 1}` }}{{ edu.degree ? ` · ${edu.degree}` : '' }}
-						</p>
-						<div class="flex items-center gap-1">
-							<label class="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700" title="Show this item on the resume">
-															<input v-model="edu.visible" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
-															Show
-														</label>
-														<button class="icon-btn" title="Move up" :disabled="i === 0" @click="move(resume.education, i, -1)">↑</button>
-							<button
-								class="icon-btn"
-								title="Move down"
-								:disabled="i === resume.education.length - 1"
-								@click="move(resume.education, i, 1)"
-							>
-								↓
-							</button>
-							<button
-								class="icon-btn hover:!bg-red-50 hover:!text-red-600"
-								title="Remove"
-								:disabled="resume.education.length === 1"
-								@click="resume.education.splice(i, 1)"
-							>
-								✕
-							</button>
-						</div>
+		<RepeatableList
+			title="Education"
+			add-label="Add education"
+			:items="master.education"
+			:can-remove="master.education.length > 1"
+			:overrides="profile.overrides"
+			:field-labels="SECTION_FIELD_LABELS.education"
+			v-model:order="profile.view.education"
+			@add="add('education')"
+			@remove="remove('education', $event)"
+			@reset="resetOverrides"
+		>
+			<template #heading="{ item, index }">
+				{{ item.school || `School ${index + 1}` }}{{ item.degree ? ` · ${item.degree}` : '' }}
+			</template>
+			<template #fields="{ item }">
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					<div>
+						<label class="label">School</label>
+						<input v-model="fieldModel(item, 'education').school" class="input" placeholder="State University" />
 					</div>
-
-					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-						<div>
-							<label class="label">School</label>
-							<input v-model="edu.school" class="input" placeholder="State University" />
-						</div>
-						<div>
-							<label class="label">Degree</label>
-							<input v-model="edu.degree" class="input" placeholder="B.S." />
-						</div>
-						<div>
-							<label class="label">Field of study</label>
-							<input v-model="edu.field" class="input" placeholder="Computer Science" />
-						</div>
-						<div>
-							<label class="label">GPA <span class="font-normal normal-case">(optional)</span></label>
-							<input v-model="edu.gpa" class="input" placeholder="3.8" />
-						</div>
-						<div>
-							<label class="label">Start year</label>
-							<input v-model="edu.startDate" class="input" placeholder="2016" />
-						</div>
-						<div>
-							<label class="label">End year</label>
-							<input v-model="edu.endDate" class="input" placeholder="2020" />
-						</div>
-						<div class="sm:col-span-2">
-							<label class="label">Details <span class="font-normal normal-case">(optional)</span></label>
-							<textarea v-model="edu.details" class="textarea" rows="2" placeholder="Honors, coursework, activities…" />
-						</div>
+					<div>
+						<label class="label">Degree</label>
+						<input v-model="fieldModel(item, 'education').degree" class="input" placeholder="B.S." />
 					</div>
-				</article>
-			</div>
-
-			<button class="btn btn-secondary mt-4 w-full border-dashed" @click="addEducation">
-				<span class="text-lg leading-none">+</span> Add education
-			</button>
-		</section>
+					<div>
+						<label class="label">Field of study</label>
+						<input v-model="fieldModel(item, 'education').field" class="input" placeholder="Computer Science" />
+					</div>
+					<div>
+						<label class="label">GPA <span class="font-normal normal-case">(optional)</span></label>
+						<input v-model="fieldModel(item, 'education').gpa" class="input" placeholder="3.8" />
+					</div>
+					<div>
+						<label class="label">Start year</label>
+						<input v-model="fieldModel(item, 'education').startDate" class="input" placeholder="2016" />
+					</div>
+					<div>
+						<label class="label">End year</label>
+						<input v-model="fieldModel(item, 'education').endDate" class="input" placeholder="2020" />
+					</div>
+					<div class="sm:col-span-2">
+						<label class="label">Details <span class="font-normal normal-case">(markdown, optional)</span></label>
+						<textarea
+							v-model="fieldModel(item, 'education').details"
+							class="textarea"
+							rows="3"
+							placeholder="Honors, coursework… or a [link](https://…)"
+						/>
+					</div>
+				</div>
+			</template>
+		</RepeatableList>
 
 		<!-- Skills -->
-		<section class="card p-5">
-			<h2 class="section-title">Skills · {{ resume.skills.length }}</h2>
-
-			<div class="mt-4 space-y-3">
-				<article
-					v-for="(group, i) in resume.skills"
-					:key="group.id"
-					class="rounded-lg border border-slate-200 bg-slate-50/60 p-4"
-					:class="{ 'opacity-60': !group.visible }"
-				>
-					<div class="mb-3 flex items-center justify-between gap-2">
-						<p class="text-sm font-semibold text-slate-700" :class="!group.visible ? 'text-slate-400 line-through decoration-red-400 decoration-2' : ''">{{ group.category || `Skill group ${i + 1}` }}</p>
-						<div class="flex items-center gap-1">
-							<label class="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700" title="Show this item on the resume">
-															<input v-model="group.visible" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
-															Show
-														</label>
-														<button class="icon-btn" title="Move up" :disabled="i === 0" @click="move(resume.skills, i, -1)">↑</button>
-							<button
-								class="icon-btn"
-								title="Move down"
-								:disabled="i === resume.skills.length - 1"
-								@click="move(resume.skills, i, 1)"
-							>
-								↓
-							</button>
-							<button
-								class="icon-btn hover:!bg-red-50 hover:!text-red-600"
-								title="Remove"
-								:disabled="resume.skills.length === 1"
-								@click="resume.skills.splice(i, 1)"
-							>
-								✕
-							</button>
-						</div>
+		<RepeatableList
+			title="Skills"
+			add-label="Add skill group"
+			:items="master.skills"
+			:can-remove="master.skills.length > 1"
+			:overrides="profile.overrides"
+			:field-labels="SECTION_FIELD_LABELS.skills"
+			v-model:order="profile.view.skills"
+			@add="add('skills')"
+			@remove="remove('skills', $event)"
+			@reset="resetOverrides"
+		>
+			<template #heading="{ item, index }">{{ item.category || `Skill group ${index + 1}` }}</template>
+			<template #fields="{ item }">
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+					<div class="sm:col-span-1">
+						<label class="label">Category</label>
+						<input v-model="fieldModel(item, 'skills').category" class="input" placeholder="Languages" />
 					</div>
-
-					<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-						<div class="sm:col-span-1">
-							<label class="label">Category</label>
-							<input v-model="group.category" class="input" placeholder="Languages" />
-						</div>
-						<div class="sm:col-span-2">
-							<label class="label">Skills · comma separated</label>
-							<input v-model="group.items" class="input" placeholder="JavaScript, TypeScript, HTML, CSS" />
-						</div>
+					<div class="sm:col-span-2">
+						<label class="label">Skills · comma separated</label>
+						<input v-model="fieldModel(item, 'skills').items" class="input" placeholder="JavaScript, TypeScript, HTML, CSS" />
 					</div>
-				</article>
-			</div>
-
-			<button class="btn btn-secondary mt-4 w-full border-dashed" @click="addSkillGroup">
-				<span class="text-lg leading-none">+</span> Add skill group
-			</button>
-		</section>
+				</div>
+			</template>
+		</RepeatableList>
 	</div>
 </template>
