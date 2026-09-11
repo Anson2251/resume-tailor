@@ -12,6 +12,7 @@ A simple resume-tailoring tool built with Vue 3 + Tailwind CSS v4 + Vite.
 - **Profile bar** in the header: switch between profiles (as accent-colored tabs, or a select once there are more than five), plus create, duplicate, rename and delete profiles.
 - **Live preview** with 3 templates: Modern, Classic, Minimal — plus a **1 / 2 column** layout toggle and a **Style popover** for the accent color and body font (all saved per profile). The font defaults to the template’s own font (Modern/Minimal → Sans, Classic → Serif) until you pick one. Two columns makes the body content (summary, experience, projects, education, skills) flow newspaper-style across two columns; entries stay whole and headings stay with their content.
 - **Export PDF** button — opens the print dialog; choose “Save as PDF” with margins set to None for an edge-to-edge A4 file with selectable vector text.
+- **Light / dark workspace** toggle in the top bar (persisted, follows the OS setting until you pick one) — the resume page itself always stays light so the printout never changes. The GitHub icon next to it links to the repo.
 - The whole workspace **auto-saves to localStorage**; Load sample / Clear helpers in the top bar.
 - **Import / Export** buttons — move your workspace (master + all profiles) between browsers as a minified JSON file. Import also accepts older single-resume files, which are migrated into a profile, and asks before replacing your current content.
 

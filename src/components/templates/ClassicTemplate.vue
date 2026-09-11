@@ -52,8 +52,8 @@ const shown = computed(() => ({
 			</p>
 		</header>
 
-		<div :class="columns === 2 ? 'resume-columns' : ''">
-			<section v-if="resume.contact.summary" class="avoid-break pt-5">
+		<div :class="columns === 2 ? 'resume-columns' : ''" class="pt-5">
+			<section v-if="resume.contact.summary" class="avoid-break">
 				<h2
 					class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
 					:style="{ color: accent, borderColor: `${accent}55` }"

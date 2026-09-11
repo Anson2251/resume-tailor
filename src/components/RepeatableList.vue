@@ -129,17 +129,17 @@ function onDragEnd() {
 	<section class="card p-5">
 		<div class="flex items-baseline justify-between gap-3">
 			<h2 class="section-title">{{ title }}</h2>
-			<span class="shrink-0 text-xs text-slate-400">{{ shownCount }}/{{ items.length }} shown</span>
+			<span class="shrink-0 text-xs text-slate-400 dark:text-slate-500">{{ shownCount }}/{{ items.length }} shown</span>
 		</div>
 
 		<div class="mt-4 space-y-3">
 			<article
 				v-for="(row, i) in rows"
 				:key="row.item.id"
-				class="relative rounded-lg border bg-slate-50/60 p-4 transition"
+				class="relative rounded-lg border bg-slate-50/60 p-4 transition dark:bg-slate-800/40"
 				:class="{
-					'border-amber-300': hasOverride(row.item.id),
-					'border-slate-200': !hasOverride(row.item.id),
+					'border-amber-300 dark:border-amber-700': hasOverride(row.item.id),
+					'border-slate-200 dark:border-slate-700': !hasOverride(row.item.id),
 					'opacity-60 saturate-0': !row.visible,
 					'opacity-40': dragId === row.item.id
 				}"
@@ -161,11 +161,11 @@ function onDragEnd() {
 						<div class="flex min-w-0 items-center gap-1">
 							<span
 								class="icon-btn shrink-0"
-								:class="
-									row.visible
-										? 'cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing'
-										: 'cursor-not-allowed opacity-30'
-								"
+    							:class="
+    								row.visible
+    									? 'cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing dark:text-slate-600 dark:hover:text-slate-300'
+    									: 'cursor-not-allowed opacity-30'
+    								"
 								:draggable="row.visible"
 								:title="row.visible ? 'Drag to reorder' : 'Hidden on this profile — cannot reorder'"
 								aria-hidden="true"
@@ -176,7 +176,7 @@ function onDragEnd() {
 							</span>
 							<p
 								class="min-w-0 text-sm font-semibold"
-								:class="row.visible ? 'text-slate-700' : 'text-slate-400 line-through decoration-black decoration-2'"
+								:class="row.visible ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 line-through decoration-black decoration-2 dark:text-slate-500'"
 							>
 								<slot name="heading" :item="row.item" :index="i" :visible="row.visible" />
 							</p>
@@ -184,7 +184,7 @@ function onDragEnd() {
 
 						<div class="flex shrink-0 items-center gap-1">
 							<label
-								class="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700"
+								class="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
 								:title="row.visible ? 'Hide on this profile' : 'Show on this profile'"
 							>
 								<input
@@ -224,11 +224,11 @@ function onDragEnd() {
 
 					<p
 						v-if="hasOverride(row.item.id)"
-						class="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11px] leading-relaxed text-amber-600"
+						class="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400"
 					>
 						<span class="min-w-0">Customized for this profile: {{ overrideLabels(row.item.id).join(', ') }}</span>
 						<button
-							class="inline-flex items-center gap-0.5 font-medium underline hover:text-amber-800"
+							class="inline-flex items-center gap-0.5 font-medium underline hover:text-amber-800 dark:hover:text-amber-200"
 							@click="emit('reset', row.item.id)"
 						>
 							<Icon size="13"><ArrowUndo16Regular /></Icon> Use master

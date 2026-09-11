@@ -6,7 +6,9 @@ import {
 	ArrowUpload16Regular,
 	Broom16Regular,
 	DocumentAdd16Regular,
-	DocumentArrowDown16Regular
+	DocumentArrowDown16Regular,
+	WeatherMoon16Regular,
+	WeatherSunny16Regular
 } from './data/icons.js'
 import ResumeForm from './components/ResumeForm.vue'
 import ResumePreview from './components/ResumePreview.vue'
@@ -27,6 +29,41 @@ import {
 const workspace = reactive(blankWorkspace())
 const loaded = ref(false)
 const fileInput = ref(null)
+
+// --- Theme (light/dark): app chrome only, the resume page stays light ---
+const THEME_KEY = 'resume-tailor-theme'
+const theme = ref('light')
+const isDark = computed(() => theme.value === 'dark')
+
+function applyTheme(value) {
+	theme.value = value
+	document.documentElement.classList.toggle('dark', value === 'dark')
+	document.documentElement.style.colorScheme = value
+	try {
+		localStorage.setItem(THEME_KEY, value)
+	} catch {
+		/* storage unavailable — ignore */
+	}
+}
+
+function toggleTheme() {
+	applyTheme(isDark.value ? 'light' : 'dark')
+}
+
+function initTheme() {
+	let stored = null
+	try {
+		stored = localStorage.getItem(THEME_KEY)
+	} catch {
+		/* storage unavailable — fall back to the pre-paint class */
+	}
+	if (stored !== 'light' && stored !== 'dark') {
+		// index.html already applied the prefers-color-scheme fallback before
+		// first paint; mirror whatever it chose instead of flashing.
+		stored = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+	}
+	applyTheme(stored)
+}
 
 const activeProfile = computed(
 	() => workspace.profiles.find((p) => p.id === workspace.activeProfileId) || workspace.profiles[0]
@@ -213,6 +250,7 @@ function exportPdf() {
 watch(workspace, persist, { deep: true })
 
 onMounted(() => {
+	initTheme()
 	restore()
 	loaded.value = true
 	persist() // write back after migration from an older save
@@ -220,13 +258,13 @@ onMounted(() => {
 </script>
 
 <template>
-	<div class="flex min-h-screen flex-col bg-slate-100 text-slate-900 lg:h-dvh">
+	<div class="flex min-h-screen flex-col bg-slate-100 text-slate-900 lg:h-dvh dark:bg-slate-950 dark:text-slate-100">
 		<!-- Top bar -->
-		<header class="no-print sticky top-0 z-10 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur">
+		<header class="no-print sticky top-0 z-10 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
 			<div class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-3 px-4 py-3">
 				<div class="mr-auto">
 					<h1 class="text-lg font-extrabold tracking-tight">Resume Tailor</h1>
-					<p class="text-xs text-slate-500">One master resume — a tailored view per profile.</p>
+					<p class="text-xs text-slate-500 dark:text-slate-400">One master resume — a tailored view per profile.</p>
 				</div>
 
 				<div class="flex items-center gap-2">
@@ -245,12 +283,35 @@ onMounted(() => {
 					<button class="btn btn-primary text-[13px]" @click="exportPdf">
 						<Icon size="16"><ArrowDownload16Regular /></Icon> Export PDF
 					</button>
+					<span class="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
+					<button
+						class="btn btn-ghost px-2.5"
+						:title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+						:aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+						@click="toggleTheme"
+					>
+						<Icon size="16"><component :is="isDark ? WeatherSunny16Regular : WeatherMoon16Regular" /></Icon>
+					</button>
+					<a
+						class="btn btn-ghost px-2.5"
+						href="https://github.com/Anson2251/resume-tailor"
+						target="_blank"
+						rel="noopener noreferrer"
+						title="View on GitHub"
+						aria-label="View on GitHub"
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+							<path
+								d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+							/>
+						</svg>
+					</a>
 					<input ref="fileInput" type="file" accept=".json,application/json" class="hidden" @change="handleImportFile" />
 				</div>
 			</div>
 
 			<!-- Profile switcher -->
-			<div class="mx-auto w-full max-w-[1400px] border-t border-slate-100 px-4 py-2">
+			<div class="mx-auto w-full max-w-[1400px] border-t border-slate-100 px-4 py-2 dark:border-slate-800">
 				<ProfileBar
 					v-model="workspace.activeProfileId"
 					:profiles="workspace.profiles"
@@ -275,7 +336,7 @@ onMounted(() => {
 					@add="addItem"
 					@remove="removeItem"
 				/>
-				<p class="mt-3 text-center text-xs text-slate-400 sticky bottom-0 backdrop-blur-md pt-2 pb-1">
+				<p class="mt-3 text-center text-xs text-slate-400 sticky bottom-0 backdrop-blur-md pt-2 pb-1 dark:text-slate-500">
 					Show toggles and ↑/↓ order are saved per profile. Editing item content on the
 					<strong class="font-semibold">master</strong> profile changes the shared content; on other profiles it is a
 					per-profile customization. Everything auto-saves in this browser — use Import / Export to move it

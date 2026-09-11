@@ -69,7 +69,7 @@ function resetOverrides(id) {
 		<section class="card p-5">
 			<div class="flex items-baseline justify-between gap-3">
 				<h2 class="section-title">Contact Information</h2>
-				<span class="shrink-0 text-xs text-slate-400">shared on every profile</span>
+				<span class="shrink-0 text-xs text-slate-400 dark:text-slate-500">shared on every profile</span>
 			</div>
 			<div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<div>
@@ -100,10 +100,10 @@ function resetOverrides(id) {
 		</section>
 
 		<!-- Job title + summary: tailored per profile -->
-		<section class="card border-indigo-200 p-5">
+		<section class="card border-indigo-200 p-5 dark:border-indigo-900">
 			<div class="flex items-baseline justify-between gap-3">
-				<h2 class="section-title text-indigo-400">Tailoring</h2>
-				<span class="shrink-0 text-xs text-indigo-400">
+				<h2 class="section-title text-indigo-400 dark:text-indigo-300">Tailoring</h2>
+				<span class="shrink-0 text-xs text-indigo-400 dark:text-indigo-300">
 					{{ editMaster ? 'master · items edit shared content' : `saved on “${props.profile.name}” only` }}
 				</span>
 			</div>
@@ -124,10 +124,10 @@ function resetOverrides(id) {
 						placeholder="**Frontend engineer** with 5 years…&#10;&#10;- Shipped a design system used by 4 teams&#10;- Cut page load by **45%**"
 					/>
 				</div>
-				<p class="text-xs text-slate-400">
+				<p class="text-xs text-slate-400 dark:text-slate-500">
 					Long-form fields (summary, achievements, highlights, details) render as <strong class="font-semibold">markdown</strong> —
-					use <code class="rounded bg-slate-100 px-1">-</code> for bullets, <code class="rounded bg-slate-100 px-1">**bold**</code>,
-					<code class="rounded bg-slate-100 px-1">*italic*</code>, <code class="rounded bg-slate-100 px-1">[links](url)</code>.
+					use <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">-</code> for bullets, <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">**bold**</code>,
+					<code class="rounded bg-slate-100 px-1 dark:bg-slate-800">*italic*</code>, <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">[links](url)</code>.
 					<template v-if="editMaster">
 						This is the <strong class="font-semibold">master</strong> profile: item content edits change the shared
 						content that every profile inherits.
@@ -185,7 +185,7 @@ function resetOverrides(id) {
 						</div>
 					</div>
 					<div class="sm:col-span-2">
-						<label class="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+						<label class="flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
 							<input v-model="fieldModel(item, 'experience').current" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
 							I currently work here
 						</label>

@@ -96,7 +96,7 @@ onBeforeUnmount(removeListeners)
 					v-if="open"
 					ref="panel"
 					role="dialog"
-					class="no-print fixed z-50 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-xl ring-1 ring-slate-900/5"
+					class="no-print fixed z-50 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-xl ring-1 ring-slate-900/5 dark:border-slate-700 dark:bg-slate-900 dark:ring-white/10"
 					:style="{ top: `${position.top}px`, left: `${position.left}px`, width }"
 				>
 					<slot :close="close" />

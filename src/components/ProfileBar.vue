@@ -29,7 +29,7 @@ const asTabs = computed(() => props.profiles.length <= 5)
     		<!-- Tabs -->
     		<div
     			v-if="asTabs"
-    			class="overflow-auto flex flex-nowrap items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm ring-1 ring-slate-200"
+    			class="overflow-auto flex flex-nowrap items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm ring-1 ring-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700"
     			role="tablist"
     			aria-label="Profiles"
     		>
@@ -39,7 +39,7 @@ const asTabs = computed(() => props.profiles.length <= 5)
     				role="tab"
     				:aria-selected="activeId === p.id"
     				class="btn px-3 py-1.5 text-[13px] shrink-0"
-    				:class="activeId === p.id ? 'font-semibold text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'"
+    				:class="activeId === p.id ? 'font-semibold text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'"
     				:style="activeId === p.id ? { backgroundColor: accent } : null"
     				@click="activeId = p.id"
     			>
@@ -56,7 +56,7 @@ const asTabs = computed(() => props.profiles.length <= 5)
     			v-else
     			v-model="activeId"
     			aria-label="Active profile"
-    			class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[13px] font-medium text-slate-800 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+    			class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[13px] font-medium text-slate-800 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
     		>
     			<option v-for="p in profiles" :key="p.id" :value="p.id">{{ p.name }}{{ p.master ? ' (master)' : '' }}</option>
     		</select>
@@ -84,7 +84,7 @@ const asTabs = computed(() => props.profiles.length <= 5)
 				<Icon size="16"><Delete16Regular /></Icon> Delete
 			</button>
 			<button
-				class="btn btn-ghost text-[13px] text-amber-600 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-40"
+				class="btn btn-ghost text-[13px] text-amber-600 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-40 dark:text-amber-400 dark:hover:bg-amber-950 dark:hover:text-amber-300"
 				:disabled="!overrideCount"
 				:title="overrideCount ? 'Reset every customized field on this profile to master' : 'No customized fields on this profile'"
 				@click="emit('clear-overrides')"
