@@ -3,9 +3,19 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="color-scheme" content="light dark" />
 		<title>Resume Tailor</title>
-		<script type="module" crossorigin src="./assets/index-TBmAPYrL.js"></script>
-		<link rel="stylesheet" crossorigin href="./assets/index-DvwyBbh4.css">
+		<script>
+			// Set the initial theme before first paint to avoid a light/dark flash.
+			try {
+				var t = localStorage.getItem('resume-tailor-theme')
+				if (t !== 'light' && t !== 'dark')
+					t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+				if (t === 'dark') document.documentElement.classList.add('dark')
+			} catch (e) {}
+		</script>
+		<script type="module" crossorigin src="./assets/index-CUSMGK3f.js"></script>
+		<link rel="stylesheet" crossorigin href="./assets/index-Czrm6rU0.css">
 	</head>
 	<body>
 		<div id="app"></div>
