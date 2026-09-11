@@ -127,6 +127,13 @@
 		box-shadow: none !important;
 		border: none !important;
 		overflow: visible !important;
+		/* The on-screen preview zoom is applied as an inline `zoom` style.
+		   Inline styles beat normal stylesheet rules, so without this
+		   `!important` reset the printout would inherit the preview zoom
+		   (e.g. 60%) and come out scaled-down with wide white margins. */
+		zoom: 1 !important;
+		transform: none !important;
+		scale: 1 !important;
 		/* Keep accent colors even if "Background graphics" is unchecked */
 		-webkit-print-color-adjust: exact !important;
 		print-color-adjust: exact !important;

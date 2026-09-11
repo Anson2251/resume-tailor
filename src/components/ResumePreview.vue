@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Icon } from '@vicons/utils'
 import ModernTemplate from './templates/ModernTemplate.vue'
 import ClassicTemplate from './templates/ClassicTemplate.vue'
@@ -29,8 +29,31 @@ const activeComponent = computed(() => {
 })
 
 // Zoom only affects on-screen display; printing is always full-size A4.
+// The CSS `zoom` property leaks into print, so we force it back to 1 while
+// printing (belt-and-suspenders next to the `zoom: 1 !important` print rule
+// in style.css, which covers the print-preview render itself).
 const ZOOMS = [0.6, 0.8, 1]
 const zoom = ref(1)
+const isPrinting = ref(false)
+const printZoom = computed(() => (isPrinting.value ? 1 : zoom.value))
+
+function handleBeforePrint() {
+	isPrinting.value = true
+}
+
+function handleAfterPrint() {
+	isPrinting.value = false
+}
+
+onMounted(() => {
+	window.addEventListener('beforeprint', handleBeforePrint)
+	window.addEventListener('afterprint', handleAfterPrint)
+})
+
+onBeforeUnmount(() => {
+	window.removeEventListener('beforeprint', handleBeforePrint)
+	window.removeEventListener('afterprint', handleAfterPrint)
+})
 </script>
 
 <template>
@@ -145,7 +168,7 @@ const zoom = ref(1)
 		<div id="print-area" class="block overflow-auto bg-slate-200/70 p-6 lg:min-h-0 lg:flex-1 rounded-lg border border-slate-300">
 			<div
 				class="resume-page overflow-hidden rounded-sm shadow-xl ring-1 ring-slate-900/10"
-				:style="{ zoom }"
+				:style="{ zoom: printZoom }"
 			>
 				<component :is="activeComponent" :resume="resume" :accent="accent" :font="font" :columns="columns" />
 			</div>
