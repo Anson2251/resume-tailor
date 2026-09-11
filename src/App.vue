@@ -35,6 +35,9 @@ const activeProfile = computed(
 // The preview is derived: master content sliced and ordered by the active profile.
 const previewResume = computed(() => buildPreview(workspace.master, activeProfile.value))
 
+// The master profile edits the shared content directly (no overrides).
+const isMaster = computed(() => activeProfile.value?.master === true)
+
 // Template, accent & font are saved per profile.
 const template = computed({
 	get: () => activeProfile.value?.template ?? 'modern',
@@ -119,7 +122,10 @@ function removeProfile() {
 	}
 	if (!confirm(`Delete profile “${activeProfile.value.name}”?`)) return
 	const index = workspace.profiles.findIndex((p) => p.id === workspace.activeProfileId)
+	const wasMaster = workspace.profiles[index]?.master
 	workspace.profiles.splice(index, 1)
+	// The master profile may be deleted; the first remaining profile takes over.
+	if (wasMaster) workspace.profiles[0].master = true
 	workspace.activeProfileId = workspace.profiles[0].id
 }
 
@@ -145,7 +151,9 @@ function removeItem({ key, id }) {
 	}
 }
 
-const overrideCount = computed(() => Object.keys(activeProfile.value?.overrides || {}).length)
+const overrideCount = computed(() =>
+	isMaster.value ? 0 : Object.keys(activeProfile.value?.overrides || {}).length
+)
 
 function clearOverrides() {
 	if (!overrideCount.value) return
@@ -260,12 +268,19 @@ onMounted(() => {
 		<!-- Main: form mirrors resume layout, preview on the right -->
 		<main class="mx-auto grid w-full max-w-[1400px] flex-1 grid-cols-1 gap-6 px-4 py-6 lg:min-h-0 lg:grid-cols-[460px_minmax(0,1fr)]">
 			<div class="no-print min-w-0 lg:min-h-0 lg:overflow-y-auto">
-				<ResumeForm v-model="workspace.master" :profile="activeProfile" @add="addItem" @remove="removeItem" />
+				<ResumeForm
+					v-model="workspace.master"
+					:profile="activeProfile"
+					:edit-master="isMaster"
+					@add="addItem"
+					@remove="removeItem"
+				/>
 				<p class="mt-3 text-center text-xs text-slate-400 sticky bottom-0 backdrop-blur-md pt-2 pb-1">
-					Content is shared across profiles; Show toggles, ↑/↓ order and edited fields are saved per
-					profile. Everything auto-saves in this browser — use Import / Export to move it between
-					browsers. Export PDF opens the print dialog — choose “Save as PDF” with margins set to None
-					for an edge-to-edge A4 file.
+					Show toggles and ↑/↓ order are saved per profile. Editing item content on the
+					<strong class="font-semibold">master</strong> profile changes the shared content; on other profiles it is a
+					per-profile customization. Everything auto-saves in this browser — use Import / Export to move it
+					between browsers. Export PDF opens the print dialog — choose “Save as PDF” with margins set to
+					None for an edge-to-edge A4 file.
 				</p>
 			</div>
 

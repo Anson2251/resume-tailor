@@ -43,7 +43,11 @@ const asTabs = computed(() => props.profiles.length <= 5)
     				:style="activeId === p.id ? { backgroundColor: accent } : null"
     				@click="activeId = p.id"
     			>
-    				{{ p.name }}
+    				{{ p.master ? '' : p.name }}<span
+    					v-if="p.master"
+    					class="font-semibold tracking-wide uppercase"
+    					title="Edits here change the shared master content"
+    				>master</span>
     			</button>
     		</div>
 
@@ -54,7 +58,7 @@ const asTabs = computed(() => props.profiles.length <= 5)
     			aria-label="Active profile"
     			class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[13px] font-medium text-slate-800 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
     		>
-    			<option v-for="p in profiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+    			<option v-for="p in profiles" :key="p.id" :value="p.id">{{ p.name }}{{ p.master ? ' (master)' : '' }}</option>
     		</select>
 
     		<button

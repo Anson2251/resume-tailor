@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue'
 import RepeatableList from './RepeatableList.vue'
 import { SECTION_FIELD_LABELS, SECTION_FIELDS } from '../data/resume.js'
 
@@ -6,12 +7,18 @@ import { SECTION_FIELD_LABELS, SECTION_FIELDS } from '../data/resume.js'
 // shows, in which order, and can override individual fields.
 const master = defineModel({ required: true })
 const props = defineProps({
-	profile: { type: Object, required: true }
+	profile: { type: Object, required: true },
+	// True when the active profile is the master: item edits change the shared
+	// content directly instead of creating per-profile overrides.
+	editMaster: { type: Boolean, default: false }
 })
 const emit = defineEmits(['add', 'remove'])
 
 const add = (key) => emit('add', { key })
 const remove = (key, id) => emit('remove', { key, id })
+
+// The master profile has no overrides.
+const overrides = computed(() => (props.editMaster ? {} : props.profile.overrides))
 
 const readOverrides = () => props.profile.overrides || {}
 
@@ -34,7 +41,8 @@ function setField(item, field, value) {
 }
 
 /**
- * Per-item field accessor for v-model: reads the active profile's override when
+ * Per-item field accessor for v-model. On the master profile it reads and writes
+ * the shared content directly; on other profiles it reads the overlay when one is
  * present (otherwise the master value) and writes copy-on-write overrides.
  */
 function fieldModel(item, section) {
@@ -42,14 +50,15 @@ function fieldModel(item, section) {
 	for (const field of SECTION_FIELDS[section]) {
 		Object.defineProperty(model, field, {
 			enumerable: true,
-			get: () => readOverrides()[item.id]?.[field] ?? item[field],
-			set: (value) => setField(item, field, value)
+			get: () => (props.editMaster ? item[field] : (readOverrides()[item.id]?.[field] ?? item[field])),
+			set: (value) => (props.editMaster ? (item[field] = value) : setField(item, field, value))
 		})
 	}
 	return model
 }
 
 function resetOverrides(id) {
+	if (props.editMaster) return
 	if (props.profile.overrides) delete props.profile.overrides[id]
 }
 </script>
@@ -94,7 +103,9 @@ function resetOverrides(id) {
 		<section class="card border-indigo-200 p-5">
 			<div class="flex items-baseline justify-between gap-3">
 				<h2 class="section-title text-indigo-400">Tailoring</h2>
-				<span class="shrink-0 text-xs text-indigo-400">saved on “{{ props.profile.name }}” only</span>
+				<span class="shrink-0 text-xs text-indigo-400">
+					{{ editMaster ? 'master · items edit shared content' : `saved on “${props.profile.name}” only` }}
+				</span>
 			</div>
 			<div class="mt-4 space-y-3">
 				<div>
@@ -117,7 +128,13 @@ function resetOverrides(id) {
 					Long-form fields (summary, achievements, highlights, details) render as <strong class="font-semibold">markdown</strong> —
 					use <code class="rounded bg-slate-100 px-1">-</code> for bullets, <code class="rounded bg-slate-100 px-1">**bold**</code>,
 					<code class="rounded bg-slate-100 px-1">*italic*</code>, <code class="rounded bg-slate-100 px-1">[links](url)</code>.
-					Edits are <strong class="font-semibold">saved on this profile only</strong>; other profiles keep the master wording.
+					<template v-if="editMaster">
+						This is the <strong class="font-semibold">master</strong> profile: item content edits change the shared
+						content that every profile inherits.
+					</template>
+					<template v-else>
+						Edits are <strong class="font-semibold">saved on this profile only</strong>; other profiles keep the master wording.
+					</template>
 				</p>
 			</div>
 		</section>
@@ -128,7 +145,7 @@ function resetOverrides(id) {
 			add-label="Add experience"
 			:items="master.experience"
 			:can-remove="master.experience.length > 1"
-			:overrides="profile.overrides"
+			:overrides="overrides"
 			:field-labels="SECTION_FIELD_LABELS.experience"
 			v-model:order="profile.view.experience"
 			@add="add('experience')"
@@ -192,7 +209,7 @@ function resetOverrides(id) {
 			add-label="Add project"
 			:items="master.projects"
 			:can-remove="master.projects.length > 1"
-			:overrides="profile.overrides"
+			:overrides="overrides"
 			:field-labels="SECTION_FIELD_LABELS.projects"
 			v-model:order="profile.view.projects"
 			@add="add('projects')"
@@ -243,7 +260,7 @@ function resetOverrides(id) {
 			add-label="Add education"
 			:items="master.education"
 			:can-remove="master.education.length > 1"
-			:overrides="profile.overrides"
+			:overrides="overrides"
 			:field-labels="SECTION_FIELD_LABELS.education"
 			v-model:order="profile.view.education"
 			@add="add('education')"
@@ -298,7 +315,7 @@ function resetOverrides(id) {
 			add-label="Add skill group"
 			:items="master.skills"
 			:can-remove="master.skills.length > 1"
-			:overrides="profile.overrides"
+			:overrides="overrides"
 			:field-labels="SECTION_FIELD_LABELS.skills"
 			v-model:order="profile.view.skills"
 			@add="add('skills')"

@@ -19,16 +19,26 @@ export function allIds(master) {
 export function blankProfile(
 	name,
 	master,
-	{ template = 'modern', accent = ACCENTS[0], font = null, columns = 1, title = '', summary = '' } = {}
+	{
+		template = 'modern',
+		accent = ACCENTS[0],
+		columns = 1,
+		font = null,
+		title = '',
+		summary = '',
+		isMaster = false
+	} = {}
 ) {
 	return {
 		id: uid(),
 		name: name || 'Untitled profile',
+		// The master profile edits the shared content directly (no overrides).
+		master: isMaster,
 		template,
 		accent,
-		// null = follow the template's default font.
-		font: FONT_IDS.includes(font) ? font : null,
 		columns: columns === 2 ? 2 : 1,
+		// null means "use the template's font".
+		font: FONT_IDS.includes(font) ? font : null,
 		title,
 		summary,
 		view: allIds(master),
@@ -38,7 +48,7 @@ export function blankProfile(
 
 export function blankWorkspace() {
 	const master = blankResume()
-	const profile = blankProfile('Master', master)
+	const profile = blankProfile('Master', master, { isMaster: true })
 	return { version: WORKSPACE_VERSION, master, profiles: [profile], activeProfileId: profile.id }
 }
 
@@ -49,7 +59,8 @@ export function sampleWorkspace() {
 		accent: ACCENTS[0],
 		title: 'Frontend Engineer',
 		summary:
-			'**Frontend engineer** with **5 years** building responsive web apps in **Vue** and **React**. Focused on design systems, performance and shipping polished UX.'
+			'**Frontend engineer** with **5 years** of experience building responsive web apps with **Vue** and **React**.\nPassionate about design systems, performance, and turning ambiguous product ideas into polished user experiences.',
+		isMaster: true
 	})
 	return { version: WORKSPACE_VERSION, master, profiles: [profile], activeProfileId: profile.id }
 }
@@ -59,6 +70,7 @@ export function cloneProfile(profile, name) {
 	const copy = JSON.parse(JSON.stringify(profile))
 	copy.id = uid()
 	copy.name = name || `${profile.name} copy`
+	copy.master = false
 	return copy
 }
 
@@ -130,10 +142,11 @@ function normalizeProfile(master, profile, index) {
 	return {
 		id: profile?.id || uid(),
 		name: typeof profile?.name === 'string' && profile.name.trim() ? profile.name : `Profile ${index + 1}`,
+		master: profile?.master === true,
 		template: TEMPLATE_IDS.includes(profile?.template) ? profile.template : 'modern',
 		accent: typeof profile?.accent === 'string' && profile.accent ? profile.accent : ACCENTS[0],
-		font: FONT_IDS.includes(profile?.font) ? profile.font : null,
 		columns: profile?.columns === 2 ? 2 : 1,
+		font: FONT_IDS.includes(profile?.font) ? profile.font : null,
 		title: typeof profile?.title === 'string' ? profile.title : '',
 		summary: typeof profile?.summary === 'string' ? profile.summary : '',
 		view: normalizeView(master, profile?.view),
@@ -170,11 +183,35 @@ export function normalizeWorkspace(ws) {
 	}
 
 	let profiles = Array.isArray(ws.profiles) ? ws.profiles.map((p, i) => normalizeProfile(master, p, i)) : []
-	if (!profiles.length) profiles = [blankProfile('Master', master)]
+	if (!profiles.length) profiles = [blankProfile('Master', master, { isMaster: true })].map((p, i) => normalizeProfile(master, p, i))
+
+	// Exactly one master profile: the flagged one, else the first.
+	let masterProfile = profiles.find((p) => p.master) || profiles[0]
+	for (const profile of profiles) profile.master = profile === masterProfile
+
+	// The master profile edits the shared content, so fold any overrides it still
+	// carries into the master (from before this behaviour existed) and clear them.
+	foldOverridesIntoMaster(master, masterProfile)
+	masterProfile.overrides = {}
 
 	const activeProfileId = profiles.some((p) => p.id === ws.activeProfileId) ? ws.activeProfileId : profiles[0].id
 
 	return { version: WORKSPACE_VERSION, master, profiles, activeProfileId }
+}
+
+/** Move a profile's field overrides into the shared master content. */
+function foldOverridesIntoMaster(master, profile) {
+	const overrides = profile?.overrides
+	if (!overrides) return
+	const byId = new Map()
+	for (const key of SECTION_KEYS) for (const item of master[key]) byId.set(item.id, item)
+	for (const [id, patch] of Object.entries(overrides)) {
+		const item = byId.get(id)
+		if (!item || !patch || typeof patch !== 'object') continue
+		for (const [field, value] of Object.entries(patch)) {
+			if (value !== undefined) item[field] = value
+		}
+	}
 }
 
 /** Turn a legacy `{ resume, template, accent }` save into a single-profile workspace. */
@@ -189,6 +226,7 @@ function workspaceFromLegacy(resume, template, accent) {
 	const profile = {
 		id: uid(),
 		name: 'Master',
+		master: true,
 		template: TEMPLATE_IDS.includes(template) ? template : 'modern',
 		accent: typeof accent === 'string' && accent ? accent : ACCENTS[0],
 		columns: 1,
