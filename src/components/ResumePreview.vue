@@ -70,12 +70,22 @@ onBeforeUnmount(() => {
 						title="Accent color and font"
 						@click="toggle"
 					>
-						<Icon size="16"><PaintBrush16Regular /></Icon>
-						Style
-						<span
-							class="h-3.5 w-3.5 rounded-full ring-1 ring-slate-900/15"
-							:style="{ backgroundColor: accent }"
-						/>
+    					<div class="flex gap-2 items-center">
+                            <div class="flex gap-1 items-center">
+          						<Icon size="16"><PaintBrush16Regular /></Icon>
+          						Style
+                            </div>
+                            |
+    						<span
+    							class="h-3.5 w-3.5 rounded-full ring-1 ring-slate-900/15"
+    							:style="{ backgroundColor: accent }"
+    						/>
+                            <span v-if="template && font && columns"> ·
+          						{{ template[0].toUpperCase() + template.slice(1) }} Template  ·
+          						{{ font[0].toUpperCase() + font.slice(1) }} Font ·
+          						{{ columns }} Column(s)
+                            </span>
+    					</div>
 					</button>
 				</template>
 
