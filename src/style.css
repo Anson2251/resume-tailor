@@ -147,17 +147,40 @@
 		print-color-adjust: exact !important;
 	}
 
-	/* Avoid awkward splits inside entries */
+	/* Small blocks (header, summary, skill groups) stay whole — never split. */
 	.avoid-break {
 		break-inside: avoid;
 		page-break-inside: avoid;
+	}
+
+	/* Fill each page before spilling onto the next: long entries (experience,
+	   projects, education) may split across pages instead of jumping whole to
+	   page 2 and leaving page 1 half empty. The split stays graceful —
+	   headings stick to the content they introduce, and individual bullet
+	   items never tear in half (the list breaks *between* bullets). */
+	.resume-page h2,
+	.resume-page h3 {
+		break-after: avoid;
+		page-break-after: avoid;
+	}
+
+	.resume-page .md li {
+		break-inside: avoid;
+		page-break-inside: avoid;
+	}
+
+	.resume-page {
+		orphans: 2;
+		widows: 2;
 	}
 }
 
 /* ---------- Resume body columns ----------
    Two columns means the body content (summary, experience, projects, education,
-   skills) flows across two columns newspaper-style — not a sidebar. Entries
-   (.avoid-break) stay whole, and headings stay with the content they introduce. */
+   skills) flows across two columns newspaper-style — not a sidebar. Long
+   entries may split across a column/page break (see the print rules above);
+   only small blocks (.avoid-break) stay whole, and headings stay with the
+   content they introduce. */
 .resume-columns {
 	column-count: 2;
 	column-gap: 2.25rem;

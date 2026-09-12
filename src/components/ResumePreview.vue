@@ -65,7 +65,7 @@ onBeforeUnmount(() => {
 					<button
 						type="button"
 						class="btn gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] shadow-sm ring-1 ring-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700"
-						:class="open ? 'font-semibold text-slate-900 dark:text-slate-50' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'"
+						:class="open ? 'text-slate-900 dark:text-slate-50' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'"
 						:aria-expanded="open"
 						title="Accent color and font"
 						@click="toggle"
@@ -75,15 +75,15 @@ onBeforeUnmount(() => {
           						<Icon size="16"><PaintBrush16Regular /></Icon>
           						Style
                             </div>
-                            |
+                            <span class="mx-1 h-4 w-px bg-slate-300 dark:bg-slate-600" aria-hidden="true"></span>
     						<span
     							class="h-3.5 w-3.5 rounded-full ring-1 ring-slate-900/15"
     							:style="{ backgroundColor: accent }"
     						/>
                             <span v-if="template && font && columns"> ·
-          						{{ template[0].toUpperCase() + template.slice(1) }} Template  ·
-          						{{ font[0].toUpperCase() + font.slice(1) }} Font ·
-          						{{ columns }} Column(s)
+          						{{ template[0].toUpperCase() + template.slice(1) }}  ·
+          						{{ font[0].toUpperCase() + font.slice(1) }} ·
+          						{{ columns }} Col(s)
                             </span>
     					</div>
 					</button>

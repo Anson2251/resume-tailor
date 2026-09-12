@@ -42,25 +42,25 @@ function dateRange(start, end, current) {
 <template>
 	<!-- Modern layout: accent header; the body flows in one or two columns. -->
 	<div class="min-h-full text-slate-800" :style="{ fontFamily }">
-		<header class="px-10 pt-7 pb-5 text-white" :style="{ backgroundColor: accent }">
-			<h1 class="text-4xl font-extrabold tracking-tight">{{ resume.contact.fullName || 'Your Name' }}</h1>
-			<p v-if="resume.contact.title" class="mt-1 text-lg font-medium opacity-90">{{ resume.contact.title }}</p>
-			<div v-if="contactLine" class="mt-3 text-[13px] opacity-90">{{ contactLine }}</div>
-			<div v-if="linksLine" class="mt-1 text-[13px] opacity-90">{{ linksLine }}</div>
+		<header class="avoid-break px-9 pt-5 pb-4 text-white" :style="{ backgroundColor: accent }">
+			<h1 class="text-[32px] leading-tight font-extrabold tracking-tight">{{ resume.contact.fullName || 'Your Name' }}</h1>
+			<p v-if="resume.contact.title" class="mt-0.5 text-[16px] font-medium opacity-90">{{ resume.contact.title }}</p>
+			<div v-if="contactLine" class="mt-2 text-xs opacity-90">{{ contactLine }}</div>
+			<div v-if="linksLine" class="mt-0.5 text-xs opacity-90">{{ linksLine }}</div>
 		</header>
 
-		<div class="px-10 py-6" :class="columns === 2 ? 'resume-columns' : ''">
+		<div class="px-9 pt-4 pb-5" :class="columns === 2 ? 'resume-columns' : ''">
 			<section v-if="resume.contact.summary" class="avoid-break">
 				<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Summary</h2>
-				<MarkdownText :source="resume.contact.summary" class="text-[13.5px] leading-relaxed text-slate-600" />
+				<MarkdownText :source="resume.contact.summary" class="text-[13px] leading-relaxed text-slate-600" />
 			</section>
 
-			<section v-if="shown.education.length" class="pt-6">
-				<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Education</h2>
+			<section v-if="shown.education.length" class="pt-4">
+				<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Education</h2>
 				<div class="entry-stack-sm">
-					<article v-for="edu in shown.education" :key="edu.id" class="avoid-break">
+					<article v-for="edu in shown.education" :key="edu.id">
 						<div class="flex items-baseline justify-between">
-							<h3 class="text-[15px] font-bold text-slate-900">{{ edu.school || 'School' }}</h3>
+							<h3 class="text-sm font-bold text-slate-900">{{ edu.school || 'School' }}</h3>
 							<span class="shrink-0 pl-3 text-xs font-medium text-slate-500">{{
 								dateRange(edu.startDate, edu.endDate, false)
 							}}</span>
@@ -68,17 +68,17 @@ function dateRange(start, end, current) {
 						<p class="text-[13px] font-medium text-slate-500">
 							{{ [edu.degree, edu.field].filter(Boolean).join(' in ') }}{{ edu.gpa ? ` · GPA ${edu.gpa}` : '' }}
 						</p>
-						<MarkdownText v-if="edu.details" :source="edu.details" class="mt-1 text-[13px] text-slate-600" />
+						<MarkdownText v-if="edu.details" :source="edu.details" class="mt-1 text-[12.5px] text-slate-600" />
 					</article>
 				</div>
 			</section>
 
-			<section v-if="shown.experience.length" class="pt-6">
-				<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Experience</h2>
-				<div class="entry-stack">
-					<article v-for="job in shown.experience" :key="job.id" class="avoid-break">
+			<section v-if="shown.experience.length" class="pt-4">
+				<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Experience</h2>
+				<div class="entry-stack-sm">
+					<article v-for="job in shown.experience" :key="job.id">
 						<div class="flex items-baseline justify-between">
-							<h3 class="text-[15px] font-bold text-slate-900">{{ job.role || 'Role' }}</h3>
+							<h3 class="text-sm font-bold text-slate-900">{{ job.role || 'Role' }}</h3>
 							<span class="shrink-0 pl-3 text-xs font-medium text-slate-500">{{
 								dateRange(job.startDate, job.endDate, job.current)
 							}}</span>
@@ -89,18 +89,18 @@ function dateRange(start, end, current) {
 						<MarkdownText
 							v-if="job.bullets"
 							:source="job.bullets"
-							class="mt-1.5 text-[13.5px] leading-relaxed text-slate-600"
+							class="mt-1 text-[13px] leading-relaxed text-slate-600"
 						/>
 					</article>
 				</div>
 			</section>
 
-			<section v-if="shown.projects.length" class="pt-6">
-				<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Projects</h2>
-				<div class="entry-stack">
-					<article v-for="project in shown.projects" :key="project.id" class="avoid-break">
+			<section v-if="shown.projects.length" class="pt-4">
+				<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Projects</h2>
+				<div class="entry-stack-sm">
+					<article v-for="project in shown.projects" :key="project.id">
 						<div class="flex items-baseline justify-between">
-							<h3 class="text-[15px] font-bold text-slate-900">{{ project.name || 'Project' }}</h3>
+							<h3 class="text-sm font-bold text-slate-900">{{ project.name || 'Project' }}</h3>
 							<span class="shrink-0 pl-3 text-xs font-medium text-slate-500">{{
 								dateRange(project.startDate, project.endDate, false)
 							}}</span>
@@ -111,22 +111,22 @@ function dateRange(start, end, current) {
 						<MarkdownText
 							v-if="project.bullets"
 							:source="project.bullets"
-							class="mt-1.5 text-[13.5px] leading-relaxed text-slate-600"
+							class="mt-1 text-[13px] leading-relaxed text-slate-600"
 						/>
 					</article>
 				</div>
 			</section>
 
-			<section v-if="shown.skills.length" class="pt-6">
-				<h2 class="mb-3 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Skills</h2>
-				<div class="entry-stack">
+			<section v-if="shown.skills.length" class="pt-4">
+				<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">Skills</h2>
+				<div class="entry-stack-sm">
 					<div v-for="group in shown.skills" :key="group.id" class="avoid-break">
-						<h3 class="text-[13px] font-bold text-slate-900">{{ group.category || 'Category' }}</h3>
-						<div class="mt-1.5">
+						<h3 class="text-xs font-bold text-slate-900">{{ group.category || 'Category' }}</h3>
+						<div class="mt-1">
 							<span
 								v-for="(skill, si) in splitComma(group.items)"
 								:key="si"
-								class="mr-1.5 mb-1.5 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
+								class="mr-1 mb-1 inline-block rounded-full px-2 py-px text-[11px] font-medium text-white"
 								:style="{ backgroundColor: accent }"
 							>
 								{{ skill }}

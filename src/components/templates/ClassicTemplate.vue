@@ -71,7 +71,7 @@ const shown = computed(() => ({
 					Education
 				</h2>
 				<div class="mt-3 entry-stack-sm">
-					<article v-for="edu in shown.education" :key="edu.id" class="avoid-break">
+					<article v-for="edu in shown.education" :key="edu.id">
 						<div class="flex items-baseline justify-between">
 							<h3 class="text-[15px] font-bold">{{ edu.school || 'School' }}</h3>
 							<span class="shrink-0 pl-3 text-[12.5px] italic text-slate-500">{{
@@ -94,7 +94,7 @@ const shown = computed(() => ({
 					Professional Experience
 				</h2>
 				<div class="mt-3 entry-stack">
-					<article v-for="job in shown.experience" :key="job.id" class="avoid-break">
+					<article v-for="job in shown.experience" :key="job.id">
 						<div class="flex items-baseline justify-between">
 							<h3 class="text-[15px] font-bold">{{ job.role || 'Role' }}, {{ job.company || 'Company' }}</h3>
 							<span class="shrink-0 pl-3 text-[12.5px] italic text-slate-500">{{
@@ -115,7 +115,7 @@ const shown = computed(() => ({
 					Projects
 				</h2>
 				<div class="mt-3 entry-stack">
-					<article v-for="project in shown.projects" :key="project.id" class="avoid-break">
+					<article v-for="project in shown.projects" :key="project.id">
 						<div class="flex items-baseline justify-between">
 							<h3 class="text-[15px] font-bold">{{ project.name || 'Project' }}</h3>
 							<span class="shrink-0 pl-3 text-[12.5px] italic text-slate-500">{{

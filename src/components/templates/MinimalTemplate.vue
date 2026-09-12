@@ -64,7 +64,7 @@ const shown = computed(() => ({
 			<section v-if="shown.education.length" class="pt-5">
 				<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">Education</h2>
 				<div class="mt-4 entry-stack-sm">
-					<article v-for="edu in shown.education" :key="edu.id" class="avoid-break">
+					<article v-for="edu in shown.education" :key="edu.id">
 						<h3 class="text-[14px] font-semibold text-slate-900">{{ edu.school || 'School' }}</h3>
 						<p class="text-[13px] text-slate-600">{{ [edu.degree, edu.field].filter(Boolean).join(' · ') }}</p>
 						<p class="mt-0.5 text-[12px] text-slate-400">
@@ -78,7 +78,7 @@ const shown = computed(() => ({
 			<section v-if="shown.experience.length" class="pt-5">
 				<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">Experience</h2>
 				<div class="mt-4 entry-stack">
-					<article v-for="job in shown.experience" :key="job.id" class="avoid-break">
+					<article v-for="job in shown.experience" :key="job.id">
 						<div class="flex items-baseline justify-between">
 							<h3 class="text-[16px] font-semibold text-slate-900">{{ job.role || 'Role' }}</h3>
 							<span class="shrink-0 pl-4 text-[12px] font-medium tracking-wide text-slate-400 uppercase">{{
@@ -101,7 +101,7 @@ const shown = computed(() => ({
 			<section v-if="shown.projects.length" class="pt-5">
 				<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">Projects</h2>
 				<div class="mt-4 entry-stack">
-					<article v-for="project in shown.projects" :key="project.id" class="avoid-break">
+					<article v-for="project in shown.projects" :key="project.id">
 						<div class="flex items-baseline justify-between">
 							<h3 class="text-[16px] font-semibold text-slate-900">{{ project.name || 'Project' }}</h3>
 							<span class="shrink-0 pl-4 text-[12px] font-medium tracking-wide text-slate-400 uppercase">{{
