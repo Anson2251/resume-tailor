@@ -1,14 +1,15 @@
 <script setup>
 import { computed } from 'vue'
 import MarkdownText from '../MarkdownText.vue'
-import { splitComma, visibleItems } from '../../data/resume.js'
+import { splitComma, visibleItems, DEFAULT_SECTION_ORDER } from '../../data/resume.js'
 import { fontStack } from '../../data/options.js'
 
 const props = defineProps({
 	resume: { type: Object, required: true },
 	accent: { type: String, default: '#1e3a5f' },
 	font: { type: String, default: 'serif' },
-	columns: { type: Number, default: 1 }
+	columns: { type: Number, default: 1 },
+	sections: { type: Array, default: () => [] }
 })
 
 const fontFamily = computed(() => fontStack(props.font))
@@ -22,6 +23,35 @@ const contactLine = computed(() =>
 		props.resume.contact.linkedin
 	].filter(Boolean)
 )
+
+// Per-profile section layout: order, custom headings, visibility.
+// Falls back to the historical render order so old saves look unchanged.
+const orderedSections = computed(() => {
+	const fixed = new Set(['summary', 'experience', 'projects', 'education', 'skills'])
+	const customs = new Set((props.resume.customSections || []).map((c) => c.id))
+	const ids = (props.sections || []).map((s) => s?.id).filter((id) => fixed.has(id) || customs.has(id))
+	for (const id of DEFAULT_SECTION_ORDER) if (!ids.includes(id)) ids.push(id)
+	for (const c of props.resume.customSections || []) if (!ids.includes(c.id)) ids.push(c.id)
+	return ids
+})
+
+function customSection(id) {
+	return (props.resume.customSections || []).find((c) => c.id === id)
+}
+
+function sectionConfig(id) {
+	return (props.sections || []).find((s) => s?.id === id)
+}
+
+function sectionVisible(id) {
+	const s = sectionConfig(id)
+	return !s || s.visible !== false
+}
+
+function sectionTitle(id, fallback) {
+	const t = sectionConfig(id)?.title
+	return t && t.trim() ? t.trim() : fallback
+}
 
 function dateRange(start, end, current) {
 	const s = (start || '').trim()
@@ -53,23 +83,24 @@ const shown = computed(() => ({
 		</header>
 
 		<div :class="columns === 2 ? 'resume-columns' : ''" class="pt-5">
-			<section v-if="resume.contact.summary" class="avoid-break">
-				<h2
-					class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
-					:style="{ color: accent, borderColor: `${accent}55` }"
-				>
-					Summary
-				</h2>
-				<MarkdownText :source="resume.contact.summary" class="mt-2 text-[13.5px] leading-relaxed" />
-			</section>
+			<template v-for="sid in orderedSections" :key="sid">
+				<section v-if="sid === 'summary' && resume.contact.summary && sectionVisible('summary')" class="avoid-break">
+					<h2
+						class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
+						:style="{ color: accent, borderColor: `${accent}55` }"
+					>
+						{{ sectionTitle('summary', 'Summary') }}
+					</h2>
+					<MarkdownText :source="resume.contact.summary" class="mt-2 text-[13.5px] leading-relaxed" />
+				</section>
 
-			<section v-if="shown.education.length" class="pt-5">
-				<h2
-					class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
-					:style="{ color: accent, borderColor: `${accent}55` }"
-				>
-					Education
-				</h2>
+				<section v-else-if="sid === 'education' && shown.education.length && sectionVisible('education')" class="pt-5">
+					<h2
+						class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
+						:style="{ color: accent, borderColor: `${accent}55` }"
+					>
+						{{ sectionTitle('education', 'Education') }}
+					</h2>
 				<div class="mt-3 entry-stack-sm">
 					<article v-for="edu in shown.education" :key="edu.id">
 						<div class="flex items-baseline justify-between">
@@ -86,13 +117,13 @@ const shown = computed(() => ({
 				</div>
 			</section>
 
-			<section v-if="shown.experience.length" class="pt-5">
-				<h2
-					class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
-					:style="{ color: accent, borderColor: `${accent}55` }"
-				>
-					Professional Experience
-				</h2>
+				<section v-else-if="sid === 'experience' && shown.experience.length && sectionVisible('experience')" class="pt-5">
+					<h2
+						class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
+						:style="{ color: accent, borderColor: `${accent}55` }"
+					>
+						{{ sectionTitle('experience', 'Professional Experience') }}
+					</h2>
 				<div class="mt-3 entry-stack">
 					<article v-for="job in shown.experience" :key="job.id">
 						<div class="flex items-baseline justify-between">
@@ -107,13 +138,13 @@ const shown = computed(() => ({
 				</div>
 			</section>
 
-			<section v-if="shown.projects.length" class="pt-5">
-				<h2
-					class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
-					:style="{ color: accent, borderColor: `${accent}55` }"
-				>
-					Projects
-				</h2>
+				<section v-else-if="sid === 'projects' && shown.projects.length && sectionVisible('projects')" class="pt-5">
+					<h2
+						class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
+						:style="{ color: accent, borderColor: `${accent}55` }"
+					>
+						{{ sectionTitle('projects', 'Projects') }}
+					</h2>
 				<div class="mt-3 entry-stack">
 					<article v-for="project in shown.projects" :key="project.id">
 						<div class="flex items-baseline justify-between">
@@ -130,19 +161,39 @@ const shown = computed(() => ({
 				</div>
 			</section>
 
-			<section v-if="shown.skills.length" class="avoid-break pt-5">
-				<h2
-					class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
-					:style="{ color: accent, borderColor: `${accent}55` }"
-				>
-					Skills
-				</h2>
+				<section v-else-if="sid === 'skills' && shown.skills.length && sectionVisible('skills')" class="avoid-break pt-5">
+					<h2
+						class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
+						:style="{ color: accent, borderColor: `${accent}55` }"
+					>
+						{{ sectionTitle('skills', 'Skills') }}
+					</h2>
 				<div class="mt-2 entry-stack-xs">
 					<p v-for="group in shown.skills" :key="group.id" class="text-[13.5px]">
 						<strong>{{ group.category || 'Category' }}:</strong> {{ splitComma(group.items).join(', ') }}
 					</p>
 				</div>
 			</section>
+
+			<section v-else-if="customSection(sid) && customSection(sid).items.length && sectionVisible(sid)" class="pt-5">
+				<h2
+					class="border-b pb-1 text-sm font-bold tracking-[0.25em] uppercase"
+					:style="{ color: accent, borderColor: `${accent}55` }"
+				>
+					{{ customSection(sid).title }}
+				</h2>
+				<div class="mt-3 entry-stack">
+					<article v-for="item in customSection(sid).items" :key="item.id">
+						<div class="flex items-baseline justify-between">
+							<h3 class="text-[15px] font-bold">{{ item.heading || 'Item' }}</h3>
+							<span v-if="item.dates" class="shrink-0 pl-3 text-[12.5px] italic text-slate-500">{{ item.dates }}</span>
+						</div>
+						<p v-if="item.sub" class="text-[13px] italic text-slate-600">{{ item.sub }}</p>
+						<MarkdownText v-if="item.body" :source="item.body" class="mt-1.5 text-[13.5px] leading-relaxed" />
+					</article>
+				</div>
+			</section>
+			</template>
 		</div>
 	</div>
 </template>

@@ -1,5 +1,14 @@
 import { ACCENTS, FONT_IDS, TEMPLATES } from './options.js'
-import { SECTION_KEYS, blankContact, blankResume, isVisible, sampleResume, uid } from './resume.js'
+import {
+	SECTION_KEYS,
+	blankContact,
+	blankResume,
+	customSectionTitle,
+	isVisible,
+	normalizeSections,
+	sampleResume,
+	uid
+} from './resume.js'
 
 export const WORKSPACE_VERSION = 2
 export const STORAGE_KEY = 'resume-tailor-data-v2'
@@ -13,6 +22,8 @@ const idsOf = (list) => (list || []).map((item) => item.id)
 export function allIds(master) {
 	const view = {}
 	for (const key of SECTION_KEYS) view[key] = idsOf(master[key])
+	view.custom = {}
+	for (const section of master.customSections || []) view.custom[section.id] = idsOf(section.items)
 	return view
 }
 
@@ -26,6 +37,7 @@ export function blankProfile(
 		font = null,
 		title = '',
 		summary = '',
+		sections = null,
 		isMaster = false
 	} = {}
 ) {
@@ -41,6 +53,10 @@ export function blankProfile(
 		font: FONT_IDS.includes(font) ? font : null,
 		title,
 		summary,
+		// Per-profile section layout: order, custom headings, visibility.
+		// A new profile starts from the master: fixed defaults plus entries
+		// for every user-created section (falling back to the master name).
+		sections: normalizeSections(sections, master),
 		view: allIds(master),
 		overrides: {}
 	}
@@ -100,10 +116,19 @@ export function buildPreview(master, profile) {
 		title: profile?.title || '',
 		summary: profile?.summary || ''
 	}
-	const preview = { contact }
+	const preview = { contact, customSections: [] }
 	for (const key of SECTION_KEYS) {
 		const resolved = resolveSection(master[key], profile?.view?.[key])
 		preview[key] = applyOverrides(resolved, profile?.overrides)
+	}
+	const entries = new Map((profile?.sections || []).map((s) => [s.id, s]))
+	for (const section of master.customSections || []) {
+		const resolved = resolveSection(section.items, profile?.view?.custom?.[section.id])
+		preview.customSections.push({
+			id: section.id,
+			title: customSectionTitle(section, entries.get(section.id)),
+			items: applyOverrides(resolved, profile?.overrides)
+		})
 	}
 	return preview
 }
@@ -135,6 +160,19 @@ function normalizeView(master, view) {
 			clean[key].push(id)
 		}
 	}
+	clean.custom = {}
+	for (const section of master.customSections || []) {
+		const existing = new Set(idsOf(section.items))
+		const seen = new Set()
+		const raw = Array.isArray(view?.custom?.[section.id]) ? view.custom[section.id] : []
+		clean.custom[section.id] = []
+		for (const entry of raw) {
+			const id = typeof entry === 'string' ? entry : entry?.id
+			if (!id || !existing.has(id) || seen.has(id)) continue
+			seen.add(id)
+			clean.custom[section.id].push(id)
+		}
+	}
 	return clean
 }
 
@@ -149,17 +187,25 @@ function normalizeProfile(master, profile, index) {
 		font: FONT_IDS.includes(profile?.font) ? profile.font : null,
 		title: typeof profile?.title === 'string' ? profile.title : '',
 		summary: typeof profile?.summary === 'string' ? profile.summary : '',
+		sections: normalizeSections(profile?.sections, master),
 		view: normalizeView(master, profile?.view),
 		overrides: normalizeOverrides(master, profile?.overrides)
 	}
+}
+
+/** All content items by id, including user-created sections (for overrides). */
+function contentById(master) {
+	const byId = new Map()
+	for (const key of SECTION_KEYS) for (const item of master[key]) byId.set(item.id, item)
+	for (const section of master.customSections || []) for (const item of section.items || []) byId.set(item.id, item)
+	return byId
 }
 
 /** Keep only overrides for existing items, dropping no-op fields. */
 function normalizeOverrides(master, overrides) {
 	const clean = {}
 	if (!overrides || typeof overrides !== 'object') return clean
-	const byId = new Map()
-	for (const key of SECTION_KEYS) for (const item of master[key]) byId.set(item.id, item)
+	const byId = contentById(master)
 	for (const [id, patch] of Object.entries(overrides)) {
 		const item = byId.get(id)
 		if (!item || !patch || typeof patch !== 'object') continue
@@ -174,6 +220,26 @@ function normalizeOverrides(master, overrides) {
 	return clean
 }
 
+/** User-created sections: keep id, shared name, and normalized generic items. */
+function normalizeCustomSections(raw) {
+	if (!Array.isArray(raw)) return []
+	return raw
+		.filter((s) => s && typeof s === 'object')
+		.map((s) => ({
+			id: s.id || uid(),
+			title: typeof s.title === 'string' ? s.title.slice(0, 60) : '',
+			items: Array.isArray(s.items)
+				? s.items.map((item) => ({
+						id: item?.id || uid(),
+						heading: typeof item?.heading === 'string' ? item.heading : '',
+						sub: typeof item?.sub === 'string' ? item.sub : '',
+						dates: typeof item?.dates === 'string' ? item.dates : '',
+						body: typeof item?.body === 'string' ? item.body : ''
+					}))
+				: []
+		}))
+}
+
 export function normalizeWorkspace(ws) {
 	const masterIn = ws.master || {}
 	const master = { contact: normalizeContact(masterIn.contact) }
@@ -181,6 +247,7 @@ export function normalizeWorkspace(ws) {
 		const list = Array.isArray(masterIn[key]) ? masterIn[key] : []
 		master[key] = list.map((item) => ({ ...stripVisible(item), id: item?.id || uid() }))
 	}
+	master.customSections = normalizeCustomSections(masterIn.customSections)
 
 	let profiles = Array.isArray(ws.profiles) ? ws.profiles.map((p, i) => normalizeProfile(master, p, i)) : []
 	if (!profiles.length) profiles = [blankProfile('Master', master, { isMaster: true })].map((p, i) => normalizeProfile(master, p, i))
@@ -203,8 +270,7 @@ export function normalizeWorkspace(ws) {
 function foldOverridesIntoMaster(master, profile) {
 	const overrides = profile?.overrides
 	if (!overrides) return
-	const byId = new Map()
-	for (const key of SECTION_KEYS) for (const item of master[key]) byId.set(item.id, item)
+	const byId = contentById(master)
 	for (const [id, patch] of Object.entries(overrides)) {
 		const item = byId.get(id)
 		if (!item || !patch || typeof patch !== 'object') continue

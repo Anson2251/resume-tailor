@@ -12,6 +12,7 @@ import {
 
 const props = defineProps({
 	title: { type: String, required: true },
+	sectionId: { type: String, default: '' },
 	items: { type: Array, required: true },
 	canRemove: { type: Boolean, default: false },
 	addLabel: { type: String, default: 'Add item' },
@@ -126,7 +127,7 @@ function onDragEnd() {
 </script>
 
 <template>
-	<section class="card p-5">
+	<section class="card scroll-mt-[150px] p-5" :id="sectionId || undefined">
 		<div class="flex items-baseline justify-between gap-3">
 			<h2 class="section-title">{{ title }}</h2>
 			<span class="shrink-0 text-xs text-slate-400 dark:text-slate-500">{{ shownCount }}/{{ items.length }} shown</span>
@@ -136,7 +137,8 @@ function onDragEnd() {
 			<article
 				v-for="(row, i) in rows"
 				:key="row.item.id"
-				class="relative rounded-lg border bg-slate-50/60 p-4 transition dark:bg-slate-800/40"
+				:id="`form-item-${row.item.id}`"
+				class="relative scroll-mt-[150px] rounded-lg border bg-slate-50/60 p-4 transition dark:bg-slate-800/40"
 				:class="{
 					'border-amber-300 dark:border-amber-700': hasOverride(row.item.id),
 					'border-slate-200 dark:border-slate-700': !hasOverride(row.item.id),

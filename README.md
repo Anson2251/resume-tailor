@@ -33,13 +33,14 @@ No accounts, no uploads, no duplicated content.
 
 ### ✍️ Editing that mirrors the resume
 
-- **Form mirrors the resume**: contact info, experience, projects, education, and skills sections.
+- **Form mirrors the resume**: contact info, experience, projects, education, and skills sections — the Tailoring card and section cards follow the profile's section order (Sections panel), so the form reads in the same order as the preview.
 - **Repeatable fields are editable lists**: each experience / project / education / skill-group entry is a card you can **drag by its grip handle to reorder**, or nudge with the ↑/↓ buttons, add, remove, and show/hide. Shown items come first (in the profile's order); items hidden from the current profile stay editable below, greyed out. Removing an entry deletes it from the master and from every profile.
 - **Markdown for long-form text**: the professional summary, experience achievements, project highlights, and education details render as **markdown** via `vue-markdown-render` (markdown-it) — write `-` bullets, `**bold**`, `*italic*`, `[links](https://…)`, `` `code` ``. Raw HTML is escaped and dangerous link protocols are blocked.
 
 ### 👀 Live preview & export
 
 - **Live preview** with 3 templates: **Modern, Classic, Minimal** — plus a **1 / 2 column** layout toggle and a **Style popover** for the accent color and body font (all saved per profile). The font defaults to the template's own font (Modern/Minimal → Sans, Classic → Serif) until you pick one. Two columns makes the body content (summary, experience, projects, education, skills) flow newspaper-style across two columns; entries stay whole and headings stay with their content.
+- **Sections panel** — reorder the resume sections (drag by the grip handle or nudge with ↑/↓), rename any heading per profile (empty = template default), and show/hide whole sections. Saved per profile, so e.g. a graduate profile can lead with Education while an industry profile leads with Experience. **Add section** creates your own (Certifications, Languages, …) with generic heading/subtitle/dates/details items; user-created sections get a delete button that removes them from the master and every profile. Built-in sections can't be deleted — hide them instead.
 - **Export PDF button** — opens the print dialog; choose “Save as PDF” with margins set to None for an edge-to-edge A4 file with selectable vector text.
 
 ### 💾 Private by design
@@ -91,14 +92,15 @@ src/
 
 The app keeps a single workspace, persisted as `{ version, master, profiles, activeProfileId }`:
 
-- **`master`** holds the shared content (items keyed by `id`); it has no visibility or order of its own.
+- **`master`** holds the shared content (items keyed by `id`); it has no visibility or order of its own. `master.customSections` holds user-created sections as `[{ id, title, items }]` with generic `{ id, heading, sub, dates, body }` items.
 - Each **profile** is a view over the master:
   - `master` — `true` for the one profile that edits the shared content directly. Exactly one profile is the master (the flagged one, else the first); any overrides it still carried are folded into the shared content on load.
-  - `view: { experience: [id, …], projects: […], education: […], skills: […] }` — an ordered list of the ids **shown** on that profile (array order = display order; ids not listed are hidden).
+  - `view: { experience: [id, …], projects: […], education: […], skills: […], custom: { [sectionId]: [id, …] } }` — an ordered list of the ids **shown** on that profile (array order = display order; ids not listed are hidden). User-created sections keep their own id lists under `view.custom`.
   - `overrides: { [itemId]: { field: value, … } }` — copy-on-write per-item field overrides (e.g. rewritten bullets). Applied on top of the master item when rendering.
   - `title` / `summary` — the tailoring fields for that target role.
   - `template` / `accent` / `font` — presentation, saved per profile. `font` is `null` by default, meaning “use the template's font”; pick a font in the Style popover to pin one explicitly.
   - `columns` — `1` (single column) or `2` (body flows across two columns).
+  - `sections` — ordered `[{ id, title, visible }]` over `summary`, the four repeatable sections, and any user-created sections (appended after the built-ins). `title` is a per-profile heading override (empty = template default, or the master name for custom sections); `visible` hides the whole section on that profile.
 
 The preview is derived by resolving the active profile's view into the resume shape the templates consume, so templates never deal with profiles directly.
 

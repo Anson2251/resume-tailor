@@ -6,7 +6,8 @@ import ClassicTemplate from './templates/ClassicTemplate.vue'
 import MinimalTemplate from './templates/MinimalTemplate.vue'
 import Popover from './Popover.vue'
 import { ACCENTS, COLUMNS, FONTS, TEMPLATES, fontStack } from '../data/options.js'
-import { Checkmark16Regular, Color16Regular, PaintBrush16Regular, TextFont16Regular, TextColumnTwo20Regular, Shapes16Regular } from '../data/icons.js'
+import { SECTION_IDS, blankSections, sectionLabel } from '../data/resume.js'
+import { Add16Regular, ArrowDown16Regular, ArrowReset20Regular, ArrowUp16Regular, Checkmark16Regular, Color16Regular, Dismiss16Regular, List16Regular, PaintBrush16Regular, ReOrderDotsVertical16Regular, TextColumnTwo20Regular, TextFont16Regular, Shapes16Regular } from '../data/icons.js'
 
 const props = defineProps({
 	resume: { type: Object, required: true }
@@ -16,6 +17,12 @@ const template = defineModel('template', { default: 'modern' })
 const accent = defineModel('accent', { default: '#4f46e5' })
 const font = defineModel('font', { default: 'sans' })
 const columns = defineModel('columns', { default: 1 })
+const sections = defineModel('sections', { default: () => blankSections() })
+
+const emit = defineEmits(['add-section', 'delete-section'])
+
+/** Built-in sections can only be hidden; user-created ones can be deleted. */
+const isCustomSection = (id) => !SECTION_IDS.includes(id)
 
 const activeComponent = computed(() => {
 	switch (template.value) {
@@ -27,6 +34,85 @@ const activeComponent = computed(() => {
 			return ModernTemplate
 	}
 })
+
+// --- Sections (order / names / visibility), saved per profile ---
+
+const visibleSectionCount = computed(() => (sections.value || []).filter((s) => s.visible !== false).length)
+const sectionCount = computed(() => (sections.value || []).length)
+
+function moveSection(id, delta) {
+	const next = [...(sections.value || [])]
+	const i = next.findIndex((s) => s.id === id)
+	const target = i + delta
+	if (i === -1 || target < 0 || target >= next.length) return
+	const [item] = next.splice(i, 1)
+	next.splice(target, 0, item)
+	sections.value = next
+}
+
+function toggleSection(id, visible) {
+	sections.value = (sections.value || []).map((s) => (s.id === id ? { ...s, visible } : s))
+}
+
+function renameSection(id, title) {
+	sections.value = (sections.value || []).map((s) => (s.id === id ? { ...s, title } : s))
+}
+
+function resetSections() {
+	// Built-ins go back to defaults; user-created sections are kept (shown,
+	// default names) so reset never destroys content.
+	const customs = (sections.value || [])
+		.filter((s) => isCustomSection(s.id))
+		.map((s) => ({ ...s, title: '', visible: true }))
+	sections.value = [...blankSections(), ...customs]
+}
+
+// Drag to reorder sections.
+const dragSectionId = ref(null)
+const dropSectionTarget = ref(null)
+
+function onSectionDragStart(event, section) {
+	dragSectionId.value = section.id
+	dropSectionTarget.value = null
+	event.dataTransfer.effectAllowed = 'move'
+	event.dataTransfer.setData('text/plain', section.id) // required by Firefox
+}
+
+function onSectionDragOver(event, section) {
+	if (!dragSectionId.value || section.id === dragSectionId.value) return
+	event.preventDefault()
+	event.dataTransfer.dropEffect = 'move'
+	const rect = event.currentTarget.getBoundingClientRect()
+	dropSectionTarget.value = {
+		id: section.id,
+		position: event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+	}
+}
+
+function onSectionDrop(event, section) {
+	if (!dragSectionId.value) return
+	event.preventDefault()
+	const target = dropSectionTarget.value
+	if (target && target.id === section.id) {
+		const next = [...(sections.value || [])]
+		const from = next.findIndex((s) => s.id === dragSectionId.value)
+		if (from !== -1) {
+			const [item] = next.splice(from, 1)
+			let to = next.findIndex((s) => s.id === section.id)
+			if (to !== -1) {
+				if (target.position === 'after') to += 1
+				next.splice(to, 0, item)
+				sections.value = next
+			}
+		}
+	}
+	onSectionDragEnd()
+}
+
+function onSectionDragEnd() {
+	dragSectionId.value = null
+	dropSectionTarget.value = null
+}
 
 // Zoom only affects on-screen display; printing is always full-size A4.
 // The CSS `zoom` property leaks into print, so we force it back to 1 while
@@ -174,6 +260,104 @@ onBeforeUnmount(() => {
 					</div>
 				</div>
 			</Popover>
+			<!-- Sections: order, names, visibility (saved per profile) -->
+			<Popover align="start" width="19rem">
+				<template #trigger="{ open, toggle }">
+					<button
+						type="button"
+						class="btn gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] shadow-sm ring-1 ring-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700"
+						:class="open ? 'text-slate-900 dark:text-slate-50' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'"
+						:aria-expanded="open"
+						title="Reorder, rename, show/hide resume sections"
+						@click="toggle"
+					>
+						<div class="flex items-center gap-2">
+							<div class="flex items-center gap-1">
+								<Icon size="16"><List16Regular /></Icon>
+								Sections
+							</div>
+							<span class="mx-1 h-4 w-px bg-slate-300 dark:bg-slate-600" aria-hidden="true"></span>
+							<span>{{ visibleSectionCount }}/{{ sectionCount }}</span>
+						</div>
+					</button>
+				</template>
+
+				<div class="space-y-3">
+					<p class="text-xs text-slate-500 dark:text-slate-400">
+						Reorder, rename, show/hide — saved on this profile. Empty name uses the template default.
+					</p>
+					<div class="grid gap-1.5">
+						<div
+							v-for="s in sections"
+							:key="s.id"
+							class="relative rounded-lg border border-slate-200 bg-white p-2 transition dark:border-slate-700 dark:bg-slate-900"
+							:class="{ 'opacity-60 saturate-0': s.visible === false, 'opacity-40': dragSectionId === s.id }"
+							@dragover="onSectionDragOver($event, s)"
+							@drop="onSectionDrop($event, s)"
+						>
+							<div
+								v-if="dropSectionTarget?.id === s.id && dropSectionTarget.position === 'before'"
+								class="pointer-events-none absolute inset-x-2 top-0 h-0.5 rounded-full bg-indigo-500"
+							/>
+							<div
+								v-if="dropSectionTarget?.id === s.id && dropSectionTarget.position === 'after'"
+								class="pointer-events-none absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-indigo-500"
+							/>
+							<div class="flex items-center gap-1.5">
+								<span
+									class="cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing dark:text-slate-600 dark:hover:text-slate-300"
+									draggable="true"
+									title="Drag to reorder"
+									aria-hidden="true"
+									@dragstart="onSectionDragStart($event, s)"
+									@dragend="onSectionDragEnd"
+								>
+									<Icon size="16"><ReOrderDotsVertical16Regular /></Icon>
+								</span>
+								<label class="flex shrink-0 cursor-pointer items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200" :title="s.visible !== false ? 'Hide section' : 'Show section'">
+									<input
+										type="checkbox"
+										class="h-4 w-4 rounded accent-indigo-600"
+										:checked="s.visible !== false"
+										@change="toggleSection(s.id, $event.target.checked)"
+									/>
+									Show
+								</label>
+								<input
+									:value="s.title"
+									class="input min-w-0 flex-1 py-1 text-[13px]"
+									:placeholder="sectionLabel(s.id)"
+									:title="`Rename “${sectionLabel(s.id)}” section`"
+									maxlength="60"
+									@input="renameSection(s.id, $event.target.value)"
+								/>
+								<button class="icon-btn" title="Move up" :disabled="sections.findIndex((x) => x.id === s.id) === 0" @click="moveSection(s.id, -1)">
+									<Icon size="16"><ArrowUp16Regular /></Icon>
+								</button>
+								<button class="icon-btn" title="Move down" :disabled="sections.findIndex((x) => x.id === s.id) === sections.length - 1" @click="moveSection(s.id, 1)">
+									<Icon size="16"><ArrowDown16Regular /></Icon>
+								</button>
+								<button
+									v-if="isCustomSection(s.id)"
+									class="icon-btn hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+									title="Delete section everywhere (master + all profiles)"
+									@click="emit('delete-section', s.id)"
+								>
+									<Icon size="16"><Dismiss16Regular /></Icon>
+								</button>
+							</div>
+						</div>
+					</div>
+					<div class="flex gap-2">
+						<button class="btn btn-ghost flex-1 text-[13px]" @click="resetSections">
+							<Icon size="16"><ArrowReset20Regular /></Icon> Reset sections
+						</button>
+						<button class="btn btn-ghost flex-1 text-[13px]" @click="emit('add-section')">
+							<Icon size="16"><Add16Regular /></Icon> Add section
+						</button>
+					</div>
+				</div>
+			</Popover>
 			<!-- Zoom -->
 			<div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
 				<button
@@ -192,7 +376,7 @@ onBeforeUnmount(() => {
 				class="resume-page overflow-hidden rounded-sm shadow-xl ring-1 ring-slate-900/10"
 				:style="{ zoom: printZoom }"
 			>
-				<component :is="activeComponent" :resume="resume" :accent="accent" :font="font" :columns="columns" />
+				<component :is="activeComponent" :resume="resume" :accent="accent" :font="font" :columns="columns" :sections="sections" />
 			</div>
 		</div>
 	</div>

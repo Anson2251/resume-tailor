@@ -11,10 +11,11 @@ import {
 	WeatherSunny16Regular
 } from './data/icons.js'
 import ResumeForm from './components/ResumeForm.vue'
+import FormNav from './components/FormNav.vue'
 import ResumePreview from './components/ResumePreview.vue'
 import ProfileBar from './components/ProfileBar.vue'
 import { ACCENTS, templateFont } from './data/options.js'
-import { SECTION_FACTORY } from './data/resume.js'
+import { SECTION_FACTORY, SECTION_KEYS, blankCustomItem, uid } from './data/resume.js'
 import {
 	LEGACY_STORAGE_KEY,
 	STORAGE_KEY,
@@ -93,6 +94,11 @@ const columns = computed({
 	get: () => activeProfile.value?.columns ?? 1,
 	set: (value) => activeProfile.value && (activeProfile.value.columns = value)
 })
+// Section order / custom names / visibility are saved per profile.
+const sections = computed({
+	get: () => activeProfile.value?.sections ?? [],
+	set: (value) => activeProfile.value && (activeProfile.value.sections = value)
+})
 
 function persist() {
 	if (!loaded.value) return
@@ -128,14 +134,15 @@ function createProfile() {
 	const name = prompt('Name this profile (e.g. “Backend roles”)', `Profile ${workspace.profiles.length + 1}`)
 	if (!name) return
 	// A new profile starts with all master content shown, and the current
-	// title/summary/template/accent as its starting point.
+	// title/summary/template/accent/sections as its starting point.
 	const profile = blankProfile(name, workspace.master, {
 		template: template.value,
 		accent: accent.value,
 		font: activeProfile.value.font,
 		columns: columns.value,
 		title: activeProfile.value.title,
-		summary: activeProfile.value.summary
+		summary: activeProfile.value.summary,
+		sections: JSON.parse(JSON.stringify(activeProfile.value.sections ?? []))
 	})
 	workspace.profiles.push(profile)
 	workspace.activeProfileId = profile.id
@@ -168,23 +175,74 @@ function removeProfile() {
 
 // --- Master items ---
 
+function findItemList(key) {
+	if (SECTION_KEYS.includes(key)) return workspace.master[key]
+	return workspace.master.customSections.find((s) => s.id === key)?.items
+}
+
+function viewOrderFor(profile, key) {
+	if (SECTION_KEYS.includes(key)) return profile.view[key]
+	return profile.view.custom?.[key]
+}
+
 function addItem({ key }) {
-	const item = SECTION_FACTORY[key]()
-	workspace.master[key].push(item)
+	if (SECTION_KEYS.includes(key)) {
+		const item = SECTION_FACTORY[key]()
+		workspace.master[key].push(item)
+		// Show the new item on the active profile, at the end of the section.
+		activeProfile.value.view[key].push(item.id)
+		return
+	}
+	const section = workspace.master.customSections.find((s) => s.id === key)
+	if (!section) return
+	const item = blankCustomItem()
+	section.items.push(item)
 	// Show the new item on the active profile, at the end of the section.
-	activeProfile.value.view[key].push(item.id)
+	const custom = (activeProfile.value.view.custom ??= {})
+	;(custom[key] ??= []).push(item.id)
 }
 
 function removeItem({ key, id }) {
-	const list = workspace.master[key]
-	const index = list.findIndex((item) => item.id === id)
+	const list = findItemList(key)
+	const index = list?.findIndex((item) => item.id === id) ?? -1
 	if (index !== -1) list.splice(index, 1)
 	// Remove references from every profile so no dangling ids are saved.
 	for (const profile of workspace.profiles) {
-		const order = profile.view[key]
-		const i = order.indexOf(id)
+		const order = viewOrderFor(profile, key)
+		const i = order?.indexOf(id) ?? -1
 		if (i !== -1) order.splice(i, 1)
 		if (profile.overrides) delete profile.overrides[id]
+	}
+}
+
+// --- User-created sections ---
+
+function createSection() {
+	const name = prompt('Name the new section (e.g. “Certifications”)', 'Certifications')
+	const title = name?.trim()
+	if (!title) return
+	const section = { id: uid(), title, items: [blankCustomItem()] }
+	workspace.master.customSections.push(section)
+	// Every profile gets the new section (shown, at the end) under its name.
+	for (const profile of workspace.profiles) {
+		profile.sections.push({ id: section.id, title, visible: true })
+		const custom = (profile.view.custom ??= {})
+		custom[section.id] = section.items.map((item) => item.id)
+	}
+}
+
+function removeSection(id) {
+	const index = workspace.master.customSections.findIndex((s) => s.id === id)
+	if (index === -1) return
+	const section = workspace.master.customSections[index]
+	const itemIds = new Set((section.items || []).map((item) => item.id))
+	if (!confirm(`Delete section “${section.title || 'Untitled section'}”? This removes it from the master and every profile.`)) return
+	workspace.master.customSections.splice(index, 1)
+	// Remove references from every profile so no dangling ids are saved.
+	for (const profile of workspace.profiles) {
+		profile.sections = (profile.sections || []).filter((s) => s.id !== id)
+		if (profile.view.custom) delete profile.view.custom[id]
+		if (profile.overrides) for (const itemId of itemIds) delete profile.overrides[itemId]
 	}
 }
 
@@ -260,7 +318,7 @@ onMounted(() => {
 <template>
 	<div class="flex min-h-screen flex-col bg-slate-100 text-slate-900 lg:h-dvh dark:bg-slate-950 dark:text-slate-100">
 		<!-- Top bar -->
-		<header class="no-print sticky top-0 z-10 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+		<header id="topbar" class="no-print sticky top-0 z-10 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
 			<div class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-3 px-4 py-3">
 				<div class="mr-auto">
 					<h1 class="text-lg font-extrabold tracking-tight">Resume Tailor</h1>
@@ -326,8 +384,11 @@ onMounted(() => {
 			</div>
 		</header>
 
-		<!-- Main: form mirrors resume layout, preview on the right -->
-		<main class="mx-auto grid w-full max-w-[1400px] flex-1 grid-cols-1 gap-6 px-4 py-6 lg:min-h-0 lg:grid-cols-[460px_minmax(0,1fr)]">
+		<!-- Anchor rail for the form (fixed to the window) -->
+			<FormNav :profile="activeProfile" :master="workspace.master" :accent="accent" />
+
+			<!-- Main: form mirrors resume layout, preview on the right -->
+			<main class="mx-auto grid w-full max-w-[1400px] flex-1 grid-cols-1 gap-6 px-4 py-6 lg:min-h-0 lg:grid-cols-[460px_minmax(0,1fr)]">
 			<div class="no-print min-w-0 lg:min-h-0 lg:overflow-y-auto">
 				<ResumeForm
 					v-model="workspace.master"
@@ -337,13 +398,15 @@ onMounted(() => {
 					@remove="removeItem"
 				/>
 				<p class="mt-3 text-center text-xs text-slate-400 sticky bottom-0 backdrop-blur-md pt-2 pb-1 dark:text-slate-500">
-					Show toggles and ↑/↓ order are saved per profile. Editing item content on the
+					Show toggles and ↑/↓ order are saved per profile, as is the section order/names in the Sections panel — the form follows the same order. Editing item content on the
 					<strong class="font-semibold">master</strong> profile changes the shared content; on other profiles it is a
 					per-profile customization. Everything auto-saves in this browser — use Import / Export to move it
 					between browsers. Export PDF opens the print dialog — choose “Save as PDF” with margins set to
 					None for an edge-to-edge A4 file.
 				</p>
-			</div>
+				<!-- Scroll room so even the last card can reach the anchor line -->
+				<div class="no-print h-[40vh]" aria-hidden="true" />
+				</div>
 
 			<div class="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
 				<ResumePreview
@@ -352,6 +415,9 @@ onMounted(() => {
 					v-model:accent="accent"
 					v-model:font="font"
 					v-model:columns="columns"
+					v-model:sections="sections"
+					@add-section="createSection"
+					@delete-section="removeSection"
 				/>
 			</div>
 		</main>

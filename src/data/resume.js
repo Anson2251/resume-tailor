@@ -43,8 +43,90 @@ export const blankSkillGroup = () => ({
 	items: ''
 })
 
+/** A generic item for user-created sections: heading + subtitle + dates + markdown body. */
+export const blankCustomItem = () => ({
+	id: uid(),
+	heading: '',
+	sub: '',
+	dates: '',
+	body: ''
+})
+
+/** Editable fields of a custom-section item — used for per-profile content overrides. */
+export const CUSTOM_ITEM_FIELDS = ['heading', 'sub', 'dates', 'body']
+
+/** Human labels for custom item fields, shown in the "customized" badge. */
+export const CUSTOM_FIELD_LABELS = { heading: 'heading', sub: 'subtitle', dates: 'dates', body: 'details' }
+
+/** Effective custom-section title: per-profile override, else the master name. */
+export function customSectionTitle(masterSection, profileEntry) {
+	const override = profileEntry?.title
+	if (override && override.trim()) return override.trim()
+	const base = masterSection?.title
+	if (base && base.trim()) return base.trim()
+	return 'Untitled section'
+}
+
 /** Repeatable sections, in the order they render on the form. */
 export const SECTION_KEYS = ['experience', 'projects', 'education', 'skills']
+
+/** All resume body sections (summary + repeatable sections) with generic labels. */
+export const RESUME_SECTIONS = [
+	{ id: 'summary', label: 'Summary' },
+	{ id: 'experience', label: 'Experience' },
+	{ id: 'projects', label: 'Projects' },
+	{ id: 'education', label: 'Education' },
+	{ id: 'skills', label: 'Skills' }
+]
+
+export const SECTION_IDS = RESUME_SECTIONS.map((s) => s.id)
+
+/**
+ * Render order used before per-profile section settings existed.
+ * Kept as the default so existing saves look exactly the same.
+ */
+export const DEFAULT_SECTION_ORDER = ['summary', 'education', 'experience', 'projects', 'skills']
+
+/** A fresh per-profile section layout: default order, default names, all visible. */
+export const blankSections = () => DEFAULT_SECTION_ORDER.map((id) => ({ id, title: '', visible: true }))
+
+/** Normalize stored section settings: keep known ids, fill in missing ones, drop unknown. */
+export function normalizeSections(raw, master) {
+	const clean = []
+	const seen = new Set()
+	const customIds = new Set((master?.customSections || []).map((s) => s?.id))
+	const valid = (id) => SECTION_IDS.includes(id) || customIds.has(id)
+	if (Array.isArray(raw)) {
+		for (const entry of raw) {
+			const id = typeof entry === 'string' ? entry : entry?.id
+			if (!id || !valid(id) || seen.has(id)) continue
+			seen.add(id)
+			clean.push({
+				id,
+				title: typeof entry?.title === 'string' ? entry.title.slice(0, 60) : '',
+				visible: entry?.visible !== false
+			})
+		}
+	}
+	for (const id of DEFAULT_SECTION_ORDER) {
+		if (!seen.has(id)) {
+			seen.add(id)
+			clean.push({ id, title: '', visible: true })
+		}
+	}
+	for (const s of master?.customSections || []) {
+		if (!seen.has(s.id)) {
+			seen.add(s.id)
+			clean.push({ id: s.id, title: '', visible: true })
+		}
+	}
+	return clean
+}
+
+/** Generic display label for a section id (used as the rename placeholder). */
+export function sectionLabel(id) {
+	return RESUME_SECTIONS.find((s) => s.id === id)?.label ?? id
+}
 
 /** Factory for a new item in a given section. */
 export const SECTION_FACTORY = {
@@ -107,7 +189,8 @@ export const blankResume = () => ({
 	experience: [blankExperience()],
 	projects: [blankProject()],
 	education: [blankEducation()],
-	skills: [blankSkillGroup()]
+	skills: [blankSkillGroup()],
+	customSections: []
 })
 
 export const sampleResume = () => ({
@@ -171,7 +254,8 @@ export const sampleResume = () => ({
 		{ id: uid(), category: 'Languages', items: 'JavaScript, TypeScript, HTML, CSS' },
 		{ id: uid(), category: 'Frameworks', items: 'Vue 3, React, Tailwind CSS, Vite' },
 		{ id: uid(), category: 'Tools', items: 'Git, Figma, Playwright, Docker' }
-	]
+	],
+	customSections: []
 })
 
 /** Items without an explicit flag (e.g. saved before this feature) count as visible. */
