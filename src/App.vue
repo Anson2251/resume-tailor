@@ -225,7 +225,7 @@ function createSection() {
 	workspace.master.customSections.push(section)
 	// Every profile gets the new section (shown, at the end) under its name.
 	for (const profile of workspace.profiles) {
-		profile.sections.push({ id: section.id, title, visible: true })
+		profile.sections.push({ id: section.id, title, visible: true, direction: 'col' })
 		const custom = (profile.view.custom ??= {})
 		custom[section.id] = section.items.map((item) => item.id)
 	}

@@ -53,6 +53,10 @@ function sectionTitle(id, fallback) {
 	return t && t.trim() ? t.trim() : fallback
 }
 
+function sectionDirection(id) {
+	return sectionConfig(id)?.direction === 'row' ? 'row' : 'col'
+}
+
 function dateRange(start, end, current) {
 	const s = (start || '').trim()
 	const e = current ? 'Present' : (end || '').trim()
@@ -104,7 +108,7 @@ const shown = computed(() => ({
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
 						{{ sectionTitle('education', 'Education') }}
 					</h2>
-					<div class="mt-4 entry-stack-sm">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm mt-4' : 'mt-4 entry-stack-sm'">
 						<article v-for="edu in shown.education" :key="edu.id">
 							<h3 class="text-[14px] font-semibold text-slate-900">{{ edu.school || 'School' }}</h3>
 							<p class="text-[13px] text-slate-600">{{ [edu.degree, edu.field].filter(Boolean).join(' · ') }}</p>
@@ -123,7 +127,7 @@ const shown = computed(() => ({
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
 						{{ sectionTitle('experience', 'Experience') }}
 					</h2>
-					<div class="mt-4 entry-stack">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-4' : 'mt-4 entry-stack'">
 						<article v-for="job in shown.experience" :key="job.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[16px] font-semibold text-slate-900">{{ job.role || 'Role' }}</h3>
@@ -148,7 +152,7 @@ const shown = computed(() => ({
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
 						{{ sectionTitle('projects', 'Projects') }}
 					</h2>
-					<div class="mt-4 entry-stack">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-4' : 'mt-4 entry-stack'">
 						<article v-for="project in shown.projects" :key="project.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[16px] font-semibold text-slate-900">{{ project.name || 'Project' }}</h3>
@@ -173,7 +177,7 @@ const shown = computed(() => ({
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
 						{{ sectionTitle('skills', 'Skills') }}
 					</h2>
-					<div class="mt-4 entry-stack-sm">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm mt-4' : 'mt-4 entry-stack-sm'">
 						<div v-for="group in shown.skills" :key="group.id" class="avoid-break">
 							<h3 class="text-[13px] font-semibold text-slate-900">{{ group.category || 'Category' }}</h3>
 							<p class="mt-0.5 text-[13px] leading-relaxed text-slate-600">
@@ -187,7 +191,7 @@ const shown = computed(() => ({
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
 						{{ customSection(sid).title }}
 					</h2>
-					<div class="mt-4 entry-stack">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-4' : 'mt-4 entry-stack'">
 						<article v-for="item in customSection(sid).items" :key="item.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[16px] font-semibold text-slate-900">{{ item.heading || 'Item' }}</h3>

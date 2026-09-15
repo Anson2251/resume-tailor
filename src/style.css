@@ -205,6 +205,29 @@
 	padding-top: 0.375rem;
 }
 
+/* Row flow for list entries (per-section "row" layout): same three densities
+   as the stacks above, but as a two-column grid instead of a vertical stack. */
+.entry-row {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	column-gap: 1.5rem;
+	row-gap: 1rem;
+}
+
+.entry-row-sm {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	column-gap: 1.5rem;
+	row-gap: 0.75rem;
+}
+
+.entry-row-xs {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	column-gap: 1rem;
+	row-gap: 0.375rem;
+}
+
 /* ---------- Markdown content ----------
    Unlayered so it beats Tailwind Preflight, which strips list styles.
    Rhythm: no margins by default (the surrounding template spacing already

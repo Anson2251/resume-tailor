@@ -53,6 +53,10 @@ function sectionTitle(id, fallback) {
 	return t && t.trim() ? t.trim() : fallback
 }
 
+function sectionDirection(id) {
+	return sectionConfig(id)?.direction === 'row' ? 'row' : 'col'
+}
+
 function dateRange(start, end, current) {
 	const s = (start || '').trim()
 	const e = current ? 'Present' : (end || '').trim()
@@ -101,7 +105,7 @@ const shown = computed(() => ({
 					>
 						{{ sectionTitle('education', 'Education') }}
 					</h2>
-					<div class="mt-3 entry-stack-sm">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm mt-3' : 'mt-3 entry-stack-sm'">
 						<article v-for="edu in shown.education" :key="edu.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[15px] font-bold">{{ edu.school || 'School' }}</h3>
@@ -127,7 +131,7 @@ const shown = computed(() => ({
 					>
 						{{ sectionTitle('experience', 'Professional Experience') }}
 					</h2>
-					<div class="mt-3 entry-stack">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-3' : 'mt-3 entry-stack'">
 						<article v-for="job in shown.experience" :key="job.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[15px] font-bold">{{ job.role || 'Role' }}, {{ job.company || 'Company' }}</h3>
@@ -148,7 +152,7 @@ const shown = computed(() => ({
 					>
 						{{ sectionTitle('projects', 'Projects') }}
 					</h2>
-					<div class="mt-3 entry-stack">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-3' : 'mt-3 entry-stack'">
 						<article v-for="project in shown.projects" :key="project.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[15px] font-bold">{{ project.name || 'Project' }}</h3>
@@ -178,7 +182,7 @@ const shown = computed(() => ({
 					>
 						{{ sectionTitle('skills', 'Skills') }}
 					</h2>
-					<div class="mt-2 entry-stack-xs">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-xs mt-2' : 'mt-2 entry-stack-xs'">
 						<p v-for="group in shown.skills" :key="group.id" class="text-[13.5px]">
 							<strong>{{ group.category || 'Category' }}:</strong> {{ splitComma(group.items).join(', ') }}
 						</p>
@@ -192,7 +196,7 @@ const shown = computed(() => ({
 					>
 						{{ customSection(sid).title }}
 					</h2>
-					<div class="mt-3 entry-stack">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-3' : 'mt-3 entry-stack'">
 						<article v-for="item in customSection(sid).items" :key="item.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[15px] font-bold">{{ item.heading || 'Item' }}</h3>

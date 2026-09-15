@@ -59,6 +59,10 @@ function sectionTitle(id, fallback) {
 	return t && t.trim() ? t.trim() : fallback
 }
 
+function sectionDirection(id) {
+	return sectionConfig(id)?.direction === 'row' ? 'row' : 'col'
+}
+
 function dateRange(start, end, current) {
 	const s = (start || '').trim()
 	const e = current ? 'Present' : (end || '').trim()
@@ -92,7 +96,7 @@ function dateRange(start, end, current) {
 					<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">
 						{{ sectionTitle('education', 'Education') }}
 					</h2>
-					<div class="entry-stack-sm">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm' : 'entry-stack-sm'">
 						<article v-for="edu in shown.education" :key="edu.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-sm font-bold text-slate-900">{{ edu.school || 'School' }}</h3>
@@ -115,7 +119,7 @@ function dateRange(start, end, current) {
 					<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">
 						{{ sectionTitle('experience', 'Experience') }}
 					</h2>
-					<div class="entry-stack-sm">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm' : 'entry-stack-sm'">
 						<article v-for="job in shown.experience" :key="job.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-sm font-bold text-slate-900">{{ job.role || 'Role' }}</h3>
@@ -139,7 +143,7 @@ function dateRange(start, end, current) {
 					<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">
 						{{ sectionTitle('projects', 'Projects') }}
 					</h2>
-					<div class="entry-stack-sm">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm' : 'entry-stack-sm'">
 						<article v-for="project in shown.projects" :key="project.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-sm font-bold text-slate-900">{{ project.name || 'Project' }}</h3>
@@ -163,7 +167,7 @@ function dateRange(start, end, current) {
 					<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">
 						{{ sectionTitle('skills', 'Skills') }}
 					</h2>
-					<div class="entry-stack-sm">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm' : 'entry-stack-sm'">
 						<div v-for="group in shown.skills" :key="group.id" class="avoid-break">
 							<h3 class="text-xs font-bold text-slate-900">{{ group.category || 'Category' }}</h3>
 							<div class="mt-1">
@@ -184,7 +188,7 @@ function dateRange(start, end, current) {
 					<h2 class="mb-2 text-xs font-bold tracking-[0.18em] uppercase" :style="{ color: accent }">
 						{{ customSection(sid).title }}
 					</h2>
-					<div class="entry-stack-sm">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm' : 'entry-stack-sm'">
 						<article v-for="item in customSection(sid).items" :key="item.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-sm font-bold text-slate-900">{{ item.heading || 'Item' }}</h3>

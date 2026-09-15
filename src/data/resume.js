@@ -87,8 +87,9 @@ export const SECTION_IDS = RESUME_SECTIONS.map((s) => s.id)
  */
 export const DEFAULT_SECTION_ORDER = ['summary', 'education', 'experience', 'projects', 'skills']
 
-/** A fresh per-profile section layout: default order, default names, all visible. */
-export const blankSections = () => DEFAULT_SECTION_ORDER.map((id) => ({ id, title: '', visible: true }))
+/** A fresh per-profile section layout: default order, default names, all visible, column flow. */
+export const blankSections = () =>
+	DEFAULT_SECTION_ORDER.map((id) => ({ id, title: '', visible: true, direction: 'col' }))
 
 /** Normalize stored section settings: keep known ids, fill in missing ones, drop unknown. */
 export function normalizeSections(raw, master) {
@@ -105,19 +106,20 @@ export function normalizeSections(raw, master) {
 				id,
 				title: typeof entry?.title === 'string' ? entry.title.slice(0, 60) : '',
 				visible: entry?.visible !== false,
+				direction: entry?.direction === 'row' ? 'row' : 'col',
 			})
 		}
 	}
 	for (const id of DEFAULT_SECTION_ORDER) {
 		if (!seen.has(id)) {
 			seen.add(id)
-			clean.push({ id, title: '', visible: true })
+			clean.push({ id, title: '', visible: true, direction: 'col' })
 		}
 	}
 	for (const s of master?.customSections || []) {
 		if (!seen.has(s.id)) {
 			seen.add(s.id)
-			clean.push({ id: s.id, title: '', visible: true })
+			clean.push({ id: s.id, title: '', visible: true, direction: 'col' })
 		}
 	}
 	return clean

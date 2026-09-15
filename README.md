@@ -40,7 +40,7 @@ No accounts, no uploads, no duplicated content.
 ### 👀 Live preview & export
 
 - **Live preview** with 3 templates: **Modern, Classic, Minimal** — plus a **1 / 2 column** layout toggle and a **Style popover** for the accent color and body font (all saved per profile). The font defaults to the template's own font (Modern/Minimal → Sans, Classic → Serif) until you pick one. Two columns makes the body content (summary, experience, projects, education, skills) flow newspaper-style across two columns; entries stay whole and headings stay with their content.
-- **Sections panel** — reorder the resume sections (drag by the grip handle or nudge with ↑/↓), rename any heading per profile (empty = template default), and show/hide whole sections. Saved per profile, so e.g. a graduate profile can lead with Education while an industry profile leads with Experience. **Add section** creates your own (Certifications, Languages, …) with generic heading/subtitle/dates/details items; user-created sections get a delete button that removes them from the master and every profile. Built-in sections can't be deleted — hide them instead.
+- **Sections panel** — reorder the resume sections (drag by the grip handle or nudge with ↑/↓), rename any heading per profile (empty = template default), show/hide whole sections, and flip any repeatable list between column and row flow with the grid button (row lays entries out in a two-column grid). Saved per profile, so e.g. a graduate profile can lead with Education while an industry profile leads with Experience. **Add section** creates your own (Certifications, Languages, …) with generic heading/subtitle/dates/details items; user-created sections get a delete button that removes them from the master and every profile. Built-in sections can't be deleted — hide them instead.
 - **Export PDF button** — opens the print dialog; choose “Save as PDF” with margins set to None for an edge-to-edge A4 file with selectable vector text.
 
 ### 💾 Private by design
@@ -101,7 +101,7 @@ The app keeps a single workspace, persisted as `{ version, master, profiles, act
   - `title` / `summary` — the tailoring fields for that target role.
   - `template` / `accent` / `font` — presentation, saved per profile. `font` is `null` by default, meaning “use the template's font”; pick a font in the Style popover to pin one explicitly.
   - `columns` — `1` (single column) or `2` (body flows across two columns).
-  - `sections` — ordered `[{ id, title, visible }]` over `summary`, the four repeatable sections, and any user-created sections (appended after the built-ins). `title` is a per-profile heading override (empty = template default, or the master name for custom sections); `visible` hides the whole section on that profile.
+  - `sections` — ordered `[{ id, title, visible, direction }]` over `summary`, the four repeatable sections, and any user-created sections (appended after the built-ins). `title` is a per-profile heading override (empty = template default, or the master name for custom sections); `visible` hides the whole section on that profile; `direction` is `col` (vertical stack) or `row` (two-column grid of entries).
 
 The preview is derived by resolving the active profile's view into the resume shape the templates consume, so templates never deal with profiles directly.
 

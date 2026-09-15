@@ -15,6 +15,7 @@ import {
 	Checkmark16Regular,
 	Color16Regular,
 	Dismiss16Regular,
+	AlignSpaceEvenlyHorizontal20Regular,
 	List16Regular,
 	PaintBrush16Regular,
 	ReOrderDotsVertical16Regular,
@@ -74,12 +75,20 @@ function renameSection(id, title) {
 
 function resetSections() {
 	// Built-ins go back to defaults; user-created sections are kept (shown,
-	// default names) so reset never destroys content.
+	// default names, column flow) so reset never destroys content.
 	const customs = (sections.value || [])
 		.filter((s) => isCustomSection(s.id))
-		.map((s) => ({ ...s, title: '', visible: true }))
+		.map((s) => ({ ...s, title: '', visible: true, direction: 'col' }))
 	sections.value = [...blankSections(), ...customs]
 }
+
+function toggleDirection(id) {
+	sections.value = (sections.value || []).map((s) =>
+		s.id === id ? { ...s, direction: s.direction === 'row' ? 'col' : 'row' } : s,
+	)
+}
+
+const sectionDirection = (id) => ((sections.value || []).find((s) => s.id === id)?.direction === 'row' ? 'row' : 'col')
 
 // Drag to reorder sections.
 const dragSectionId = ref(null)
@@ -323,7 +332,7 @@ onBeforeUnmount(() => {
 								: 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
 						"
 						:aria-expanded="open"
-						title="Reorder, rename, show/hide resume sections"
+						title="Reorder, rename, show/hide, lay out resume sections"
 						@click="toggle"
 					>
 						<div class="flex items-center gap-2">
@@ -339,7 +348,8 @@ onBeforeUnmount(() => {
 
 				<div class="space-y-3">
 					<p class="text-xs text-slate-500 dark:text-slate-400">
-						Reorder, rename, show/hide — saved on this profile. Empty name uses the template default.
+						Reorder, rename, show/hide — saved on this profile. Empty name uses the template default. The grid button
+						lays a section's entries out in a row instead of a column.
 					</p>
 					<div class="grid gap-1.5">
 						<div
@@ -384,8 +394,8 @@ onBeforeUnmount(() => {
 								<input
 									:value="s.title"
 									class="input min-w-0 flex-1 py-1 text-[13px]"
-									:placeholder="sectionLabel(s.id)"
-									:title="`Rename “${sectionLabel(s.id)}” section`"
+									:placeholder="isCustomSection(s.id) ? 'Section name' : sectionLabel(s.id)"
+									:title="isCustomSection(s.id) ? 'Rename section' : `Rename “${sectionLabel(s.id)}” section`"
 									maxlength="60"
 									@input="renameSection(s.id, $event.target.value)"
 								/>
@@ -404,6 +414,15 @@ onBeforeUnmount(() => {
 									@click="moveSection(s.id, 1)"
 								>
 									<Icon size="16"><ArrowDown16Regular /></Icon>
+								</button>
+								<button
+									v-if="s.id !== 'summary'"
+									class="icon-btn"
+									:title="sectionDirection(s.id) === 'row' ? 'Use column layout' : 'Use row layout'"
+									:style="sectionDirection(s.id) === 'row' ? { backgroundColor: accent, color: '#fff' } : null"
+									@click="toggleDirection(s.id)"
+								>
+									<Icon size="16"><AlignSpaceEvenlyHorizontal20Regular /></Icon>
 								</button>
 								<button
 									v-if="isCustomSection(s.id)"
