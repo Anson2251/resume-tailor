@@ -7,7 +7,7 @@ import {
 	isVisible,
 	normalizeSections,
 	sampleResume,
-	uid
+	uid,
 } from './resume.js'
 
 export const WORKSPACE_VERSION = 2
@@ -38,8 +38,8 @@ export function blankProfile(
 		title = '',
 		summary = '',
 		sections = null,
-		isMaster = false
-	} = {}
+		isMaster = false,
+	} = {},
 ) {
 	return {
 		id: uid(),
@@ -58,7 +58,7 @@ export function blankProfile(
 		// for every user-created section (falling back to the master name).
 		sections: normalizeSections(sections, master),
 		view: allIds(master),
-		overrides: {}
+		overrides: {},
 	}
 }
 
@@ -76,7 +76,7 @@ export function sampleWorkspace() {
 		title: 'Frontend Engineer',
 		summary:
 			'**Frontend engineer** with **5 years** of experience building responsive web apps with **Vue** and **React**.\nPassionate about design systems, performance, and turning ambiguous product ideas into polished user experiences.',
-		isMaster: true
+		isMaster: true,
 	})
 	return { version: WORKSPACE_VERSION, master, profiles: [profile], activeProfileId: profile.id }
 }
@@ -114,7 +114,7 @@ export function buildPreview(master, profile) {
 	const contact = {
 		...(master.contact || blankContact()),
 		title: profile?.title || '',
-		summary: profile?.summary || ''
+		summary: profile?.summary || '',
 	}
 	const preview = { contact, customSections: [] }
 	for (const key of SECTION_KEYS) {
@@ -127,7 +127,7 @@ export function buildPreview(master, profile) {
 		preview.customSections.push({
 			id: section.id,
 			title: customSectionTitle(section, entries.get(section.id)),
-			items: applyOverrides(resolved, profile?.overrides)
+			items: applyOverrides(resolved, profile?.overrides),
 		})
 	}
 	return preview
@@ -189,7 +189,7 @@ function normalizeProfile(master, profile, index) {
 		summary: typeof profile?.summary === 'string' ? profile.summary : '',
 		sections: normalizeSections(profile?.sections, master),
 		view: normalizeView(master, profile?.view),
-		overrides: normalizeOverrides(master, profile?.overrides)
+		overrides: normalizeOverrides(master, profile?.overrides),
 	}
 }
 
@@ -234,9 +234,9 @@ function normalizeCustomSections(raw) {
 						heading: typeof item?.heading === 'string' ? item.heading : '',
 						sub: typeof item?.sub === 'string' ? item.sub : '',
 						dates: typeof item?.dates === 'string' ? item.dates : '',
-						body: typeof item?.body === 'string' ? item.body : ''
+						body: typeof item?.body === 'string' ? item.body : '',
 					}))
-				: []
+				: [],
 		}))
 }
 
@@ -250,7 +250,8 @@ export function normalizeWorkspace(ws) {
 	master.customSections = normalizeCustomSections(masterIn.customSections)
 
 	let profiles = Array.isArray(ws.profiles) ? ws.profiles.map((p, i) => normalizeProfile(master, p, i)) : []
-	if (!profiles.length) profiles = [blankProfile('Master', master, { isMaster: true })].map((p, i) => normalizeProfile(master, p, i))
+	if (!profiles.length)
+		profiles = [blankProfile('Master', master, { isMaster: true })].map((p, i) => normalizeProfile(master, p, i))
 
 	// Exactly one master profile: the flagged one, else the first.
 	let masterProfile = profiles.find((p) => p.master) || profiles[0]
@@ -287,7 +288,7 @@ function workspaceFromLegacy(resume, template, accent) {
 		experience: (resume.experience || []).map(stripVisible),
 		projects: (resume.projects || []).map(stripVisible),
 		education: (resume.education || []).map(stripVisible),
-		skills: (resume.skills || []).map(stripVisible)
+		skills: (resume.skills || []).map(stripVisible),
 	}
 	const profile = {
 		id: uid(),
@@ -298,7 +299,7 @@ function workspaceFromLegacy(resume, template, accent) {
 		columns: 1,
 		title: typeof resume.contact?.title === 'string' ? resume.contact.title : '',
 		summary: typeof resume.contact?.summary === 'string' ? resume.contact.summary : '',
-		view: {}
+		view: {},
 	}
 	// Preserve what was shown/hidden before profiles existed.
 	for (const key of SECTION_KEYS) {

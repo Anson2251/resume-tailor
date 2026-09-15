@@ -13,7 +13,7 @@ export const blankExperience = () => ({
 	startDate: '',
 	endDate: '',
 	current: false,
-	bullets: ''
+	bullets: '',
 })
 
 export const blankProject = () => ({
@@ -23,7 +23,7 @@ export const blankProject = () => ({
 	tech: '',
 	startDate: '',
 	endDate: '',
-	bullets: ''
+	bullets: '',
 })
 
 export const blankEducation = () => ({
@@ -34,13 +34,13 @@ export const blankEducation = () => ({
 	startDate: '',
 	endDate: '',
 	gpa: '',
-	details: ''
+	details: '',
 })
 
 export const blankSkillGroup = () => ({
 	id: uid(),
 	category: '',
-	items: ''
+	items: '',
 })
 
 /** A generic item for user-created sections: heading + subtitle + dates + markdown body. */
@@ -49,7 +49,7 @@ export const blankCustomItem = () => ({
 	heading: '',
 	sub: '',
 	dates: '',
-	body: ''
+	body: '',
 })
 
 /** Editable fields of a custom-section item — used for per-profile content overrides. */
@@ -76,7 +76,7 @@ export const RESUME_SECTIONS = [
 	{ id: 'experience', label: 'Experience' },
 	{ id: 'projects', label: 'Projects' },
 	{ id: 'education', label: 'Education' },
-	{ id: 'skills', label: 'Skills' }
+	{ id: 'skills', label: 'Skills' },
 ]
 
 export const SECTION_IDS = RESUME_SECTIONS.map((s) => s.id)
@@ -104,7 +104,7 @@ export function normalizeSections(raw, master) {
 			clean.push({
 				id,
 				title: typeof entry?.title === 'string' ? entry.title.slice(0, 60) : '',
-				visible: entry?.visible !== false
+				visible: entry?.visible !== false,
 			})
 		}
 	}
@@ -133,7 +133,7 @@ export const SECTION_FACTORY = {
 	experience: blankExperience,
 	projects: blankProject,
 	education: blankEducation,
-	skills: blankSkillGroup
+	skills: blankSkillGroup,
 }
 
 /** Editable fields per section — used for per-profile content overrides. */
@@ -141,7 +141,7 @@ export const SECTION_FIELDS = {
 	experience: ['role', 'company', 'location', 'startDate', 'endDate', 'current', 'bullets'],
 	projects: ['name', 'link', 'tech', 'startDate', 'endDate', 'bullets'],
 	education: ['school', 'degree', 'field', 'startDate', 'endDate', 'gpa', 'details'],
-	skills: ['category', 'items']
+	skills: ['category', 'items'],
 }
 
 /** Human labels for overridden fields, shown in the "customized" badge. */
@@ -153,7 +153,7 @@ export const SECTION_FIELD_LABELS = {
 		startDate: 'start',
 		endDate: 'end',
 		current: 'current',
-		bullets: 'achievements'
+		bullets: 'achievements',
 	},
 	projects: {
 		name: 'name',
@@ -161,7 +161,7 @@ export const SECTION_FIELD_LABELS = {
 		tech: 'technologies',
 		startDate: 'start',
 		endDate: 'end',
-		bullets: 'highlights'
+		bullets: 'highlights',
 	},
 	education: {
 		school: 'school',
@@ -170,9 +170,9 @@ export const SECTION_FIELD_LABELS = {
 		startDate: 'start',
 		endDate: 'end',
 		gpa: 'GPA',
-		details: 'details'
+		details: 'details',
 	},
-	skills: { category: 'category', items: 'skills' }
+	skills: { category: 'category', items: 'skills' },
 }
 
 export const blankContact = () => ({
@@ -181,7 +181,7 @@ export const blankContact = () => ({
 	phone: '',
 	location: '',
 	website: '',
-	linkedin: ''
+	linkedin: '',
 })
 
 export const blankResume = () => ({
@@ -190,7 +190,7 @@ export const blankResume = () => ({
 	projects: [blankProject()],
 	education: [blankEducation()],
 	skills: [blankSkillGroup()],
-	customSections: []
+	customSections: [],
 })
 
 export const sampleResume = () => ({
@@ -200,7 +200,7 @@ export const sampleResume = () => ({
 		phone: '+33 6 12 34 56 78',
 		location: 'Paris, France',
 		website: 'bobsmith.example.com',
-		linkedin: 'linkedin.com/in/bob-smith-example'
+		linkedin: 'linkedin.com/in/bob-smith-example',
 	},
 	experience: [
 		{
@@ -212,7 +212,7 @@ export const sampleResume = () => ({
 			endDate: '',
 			current: true,
 			bullets:
-				'- Led migration of a legacy jQuery dashboard to Vue 3, cutting page load time by **45%**\n- Built a reusable component library adopted by 4 product teams\n- Mentored 3 junior engineers through onboarding and code reviews'
+				'- Led migration of a legacy jQuery dashboard to Vue 3, cutting page load time by **45%**\n- Built a reusable component library adopted by 4 product teams\n- Mentored 3 junior engineers through onboarding and code reviews',
 		},
 		{
 			id: uid(),
@@ -223,8 +223,8 @@ export const sampleResume = () => ({
 			endDate: 'Dec 2021',
 			current: false,
 			bullets:
-				'- Shipped marketing site and checkout flow serving **200k** monthly visitors\n- Improved Lighthouse performance score from 62 to **94**\n- Collaborated with designers to implement a Tailwind-based design system'
-		}
+				'- Shipped marketing site and checkout flow serving **200k** monthly visitors\n- Improved Lighthouse performance score from 62 to **94**\n- Collaborated with designers to implement a Tailwind-based design system',
+		},
 	],
 	projects: [
 		{
@@ -235,8 +235,8 @@ export const sampleResume = () => ({
 			startDate: '2023',
 			endDate: '',
 			bullets:
-				'- Designed and built a personal portfolio with blog and dark mode\n- Top post on frontend performance reached **15k** readers'
-		}
+				'- Designed and built a personal portfolio with blog and dark mode\n- Top post on frontend performance reached **15k** readers',
+		},
 	],
 	education: [
 		{
@@ -247,15 +247,15 @@ export const sampleResume = () => ({
 			startDate: '2016',
 			endDate: '2020',
 			gpa: '3.8',
-			details: 'Relevant coursework: **Data Structures**, Web Development, HCI'
-		}
+			details: 'Relevant coursework: **Data Structures**, Web Development, HCI',
+		},
 	],
 	skills: [
 		{ id: uid(), category: 'Languages', items: 'JavaScript, TypeScript, HTML, CSS' },
 		{ id: uid(), category: 'Frameworks', items: 'Vue 3, React, Tailwind CSS, Vite' },
-		{ id: uid(), category: 'Tools', items: 'Git, Figma, Playwright, Docker' }
+		{ id: uid(), category: 'Tools', items: 'Git, Figma, Playwright, Docker' },
 	],
-	customSections: []
+	customSections: [],
 })
 
 /** Items without an explicit flag (e.g. saved before this feature) count as visible. */

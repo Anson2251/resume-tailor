@@ -10,7 +10,7 @@ import { onBeforeUnmount, ref, watch } from 'vue'
  */
 const props = defineProps({
 	align: { type: String, default: 'start' }, // 'start' | 'end'
-	width: { type: String, default: '17rem' }
+	width: { type: String, default: '17rem' },
 })
 
 const open = ref(false)
@@ -33,7 +33,7 @@ function updatePosition() {
 	const left = props.align === 'end' ? rect.right - width : rect.left
 	position.value = {
 		top: rect.bottom + 8,
-		left: Math.max(8, Math.min(left, window.innerWidth - width - 8))
+		left: Math.max(8, Math.min(left, window.innerWidth - width - 8)),
 	}
 }
 

@@ -9,8 +9,7 @@
 			// Set the initial theme before first paint to avoid a light/dark flash.
 			try {
 				var t = localStorage.getItem('resume-tailor-theme')
-				if (t !== 'light' && t !== 'dark')
-					t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+				if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 				if (t === 'dark') document.documentElement.classList.add('dark')
 			} catch (e) {}
 		</script>

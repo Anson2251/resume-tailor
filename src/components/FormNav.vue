@@ -14,7 +14,7 @@ import { DEFAULT_SECTION_ORDER, SECTION_KEYS, customSectionTitle, sectionLabel }
 const props = defineProps({
 	profile: { type: Object, required: true },
 	master: { type: Object, required: true },
-	accent: { type: String, default: '#4f46e5' }
+	accent: { type: String, default: '#4f46e5' },
 })
 
 // The active anchor is derived purely from the scrolled position — the nav
@@ -52,7 +52,7 @@ function itemLabel(key, item, index) {
 			return item?.category || `Skill group ${index + 1}`
 		default:
 			return item?.heading || `Item ${index + 1}`
-		}
+	}
 }
 
 /** Content list for a section: fixed key on master, or a user-created section's items. */
@@ -76,7 +76,11 @@ function sectionChildren(key) {
 	for (const item of list) if (!seen.has(item.id)) ordered.push(item.id)
 	return ordered.map((id) => ({
 		id,
-		label: itemLabel(key, byId.get(id), list.findIndex((item) => item.id === id))
+		label: itemLabel(
+			key,
+			byId.get(id),
+			list.findIndex((item) => item.id === id),
+		),
 	}))
 }
 
@@ -99,8 +103,8 @@ const groups = computed(() => {
 		...ids.map((id) => ({
 			id,
 			label: groupLabel(id),
-			children: id === 'summary' ? [] : sectionChildren(id)
-		}))
+			children: id === 'summary' ? [] : sectionChildren(id),
+		})),
 	]
 })
 
@@ -214,7 +218,11 @@ onBeforeUnmount(() => {
 						type="button"
 						:title="group.label"
 						class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[15px] transition"
-						:class="activeKey === group.id ? 'bg-white/10 font-medium text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'"
+						:class="
+							activeKey === group.id
+								? 'bg-white/10 font-medium text-white'
+								: 'text-slate-300 hover:bg-white/5 hover:text-white'
+						"
 						@click="scrollTo(group.id)"
 					>
 						<span
@@ -229,7 +237,11 @@ onBeforeUnmount(() => {
 						type="button"
 						:title="child.label"
 						class="flex w-full items-center gap-2.5 rounded-lg py-1.5 pr-3 pl-8 text-left text-[13px] transition"
-						:class="activeKey === child.id ? 'bg-white/10 font-medium text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'"
+						:class="
+							activeKey === child.id
+								? 'bg-white/10 font-medium text-white'
+								: 'text-slate-400 hover:bg-white/5 hover:text-white'
+						"
 						@click="scrollTo(child.id)"
 					>
 						<span

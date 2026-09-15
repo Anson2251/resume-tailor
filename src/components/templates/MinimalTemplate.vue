@@ -9,7 +9,7 @@ const props = defineProps({
 	accent: { type: String, default: '#0f766e' },
 	font: { type: String, default: 'sans' },
 	columns: { type: Number, default: 1 },
-	sections: { type: Array, default: () => [] }
+	sections: { type: Array, default: () => [] },
 })
 
 const fontFamily = computed(() => fontStack(props.font))
@@ -17,11 +17,11 @@ const fontFamily = computed(() => fontStack(props.font))
 const contactBits = computed(() =>
 	[props.resume.contact.email, props.resume.contact.phone, props.resume.contact.location]
 		.filter(Boolean)
-		.join('   ·   ')
+		.join('   ·   '),
 )
 
 const linkBits = computed(() =>
-	[props.resume.contact.website, props.resume.contact.linkedin].filter(Boolean).join('   ·   ')
+	[props.resume.contact.website, props.resume.contact.linkedin].filter(Boolean).join('   ·   '),
 )
 
 // Per-profile section layout: order, custom headings, visibility.
@@ -65,7 +65,7 @@ const shown = computed(() => ({
 	experience: visibleItems(props.resume.experience),
 	projects: visibleItems(props.resume.projects),
 	education: visibleItems(props.resume.education),
-	skills: visibleItems(props.resume.skills)
+	skills: visibleItems(props.resume.skills),
 }))
 </script>
 
@@ -87,94 +87,125 @@ const shown = computed(() => ({
 
 		<div :class="columns === 2 ? 'resume-columns' : ''">
 			<template v-for="sid in orderedSections" :key="sid">
-				<section v-if="sid === 'summary' && resume.contact.summary && sectionVisible('summary')" class="avoid-break pt-5">
-					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">{{ sectionTitle('summary', 'About') }}</h2>
-				<MarkdownText :source="resume.contact.summary" class="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-slate-600" />
-			</section>
+				<section
+					v-if="sid === 'summary' && resume.contact.summary && sectionVisible('summary')"
+					class="avoid-break pt-5"
+				>
+					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
+						{{ sectionTitle('summary', 'About') }}
+					</h2>
+					<MarkdownText
+						:source="resume.contact.summary"
+						class="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-slate-600"
+					/>
+				</section>
 
 				<section v-else-if="sid === 'education' && shown.education.length && sectionVisible('education')" class="pt-5">
-					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">{{ sectionTitle('education', 'Education') }}</h2>
-				<div class="mt-4 entry-stack-sm">
-					<article v-for="edu in shown.education" :key="edu.id">
-						<h3 class="text-[14px] font-semibold text-slate-900">{{ edu.school || 'School' }}</h3>
-						<p class="text-[13px] text-slate-600">{{ [edu.degree, edu.field].filter(Boolean).join(' · ') }}</p>
-						<p class="mt-0.5 text-[12px] text-slate-400">
-							{{ dateRange(edu.startDate, edu.endDate, false) }}{{ edu.gpa ? `  ·  GPA ${edu.gpa}` : '' }}
-						</p>
-						<MarkdownText v-if="edu.details" :source="edu.details" class="mt-1 text-[12.5px] text-slate-500" />
-					</article>
-				</div>
-			</section>
+					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
+						{{ sectionTitle('education', 'Education') }}
+					</h2>
+					<div class="mt-4 entry-stack-sm">
+						<article v-for="edu in shown.education" :key="edu.id">
+							<h3 class="text-[14px] font-semibold text-slate-900">{{ edu.school || 'School' }}</h3>
+							<p class="text-[13px] text-slate-600">{{ [edu.degree, edu.field].filter(Boolean).join(' · ') }}</p>
+							<p class="mt-0.5 text-[12px] text-slate-400">
+								{{ dateRange(edu.startDate, edu.endDate, false) }}{{ edu.gpa ? `  ·  GPA ${edu.gpa}` : '' }}
+							</p>
+							<MarkdownText v-if="edu.details" :source="edu.details" class="mt-1 text-[12.5px] text-slate-500" />
+						</article>
+					</div>
+				</section>
 
-				<section v-else-if="sid === 'experience' && shown.experience.length && sectionVisible('experience')" class="pt-5">
-					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">{{ sectionTitle('experience', 'Experience') }}</h2>
-				<div class="mt-4 entry-stack">
-					<article v-for="job in shown.experience" :key="job.id">
-						<div class="flex items-baseline justify-between">
-							<h3 class="text-[16px] font-semibold text-slate-900">{{ job.role || 'Role' }}</h3>
-							<span class="shrink-0 pl-4 text-[12px] font-medium tracking-wide text-slate-400 uppercase">{{
-								dateRange(job.startDate, job.endDate, job.current)
-							}}</span>
-						</div>
-						<p class="mt-0.5 text-[13px]" :style="{ color: accent }">
-							{{ [job.company, job.location].filter(Boolean).join('  ·  ') }}
-						</p>
-						<MarkdownText
-							v-if="job.bullets"
-							:source="job.bullets"
-							class="md-dot mt-2 text-[13.5px] leading-relaxed text-slate-600"
-							:style="{ '--md-dot-color': accent }"
-						/>
-					</article>
-				</div>
-			</section>
+				<section
+					v-else-if="sid === 'experience' && shown.experience.length && sectionVisible('experience')"
+					class="pt-5"
+				>
+					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
+						{{ sectionTitle('experience', 'Experience') }}
+					</h2>
+					<div class="mt-4 entry-stack">
+						<article v-for="job in shown.experience" :key="job.id">
+							<div class="flex items-baseline justify-between">
+								<h3 class="text-[16px] font-semibold text-slate-900">{{ job.role || 'Role' }}</h3>
+								<span class="shrink-0 pl-4 text-[12px] font-medium tracking-wide text-slate-400 uppercase">{{
+									dateRange(job.startDate, job.endDate, job.current)
+								}}</span>
+							</div>
+							<p class="mt-0.5 text-[13px]" :style="{ color: accent }">
+								{{ [job.company, job.location].filter(Boolean).join('  ·  ') }}
+							</p>
+							<MarkdownText
+								v-if="job.bullets"
+								:source="job.bullets"
+								class="md-dot mt-2 text-[13.5px] leading-relaxed text-slate-600"
+								:style="{ '--md-dot-color': accent }"
+							/>
+						</article>
+					</div>
+				</section>
 
 				<section v-else-if="sid === 'projects' && shown.projects.length && sectionVisible('projects')" class="pt-5">
-					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">{{ sectionTitle('projects', 'Projects') }}</h2>
-				<div class="mt-4 entry-stack">
-					<article v-for="project in shown.projects" :key="project.id">
-						<div class="flex items-baseline justify-between">
-							<h3 class="text-[16px] font-semibold text-slate-900">{{ project.name || 'Project' }}</h3>
-							<span class="shrink-0 pl-4 text-[12px] font-medium tracking-wide text-slate-400 uppercase">{{
-								dateRange(project.startDate, project.endDate, false)
-							}}</span>
-						</div>
-						<p class="mt-0.5 text-[13px]" :style="{ color: accent }">
-							{{ [project.tech, project.link].filter(Boolean).join('  ·  ') }}
-						</p>
-						<MarkdownText
-							v-if="project.bullets"
-							:source="project.bullets"
-							class="md-dot mt-2 text-[13.5px] leading-relaxed text-slate-600"
-							:style="{ '--md-dot-color': accent }"
-						/>
-					</article>
-				</div>
-			</section>
+					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
+						{{ sectionTitle('projects', 'Projects') }}
+					</h2>
+					<div class="mt-4 entry-stack">
+						<article v-for="project in shown.projects" :key="project.id">
+							<div class="flex items-baseline justify-between">
+								<h3 class="text-[16px] font-semibold text-slate-900">{{ project.name || 'Project' }}</h3>
+								<span class="shrink-0 pl-4 text-[12px] font-medium tracking-wide text-slate-400 uppercase">{{
+									dateRange(project.startDate, project.endDate, false)
+								}}</span>
+							</div>
+							<p class="mt-0.5 text-[13px]" :style="{ color: accent }">
+								{{ [project.tech, project.link].filter(Boolean).join('  ·  ') }}
+							</p>
+							<MarkdownText
+								v-if="project.bullets"
+								:source="project.bullets"
+								class="md-dot mt-2 text-[13.5px] leading-relaxed text-slate-600"
+								:style="{ '--md-dot-color': accent }"
+							/>
+						</article>
+					</div>
+				</section>
 
 				<section v-else-if="sid === 'skills' && shown.skills.length && sectionVisible('skills')" class="pt-5">
-					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">{{ sectionTitle('skills', 'Skills') }}</h2>
-				<div class="mt-4 entry-stack-sm">
-					<div v-for="group in shown.skills" :key="group.id" class="avoid-break">
-						<h3 class="text-[13px] font-semibold text-slate-900">{{ group.category || 'Category' }}</h3>
-						<p class="mt-0.5 text-[13px] leading-relaxed text-slate-600">{{ splitComma(group.items).join('  ·  ') }}</p>
-					</div>
-				</div>
-			</section>
-
-			<section v-else-if="customSection(sid) && customSection(sid).items.length && sectionVisible(sid)" class="pt-5">
-				<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">{{ customSection(sid).title }}</h2>
-				<div class="mt-4 entry-stack">
-					<article v-for="item in customSection(sid).items" :key="item.id">
-						<div class="flex items-baseline justify-between">
-							<h3 class="text-[16px] font-semibold text-slate-900">{{ item.heading || 'Item' }}</h3>
-							<span v-if="item.dates" class="shrink-0 pl-4 text-[12px] font-medium tracking-wide text-slate-400 uppercase">{{ item.dates }}</span>
+					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
+						{{ sectionTitle('skills', 'Skills') }}
+					</h2>
+					<div class="mt-4 entry-stack-sm">
+						<div v-for="group in shown.skills" :key="group.id" class="avoid-break">
+							<h3 class="text-[13px] font-semibold text-slate-900">{{ group.category || 'Category' }}</h3>
+							<p class="mt-0.5 text-[13px] leading-relaxed text-slate-600">
+								{{ splitComma(group.items).join('  ·  ') }}
+							</p>
 						</div>
-						<p v-if="item.sub" class="mt-0.5 text-[13px]" :style="{ color: accent }">{{ item.sub }}</p>
-						<MarkdownText v-if="item.body" :source="item.body" class="mt-2 text-[13.5px] leading-relaxed text-slate-600" />
-					</article>
-				</div>
-			</section>
+					</div>
+				</section>
+
+				<section v-else-if="customSection(sid) && customSection(sid).items.length && sectionVisible(sid)" class="pt-5">
+					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
+						{{ customSection(sid).title }}
+					</h2>
+					<div class="mt-4 entry-stack">
+						<article v-for="item in customSection(sid).items" :key="item.id">
+							<div class="flex items-baseline justify-between">
+								<h3 class="text-[16px] font-semibold text-slate-900">{{ item.heading || 'Item' }}</h3>
+								<span
+									v-if="item.dates"
+									class="shrink-0 pl-4 text-[12px] font-medium tracking-wide text-slate-400 uppercase"
+									>{{ item.dates }}</span
+								>
+							</div>
+							<p v-if="item.sub" class="mt-0.5 text-[13px]" :style="{ color: accent }">{{ item.sub }}</p>
+							<MarkdownText
+								v-if="item.body"
+								:source="item.body"
+								class="mt-2 text-[13.5px] leading-relaxed text-slate-600"
+							/>
+						</article>
+					</div>
+				</section>
 			</template>
 		</div>
 	</div>

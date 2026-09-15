@@ -4,7 +4,7 @@ import VueMarkdown from 'vue-markdown-render'
 
 const props = defineProps({
 	source: { type: String, default: '' },
-	options: { type: Object, default: null }
+	options: { type: Object, default: null },
 })
 
 // html:false keeps raw HTML escaped (safe by default); breaks keeps single

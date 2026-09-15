@@ -8,7 +8,7 @@ import {
 	SECTION_FIELD_LABELS,
 	SECTION_FIELDS,
 	SECTION_KEYS,
-	customSectionTitle
+	customSectionTitle,
 } from '../data/resume.js'
 
 // The shared master content is edited here; the active profile decides what
@@ -18,7 +18,7 @@ const props = defineProps({
 	profile: { type: Object, required: true },
 	// True when the active profile is the master: item edits change the shared
 	// content directly instead of creating per-profile overrides.
-	editMaster: { type: Boolean, default: false }
+	editMaster: { type: Boolean, default: false },
 })
 const emit = defineEmits(['add', 'remove'])
 
@@ -89,7 +89,7 @@ function fieldModel(item, section) {
 		Object.defineProperty(model, field, {
 			enumerable: true,
 			get: () => (props.editMaster ? item[field] : (readOverrides()[item.id]?.[field] ?? item[field])),
-			set: (value) => (props.editMaster ? (item[field] = value) : setField(item, field, value))
+			set: (value) => (props.editMaster ? (item[field] = value) : setField(item, field, value)),
 		})
 	}
 	return model
@@ -132,7 +132,12 @@ function resetOverrides(id) {
 				</div>
 				<div>
 					<label class="label" for="f-linkedin">LinkedIn</label>
-					<input id="f-linkedin" v-model="master.contact.linkedin" class="input" placeholder="linkedin.com/in/username" />
+					<input
+						id="f-linkedin"
+						v-model="master.contact.linkedin"
+						class="input"
+						placeholder="linkedin.com/in/username"
+					/>
 				</div>
 			</div>
 		</section>
@@ -140,7 +145,11 @@ function resetOverrides(id) {
 		<!-- Everything below follows the profile's section order (Sections panel). -->
 		<template v-for="sid in sectionOrder" :key="sid">
 			<!-- Job title + summary: tailored per profile -->
-			<section v-if="sid === 'summary'" id="form-section-summary" class="card scroll-mt-[150px] border-indigo-200 p-5 dark:border-indigo-900">
+			<section
+				v-if="sid === 'summary'"
+				id="form-section-summary"
+				class="card scroll-mt-[150px] border-indigo-200 p-5 dark:border-indigo-900"
+			>
 				<div class="flex items-baseline justify-between gap-3">
 					<h2 class="section-title text-indigo-400 dark:text-indigo-300">Tailoring</h2>
 					<span class="shrink-0 text-xs text-indigo-400 dark:text-indigo-300">
@@ -149,7 +158,9 @@ function resetOverrides(id) {
 				</div>
 				<div class="mt-4 space-y-3">
 					<div>
-						<label class="label" for="f-title">Job title <span class="font-normal normal-case">(this profile)</span></label>
+						<label class="label" for="f-title"
+							>Job title <span class="font-normal normal-case">(this profile)</span></label
+						>
 						<input id="f-title" v-model="profile.title" class="input" placeholder="Frontend Engineer" />
 					</div>
 					<div>
@@ -165,15 +176,19 @@ function resetOverrides(id) {
 						/>
 					</div>
 					<p class="text-xs text-slate-400 dark:text-slate-500">
-						Long-form fields (summary, achievements, highlights, details) render as <strong class="font-semibold">markdown</strong> —
-						use <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">-</code> for bullets, <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">**bold**</code>,
-						<code class="rounded bg-slate-100 px-1 dark:bg-slate-800">*italic*</code>, <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">[links](url)</code>.
+						Long-form fields (summary, achievements, highlights, details) render as
+						<strong class="font-semibold">markdown</strong> — use
+						<code class="rounded bg-slate-100 px-1 dark:bg-slate-800">-</code> for bullets,
+						<code class="rounded bg-slate-100 px-1 dark:bg-slate-800">**bold**</code>,
+						<code class="rounded bg-slate-100 px-1 dark:bg-slate-800">*italic*</code>,
+						<code class="rounded bg-slate-100 px-1 dark:bg-slate-800">[links](url)</code>.
 						<template v-if="editMaster">
 							This is the <strong class="font-semibold">master</strong> profile: item content edits change the shared
 							content that every profile inherits.
 						</template>
 						<template v-else>
-							Edits are <strong class="font-semibold">saved on this profile only</strong>; other profiles keep the master wording.
+							Edits are <strong class="font-semibold">saved on this profile only</strong>; other profiles keep the
+							master wording.
 						</template>
 					</p>
 				</div>
@@ -195,13 +210,21 @@ function resetOverrides(id) {
 				@reset="resetOverrides"
 			>
 				<template #heading="{ item, index }">
-					{{ item.role || item.company ? `${item.role || 'New role'}${item.company ? ` · ${item.company}` : ''}` : `Position ${index + 1}` }}
+					{{
+						item.role || item.company
+							? `${item.role || 'New role'}${item.company ? ` · ${item.company}` : ''}`
+							: `Position ${index + 1}`
+					}}
 				</template>
 				<template #fields="{ item }">
 					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 						<div>
 							<label class="label">Role</label>
-							<input v-model="fieldModel(item, 'experience').role" class="input" placeholder="Senior Frontend Engineer" />
+							<input
+								v-model="fieldModel(item, 'experience').role"
+								class="input"
+								placeholder="Senior Frontend Engineer"
+							/>
 						</div>
 						<div>
 							<label class="label">Company</label>
@@ -228,7 +251,11 @@ function resetOverrides(id) {
 						</div>
 						<div class="sm:col-span-2">
 							<label class="flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-								<input v-model="fieldModel(item, 'experience').current" type="checkbox" class="h-4 w-4 rounded accent-indigo-600" />
+								<input
+									v-model="fieldModel(item, 'experience').current"
+									type="checkbox"
+									class="h-4 w-4 rounded accent-indigo-600"
+								/>
 								I currently work here
 							</label>
 						</div>
@@ -379,7 +406,11 @@ function resetOverrides(id) {
 						</div>
 						<div class="sm:col-span-2">
 							<label class="label">Skills · comma separated</label>
-							<input v-model="fieldModel(item, 'skills').items" class="input" placeholder="JavaScript, TypeScript, HTML, CSS" />
+							<input
+								v-model="fieldModel(item, 'skills').items"
+								class="input"
+								placeholder="JavaScript, TypeScript, HTML, CSS"
+							/>
 						</div>
 					</div>
 				</template>
@@ -405,7 +436,11 @@ function resetOverrides(id) {
 					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 						<div>
 							<label class="label">Heading</label>
-							<input v-model="fieldModel(item, sid).heading" class="input" placeholder="AWS Certified Solutions Architect" />
+							<input
+								v-model="fieldModel(item, sid).heading"
+								class="input"
+								placeholder="AWS Certified Solutions Architect"
+							/>
 						</div>
 						<div>
 							<label class="label">Dates</label>

@@ -1,7 +1,7 @@
 export const TEMPLATES = [
 	{ id: 'modern', name: 'Modern', hint: 'Accent header', font: 'sans' },
 	{ id: 'classic', name: 'Classic', hint: 'Centered serif', font: 'serif' },
-	{ id: 'minimal', name: 'Minimal', hint: 'Airy + hairlines', font: 'sans' }
+	{ id: 'minimal', name: 'Minimal', hint: 'Airy + hairlines', font: 'sans' },
 ]
 
 /** The body can flow in 1 or 2 columns (per profile). */
@@ -15,20 +15,20 @@ export const FONTS = [
 		id: 'sans',
 		name: 'Sans',
 		hint: 'Clean and modern',
-		family: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+		family: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 	},
 	{
 		id: 'serif',
 		name: 'Serif',
 		hint: 'Classic and formal',
-		family: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif'
+		family: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
 	},
 	{
 		id: 'mono',
 		name: 'Mono',
 		hint: 'Technical and precise',
-		family: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace'
-	}
+		family: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
+	},
 ]
 
 export const DEFAULT_FONT = FONTS[0].id

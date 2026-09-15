@@ -8,7 +8,7 @@ import {
 	DocumentAdd16Regular,
 	DocumentArrowDown16Regular,
 	WeatherMoon16Regular,
-	WeatherSunny16Regular
+	WeatherSunny16Regular,
 } from './data/icons.js'
 import ResumeForm from './components/ResumeForm.vue'
 import FormNav from './components/FormNav.vue'
@@ -24,7 +24,7 @@ import {
 	buildPreview,
 	cloneProfile,
 	migrate,
-	sampleWorkspace
+	sampleWorkspace,
 } from './data/workspace.js'
 
 const workspace = reactive(blankWorkspace())
@@ -67,7 +67,7 @@ function initTheme() {
 }
 
 const activeProfile = computed(
-	() => workspace.profiles.find((p) => p.id === workspace.activeProfileId) || workspace.profiles[0]
+	() => workspace.profiles.find((p) => p.id === workspace.activeProfileId) || workspace.profiles[0],
 )
 
 // The preview is derived: master content sliced and ordered by the active profile.
@@ -79,25 +79,25 @@ const isMaster = computed(() => activeProfile.value?.master === true)
 // Template, accent & font are saved per profile.
 const template = computed({
 	get: () => activeProfile.value?.template ?? 'modern',
-	set: (value) => activeProfile.value && (activeProfile.value.template = value)
+	set: (value) => activeProfile.value && (activeProfile.value.template = value),
 })
 const accent = computed({
 	get: () => activeProfile.value?.accent ?? ACCENTS[0],
-	set: (value) => activeProfile.value && (activeProfile.value.accent = value)
+	set: (value) => activeProfile.value && (activeProfile.value.accent = value),
 })
 // Font falls back to the template's default font until the user picks one.
 const font = computed({
 	get: () => activeProfile.value?.font ?? templateFont(activeProfile.value?.template ?? 'modern'),
-	set: (value) => activeProfile.value && (activeProfile.value.font = value)
+	set: (value) => activeProfile.value && (activeProfile.value.font = value),
 })
 const columns = computed({
 	get: () => activeProfile.value?.columns ?? 1,
-	set: (value) => activeProfile.value && (activeProfile.value.columns = value)
+	set: (value) => activeProfile.value && (activeProfile.value.columns = value),
 })
 // Section order / custom names / visibility are saved per profile.
 const sections = computed({
 	get: () => activeProfile.value?.sections ?? [],
-	set: (value) => activeProfile.value && (activeProfile.value.sections = value)
+	set: (value) => activeProfile.value && (activeProfile.value.sections = value),
 })
 
 function persist() {
@@ -142,7 +142,7 @@ function createProfile() {
 		columns: columns.value,
 		title: activeProfile.value.title,
 		summary: activeProfile.value.summary,
-		sections: JSON.parse(JSON.stringify(activeProfile.value.sections ?? []))
+		sections: JSON.parse(JSON.stringify(activeProfile.value.sections ?? [])),
 	})
 	workspace.profiles.push(profile)
 	workspace.activeProfileId = profile.id
@@ -236,7 +236,12 @@ function removeSection(id) {
 	if (index === -1) return
 	const section = workspace.master.customSections[index]
 	const itemIds = new Set((section.items || []).map((item) => item.id))
-	if (!confirm(`Delete section “${section.title || 'Untitled section'}”? This removes it from the master and every profile.`)) return
+	if (
+		!confirm(
+			`Delete section “${section.title || 'Untitled section'}”? This removes it from the master and every profile.`,
+		)
+	)
+		return
 	workspace.master.customSections.splice(index, 1)
 	// Remove references from every profile so no dangling ids are saved.
 	for (const profile of workspace.profiles) {
@@ -246,9 +251,7 @@ function removeSection(id) {
 	}
 }
 
-const overrideCount = computed(() =>
-	isMaster.value ? 0 : Object.keys(activeProfile.value?.overrides || {}).length
-)
+const overrideCount = computed(() => (isMaster.value ? 0 : Object.keys(activeProfile.value?.overrides || {}).length))
 
 function clearOverrides() {
 	if (!overrideCount.value) return
@@ -318,7 +321,10 @@ onMounted(() => {
 <template>
 	<div class="flex min-h-screen flex-col bg-slate-100 text-slate-900 lg:h-dvh dark:bg-slate-950 dark:text-slate-100">
 		<!-- Top bar -->
-		<header id="topbar" class="no-print sticky top-0 z-10 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+		<header
+			id="topbar"
+			class="no-print sticky top-0 z-10 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
+		>
 			<div class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-3 px-4 py-3">
 				<div class="mr-auto">
 					<h1 class="text-lg font-extrabold tracking-tight">Resume Tailor</h1>
@@ -364,7 +370,13 @@ onMounted(() => {
 							/>
 						</svg>
 					</a>
-					<input ref="fileInput" type="file" accept=".json,application/json" class="hidden" @change="handleImportFile" />
+					<input
+						ref="fileInput"
+						type="file"
+						accept=".json,application/json"
+						class="hidden"
+						@change="handleImportFile"
+					/>
 				</div>
 			</div>
 
@@ -385,10 +397,12 @@ onMounted(() => {
 		</header>
 
 		<!-- Anchor rail for the form (fixed to the window) -->
-			<FormNav :profile="activeProfile" :master="workspace.master" :accent="accent" />
+		<FormNav :profile="activeProfile" :master="workspace.master" :accent="accent" />
 
-			<!-- Main: form mirrors resume layout, preview on the right -->
-			<main class="mx-auto grid w-full max-w-[1400px] flex-1 grid-cols-1 gap-6 px-4 py-6 lg:min-h-0 lg:grid-cols-[460px_minmax(0,1fr)]">
+		<!-- Main: form mirrors resume layout, preview on the right -->
+		<main
+			class="mx-auto grid w-full max-w-[1400px] flex-1 grid-cols-1 gap-6 px-4 py-6 lg:min-h-0 lg:grid-cols-[460px_minmax(0,1fr)]"
+		>
 			<div class="no-print min-w-0 lg:min-h-0 lg:overflow-y-auto">
 				<ResumeForm
 					v-model="workspace.master"
@@ -397,16 +411,19 @@ onMounted(() => {
 					@add="addItem"
 					@remove="removeItem"
 				/>
-				<p class="mt-3 text-center text-xs text-slate-400 sticky bottom-0 backdrop-blur-md pt-2 pb-1 dark:text-slate-500">
-					Show toggles and ↑/↓ order are saved per profile, as is the section order/names in the Sections panel — the form follows the same order. Editing item content on the
+				<p
+					class="mt-3 text-center text-xs text-slate-400 sticky bottom-0 backdrop-blur-md pt-2 pb-1 dark:text-slate-500"
+				>
+					Show toggles and ↑/↓ order are saved per profile, as is the section order/names in the Sections panel — the
+					form follows the same order. Editing item content on the
 					<strong class="font-semibold">master</strong> profile changes the shared content; on other profiles it is a
-					per-profile customization. Everything auto-saves in this browser — use Import / Export to move it
-					between browsers. Export PDF opens the print dialog — choose “Save as PDF” with margins set to
-					None for an edge-to-edge A4 file.
+					per-profile customization. Everything auto-saves in this browser — use Import / Export to move it between
+					browsers. Export PDF opens the print dialog — choose “Save as PDF” with margins set to None for an
+					edge-to-edge A4 file.
 				</p>
 				<!-- Scroll room so even the last card can reach the anchor line -->
 				<div class="no-print h-[40vh]" aria-hidden="true" />
-				</div>
+			</div>
 
 			<div class="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
 				<ResumePreview
