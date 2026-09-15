@@ -22,6 +22,8 @@ import {
 	TextColumnTwo20Regular,
 	TextFont16Regular,
 	Shapes16Regular,
+	ZoomIn16Regular,
+	ZoomOut16Regular,
 } from '../data/icons.js'
 
 const props = defineProps({
@@ -141,10 +143,29 @@ function onSectionDragEnd() {
 // The CSS `zoom` property leaks into print, so we force it back to 1 while
 // printing (belt-and-suspenders next to the `zoom: 1 !important` print rule
 // in style.css, which covers the print-preview render itself).
-const ZOOMS = [0.6, 0.8, 1]
+const MIN_ZOOM = 0.3
+const MAX_ZOOM = 2
+const ZOOM_STEP = 0.1
 const zoom = ref(1)
 const isPrinting = ref(false)
 const printZoom = computed(() => (isPrinting.value ? 1 : zoom.value))
+const zoomPercent = computed(() => `${Math.round(zoom.value * 100)}%`)
+
+function clampZoom(value) {
+	return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(value * 100) / 100))
+}
+
+function zoomIn() {
+	zoom.value = clampZoom(zoom.value + ZOOM_STEP)
+}
+
+function zoomOut() {
+	zoom.value = clampZoom(zoom.value - ZOOM_STEP)
+}
+
+function resetZoom() {
+	zoom.value = 1
+}
 
 function handleBeforePrint() {
 	isPrinting.value = true
@@ -157,12 +178,68 @@ function handleAfterPrint() {
 onMounted(() => {
 	window.addEventListener('beforeprint', handleBeforePrint)
 	window.addEventListener('afterprint', handleAfterPrint)
+	window.addEventListener('mousemove', onViewportMouseMove)
+	window.addEventListener('mouseup', onViewportMouseUp)
+	printArea.value?.addEventListener('wheel', onViewportWheel, { passive: false })
 })
 
 onBeforeUnmount(() => {
 	window.removeEventListener('beforeprint', handleBeforePrint)
 	window.removeEventListener('afterprint', handleAfterPrint)
+	window.removeEventListener('mousemove', onViewportMouseMove)
+	window.removeEventListener('mouseup', onViewportMouseUp)
+	printArea.value?.removeEventListener('wheel', onViewportWheel)
 })
+
+// --- Preview viewport: drag to pan, wheel to zoom (not selectable) ---
+const printArea = ref(null)
+const dragging = ref(false)
+let dragX = 0
+let dragY = 0
+let dragLeft = 0
+let dragTop = 0
+
+function onViewportMouseDown(event) {
+	if (event.button !== 0) return
+	const el = printArea.value
+	if (!el) return
+	dragging.value = true
+	dragX = event.clientX
+	dragY = event.clientY
+	dragLeft = el.scrollLeft
+	dragTop = el.scrollTop
+	event.preventDefault()
+}
+
+function onViewportMouseMove(event) {
+	if (!dragging.value) return
+	const el = printArea.value
+	if (!el) return
+	el.scrollLeft = dragLeft - (event.clientX - dragX)
+	el.scrollTop = dragTop - (event.clientY - dragY)
+}
+
+function onViewportMouseUp() {
+	dragging.value = false
+}
+
+function onViewportWheel(event) {
+	event.preventDefault()
+	const el = printArea.value
+	if (!el) return
+	const oldZoom = zoom.value
+	const speed = event.ctrlKey ? 0.01 : 0.0015
+	const next = clampZoom(oldZoom * Math.exp(-event.deltaY * speed))
+	if (next === oldZoom) return
+	// Keep the point under the cursor stable while scaling.
+	const rect = el.getBoundingClientRect()
+	const cx = event.clientX - rect.left
+	const cy = event.clientY - rect.top
+	const ratio = next / oldZoom
+	zoom.value = next
+	el.scrollLeft = (el.scrollLeft + cx) * ratio - cx
+	el.scrollTop = (el.scrollTop + cy) * ratio - cy
+}
 </script>
 
 <template>
@@ -437,34 +514,53 @@ onBeforeUnmount(() => {
 					</div>
 					<div class="flex gap-2">
 						<button class="btn btn-ghost flex-1 text-[13px]" @click="resetSections">
-							<Icon size="16"><ArrowReset20Regular /></Icon> Reset sections
+							<Icon size="16"><ArrowReset20Regular /></Icon> Reset
 						</button>
 						<button class="btn btn-ghost flex-1 text-[13px]" @click="emit('add-section')">
-							<Icon size="16"><Add16Regular /></Icon> Add section
+							<Icon size="16"><Add16Regular /></Icon> Add
 						</button>
 					</div>
 				</div>
 			</Popover>
-			<!-- Zoom -->
+			<!-- Zoom: out / percent / in -->
 			<div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
 				<button
-					v-for="z in ZOOMS"
-					:key="z"
-					class="rounded-md px-2 py-1 transition"
-					:class="
-						zoom === z
-							? 'bg-white font-semibold text-slate-900 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-50 dark:ring-slate-700'
-							: 'hover:bg-slate-200/70 dark:hover:bg-slate-800'
-					"
-					@click="zoom = z"
+					type="button"
+					class="icon-btn"
+					title="Zoom out"
+					aria-label="Zoom out"
+					:disabled="zoom <= MIN_ZOOM"
+					@click="zoomOut"
 				>
-					{{ Math.round(z * 100) }}%
+					<Icon size="16"><ZoomOut16Regular /></Icon>
+				</button>
+				<button
+					type="button"
+					class="min-w-14 rounded-md px-1 py-1 text-center font-medium tabular-nums transition hover:bg-slate-200/70 dark:hover:bg-slate-800"
+					title="Reset zoom to 100%"
+					@click="resetZoom"
+				>
+					{{ zoomPercent }}
+				</button>
+				<button
+					type="button"
+					class="icon-btn"
+					title="Zoom in"
+					aria-label="Zoom in"
+					:disabled="zoom >= MAX_ZOOM"
+					@click="zoomIn"
+				>
+					<Icon size="16"><ZoomIn16Regular /></Icon>
 				</button>
 			</div>
 		</div>
 		<div
 			id="print-area"
-			class="block overflow-auto bg-slate-200/70 p-6 lg:min-h-0 lg:flex-1 rounded-lg border border-slate-300 dark:border-slate-800 dark:bg-slate-950"
+			ref="printArea"
+			class="block overflow-auto rounded-lg border border-slate-300 bg-slate-200/70 p-6 select-none lg:min-h-0 lg:flex-1 dark:border-slate-800 dark:bg-slate-950"
+			:class="dragging ? 'cursor-grabbing' : 'cursor-grab'"
+			@mousedown="onViewportMouseDown"
+			@dragstart.prevent
 		>
 			<div
 				class="resume-page overflow-hidden rounded-sm shadow-xl ring-1 ring-slate-900/10"

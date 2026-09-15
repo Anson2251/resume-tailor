@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 /**
  * Generic popover shell. Content is fully slot-driven:
@@ -17,6 +17,8 @@ const open = ref(false)
 const root = ref(null)
 const panel = ref(null)
 const position = ref({ top: 0, left: 0 })
+const maxHeight = ref(320)
+const MARGIN = 8
 
 function toPx(value) {
 	const n = parseFloat(value)
@@ -24,16 +26,39 @@ function toPx(value) {
 	return /rem$/.test(value) ? n * 16 : n
 }
 
-/** Pin the panel just below the trigger, clamped to the viewport. */
+/** Pin the panel next to the trigger, clamped to the viewport.
+ * Flips above the trigger when there is more room there, and caps the
+ * height so oversized content scrolls instead of exceeding the window. */
 function updatePosition() {
 	const trigger = root.value
 	if (!trigger) return
 	const rect = trigger.getBoundingClientRect()
 	const width = toPx(props.width)
 	const left = props.align === 'end' ? rect.right - width : rect.left
-	position.value = {
-		top: rect.bottom + 8,
-		left: Math.max(8, Math.min(left, window.innerWidth - width - 8)),
+
+	const belowTop = rect.bottom + MARGIN
+	const spaceBelow = window.innerHeight - belowTop - MARGIN
+	const spaceAbove = rect.top - MARGIN * 2
+	// Flip above when below is cramped but above has meaningfully more room.
+	const flip = spaceBelow < 200 && spaceAbove > spaceBelow
+
+	if (!flip) {
+		position.value = {
+			top: Math.max(MARGIN, Math.min(belowTop, window.innerHeight - MARGIN - 120)),
+			left: Math.max(MARGIN, Math.min(left, window.innerWidth - width - MARGIN)),
+		}
+		maxHeight.value = Math.max(120, Math.min(spaceBelow, window.innerHeight - MARGIN * 2))
+	} else {
+		maxHeight.value = Math.max(120, Math.min(spaceAbove, window.innerHeight - MARGIN * 2))
+		// Stick the panel's bottom edge to just above the trigger. If the
+		// panel is already mounted, measure it so short content sits flush
+		// against the trigger instead of stretching to the viewport top.
+		const measured = panel.value?.offsetHeight ?? maxHeight.value
+		const height = Math.min(measured, maxHeight.value)
+		position.value = {
+			top: Math.max(MARGIN, rect.top - MARGIN - height),
+			left: Math.max(MARGIN, Math.min(left, window.innerWidth - width - MARGIN)),
+		}
 	}
 }
 
@@ -71,6 +96,9 @@ function removeListeners() {
 watch(open, (isOpen) => {
 	if (isOpen) {
 		updatePosition()
+		// Re-measure after mount so flipped panels hug the trigger and
+		// below-panels account for the real viewport space.
+		nextTick(() => updatePosition())
 		addListeners()
 	} else {
 		removeListeners()
@@ -96,8 +124,8 @@ onBeforeUnmount(removeListeners)
 					v-if="open"
 					ref="panel"
 					role="dialog"
-					class="no-print fixed z-50 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-xl ring-1 ring-slate-900/5 dark:border-slate-700 dark:bg-slate-900 dark:ring-white/10"
-					:style="{ top: `${position.top}px`, left: `${position.left}px`, width }"
+					class="no-print fixed z-50 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 text-left shadow-xl ring-1 ring-slate-900/5 dark:border-slate-700 dark:bg-slate-900 dark:ring-white/10"
+					:style="{ top: `${position.top}px`, left: `${position.left}px`, width, maxHeight: `${maxHeight}px` }"
 				>
 					<slot :close="close" />
 				</div>

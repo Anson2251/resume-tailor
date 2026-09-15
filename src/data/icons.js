@@ -25,3 +25,5 @@ export { default as WeatherMoon16Regular } from '@vicons/fluent/es/WeatherMoon16
 export { default as WeatherSunny16Regular } from '@vicons/fluent/es/WeatherSunny16Regular'
 export { default as TextColumnTwo20Regular } from '@vicons/fluent/es/TextColumnTwo20Regular'
 export { default as Shapes16Regular } from '@vicons/fluent/es/Shapes16Regular'
+export { default as ZoomIn16Regular } from '@vicons/fluent/es/ZoomIn16Regular'
+export { default as ZoomOut16Regular } from '@vicons/fluent/es/ZoomOut16Regular'
