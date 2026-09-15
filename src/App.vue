@@ -419,10 +419,8 @@ onMounted(() => {
 					<strong class="font-semibold">master</strong> profile changes the shared content; on other profiles it is a
 					per-profile customization. Everything auto-saves in this browser — use Import / Export to move it between
 					browsers. Export PDF opens the print dialog — choose “Save as PDF” with margins set to None for an
-					edge-to-edge A4 file.
+					edge-to-edge A4 file. None for an edge-to-edge A4 file.
 				</p>
-				<!-- Scroll room so even the last card can reach the anchor line -->
-				<div class="no-print h-[40vh]" aria-hidden="true" />
 			</div>
 
 			<div class="min-w-0 lg:flex lg:min-h-0 lg:flex-col">

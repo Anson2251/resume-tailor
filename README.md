@@ -56,6 +56,7 @@ pnpm install
 pnpm dev      # dev server
 pnpm build    # production build → dist/
 pnpm preview  # preview the build
+pnpm format   # format everything with Prettier
 ```
 
 ---

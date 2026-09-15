@@ -177,9 +177,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-	<nav class="no-print fixed top-1/2 left-3 z-30 hidden -translate-y-1/2 lg:block" aria-label="Form sections">
+	<nav class="no-print fixed top-1/2 left-1 z-30 hidden -translate-y-1/2 lg:block" aria-label="Form sections">
 		<div
-			class="relative flex flex-col items-start gap-2 rounded-full bg-slate-950/85 px-2.5 py-4 shadow-xl ring-1 ring-white/10 backdrop-blur"
+			class="relative flex flex-col items-start gap-2 rounded-full px-2.5 py-4 transition-all duration-200"
+			:class="
+				open
+					? 'bg-white/85 opacity-100 shadow-xl ring-1 ring-slate-900/10 backdrop-blur dark:bg-slate-950/85 dark:ring-white/10'
+					: 'bg-transparent opacity-40 ring-1 ring-transparent'
+			"
 			@mouseenter="open = true"
 			@mouseleave="open = false"
 			@focusin="open = true"
@@ -192,8 +197,12 @@ onBeforeUnmount(() => {
 					:title="group.label"
 					:aria-label="`Go to ${group.label}`"
 					:aria-current="activeKey === group.id ? 'true' : undefined"
-					class="h-[3px] w-7 rounded-full transition-colors duration-200"
-					:class="activeKey === group.id ? 'bg-white' : 'bg-white/25 hover:bg-white/60'"
+					class="h-[3px] w-5 rounded-full transition-colors duration-200"
+					:class="
+						activeKey === group.id
+							? 'bg-slate-800 dark:bg-white'
+							: 'bg-slate-400 hover:bg-slate-600 dark:bg-white/25 dark:hover:bg-white/60'
+					"
 					@click="scrollTo(group.id)"
 				/>
 				<button
@@ -203,14 +212,18 @@ onBeforeUnmount(() => {
 					:title="child.label"
 					:aria-label="`Go to ${child.label}`"
 					:aria-current="activeKey === child.id ? 'true' : undefined"
-					class="h-[3px] w-4 rounded-full transition-colors duration-200"
-					:class="activeKey === child.id ? 'bg-white' : 'bg-white/25 hover:bg-white/60'"
+					class="h-[3px] w-3 rounded-full transition-colors duration-200"
+					:class="
+						activeKey === child.id
+							? 'bg-slate-800 dark:bg-white'
+							: 'bg-slate-400 hover:bg-slate-600 dark:bg-white/25 dark:hover:bg-white/60'
+					"
 					@click="scrollTo(child.id)"
 				/>
 			</template>
 			<!-- Hover popup with anchor names -->
 			<div
-				class="absolute top-1/2 left-full ml-3 max-h-[70vh] w-60 -translate-y-1/2 overflow-y-auto rounded-2xl bg-slate-950/95 p-2 shadow-2xl ring-1 ring-white/10 backdrop-blur transition-all duration-150"
+				class="absolute top-1/2 left-full ml-3 max-h-[70vh] w-60 -translate-y-1/2 overflow-y-auto rounded-2xl bg-white/95 p-2 shadow-2xl ring-1 ring-slate-900/10 backdrop-blur transition-all duration-150 dark:bg-slate-950/95 dark:ring-white/10"
 				:class="open ? 'visible translate-x-0 opacity-100' : 'invisible -translate-x-1 opacity-0'"
 			>
 				<template v-for="group in groups" :key="group.id">
@@ -220,8 +233,8 @@ onBeforeUnmount(() => {
 						class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[15px] transition"
 						:class="
 							activeKey === group.id
-								? 'bg-white/10 font-medium text-white'
-								: 'text-slate-300 hover:bg-white/5 hover:text-white'
+								? 'bg-slate-100 font-medium text-slate-900 dark:bg-white/10 dark:text-white'
+								: 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white'
 						"
 						@click="scrollTo(group.id)"
 					>
@@ -239,8 +252,8 @@ onBeforeUnmount(() => {
 						class="flex w-full items-center gap-2.5 rounded-lg py-1.5 pr-3 pl-8 text-left text-[13px] transition"
 						:class="
 							activeKey === child.id
-								? 'bg-white/10 font-medium text-white'
-								: 'text-slate-400 hover:bg-white/5 hover:text-white'
+								? 'bg-slate-100 font-medium text-slate-900 dark:bg-white/10 dark:text-white'
+								: 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white'
 						"
 						@click="scrollTo(child.id)"
 					>
