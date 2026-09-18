@@ -66,6 +66,8 @@
 	background: #fff;
 	flex-shrink: 0;
 	color-scheme: light;
+	/* Spacing scale set from the Style panel slider (per profile). */
+	--sp: 1;
 }
 
 /* ---------- Print / Export PDF ---------- */
@@ -192,17 +194,18 @@
 
 /* Spacing between list entries. Uses padding (not margin) so the gap survives
    a column/page break, where margins are truncated at the fragment boundary.
-   `> * + *` keeps the first entry flush against the section heading. */
+   `> * + *` keeps the first entry flush against the section heading.
+   All gaps scale with --sp (the Style panel spacing slider). */
 .entry-stack > * + * {
-	padding-top: 1rem;
+	padding-top: calc(1rem * var(--sp, 1));
 }
 
 .entry-stack-sm > * + * {
-	padding-top: 0.75rem;
+	padding-top: calc(0.75rem * var(--sp, 1));
 }
 
 .entry-stack-xs > * + * {
-	padding-top: 0.375rem;
+	padding-top: calc(0.375rem * var(--sp, 1));
 }
 
 /* Row flow for list entries (per-section "row" layout): same three densities
@@ -211,21 +214,80 @@
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	column-gap: 1.5rem;
-	row-gap: 1rem;
+	row-gap: calc(1rem * var(--sp, 1));
 }
 
 .entry-row-sm {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	column-gap: 1.5rem;
-	row-gap: 0.75rem;
+	row-gap: calc(0.75rem * var(--sp, 1));
 }
 
 .entry-row-xs {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	column-gap: 1rem;
-	row-gap: 0.375rem;
+	row-gap: calc(0.375rem * var(--sp, 1));
+}
+
+/* ---------- Resume density ----------
+   The templates lay out sections with Tailwind vertical utilities (pt-*, mt-*,
+   ...). These overrides scale those utilities inside the resume page by --sp
+   so the Style panel spacing slider tightens/loosens every template at once.
+   Horizontal rhythm (px-*, column-gap, pl-*) is left alone. */
+.resume-page .pt-4 {
+	padding-top: calc(1rem * var(--sp, 1));
+}
+.resume-page .pt-5 {
+	padding-top: calc(1.25rem * var(--sp, 1));
+}
+.resume-page .pb-1 {
+	padding-bottom: calc(0.25rem * var(--sp, 1));
+}
+.resume-page .pb-4 {
+	padding-bottom: calc(1rem * var(--sp, 1));
+}
+.resume-page .pb-5 {
+	padding-bottom: calc(1.25rem * var(--sp, 1));
+}
+.resume-page .py-8 {
+	padding-top: calc(2rem * var(--sp, 1));
+	padding-bottom: calc(2rem * var(--sp, 1));
+}
+.resume-page .py-6 {
+	padding-top: calc(1.5rem * var(--sp, 1));
+	padding-bottom: calc(1.5rem * var(--sp, 1));
+}
+.resume-page .mt-0\.5 {
+	margin-top: calc(0.125rem * var(--sp, 1));
+}
+.resume-page .mt-1 {
+	margin-top: calc(0.25rem * var(--sp, 1));
+}
+.resume-page .mt-1\.5 {
+	margin-top: calc(0.375rem * var(--sp, 1));
+}
+.resume-page .mt-2 {
+	margin-top: calc(0.5rem * var(--sp, 1));
+}
+.resume-page .mt-3 {
+	margin-top: calc(0.75rem * var(--sp, 1));
+}
+.resume-page .mt-4 {
+	margin-top: calc(1rem * var(--sp, 1));
+}
+.resume-page .mt-6 {
+	margin-top: calc(1.5rem * var(--sp, 1));
+}
+.resume-page .mb-1 {
+	margin-bottom: calc(0.25rem * var(--sp, 1));
+}
+.resume-page .mb-2 {
+	margin-bottom: calc(0.5rem * var(--sp, 1));
+}
+.resume-page .leading-relaxed {
+	line-height: calc(1.625 * (0.9 + 0.1 * var(--sp, 1)));
 }
 
 /* ---------- Markdown content ----------
@@ -242,18 +304,18 @@
 }
 
 .md > * + * {
-	margin-top: 0.4em;
+	margin-top: calc(0.4em * var(--sp, 1));
 }
 
 .md li + li {
-	margin-top: 0.2em;
+	margin-top: calc(0.2em * var(--sp, 1));
 }
 
 /* Loose lists wrap each item in a <p>; keep those as tight as the list itself. */
 .md li > * + *,
 .md li > ul,
 .md li > ol {
-	margin-top: 0.2em;
+	margin-top: calc(0.2em * var(--sp, 1));
 }
 
 .md ul,
@@ -293,7 +355,7 @@
 }
 
 .md hr {
-	margin: 0.6em 0;
+	margin: calc(0.6em * var(--sp, 1)) 0;
 	border: 0;
 	border-top: 1px solid currentColor;
 	opacity: 0.25;

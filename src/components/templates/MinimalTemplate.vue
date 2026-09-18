@@ -75,7 +75,7 @@ const shown = computed(() => ({
 
 <template>
 	<!-- Airy minimal layout; the body flows in one or two columns. -->
-	<div class="min-h-full px-12 py-8 text-slate-800" :style="{ fontFamily }">
+	<div class="min-h-full px-12 py-6 text-slate-800" :style="{ fontFamily }">
 		<header class="avoid-break">
 			<h1 class="text-[42px] leading-none font-light tracking-tight text-slate-900">
 				{{ resume.contact.fullName || 'Your Name' }}
@@ -87,28 +87,28 @@ const shown = computed(() => ({
 			<p v-if="linkBits" class="mt-0.5 text-[12.5px] font-medium" :style="{ color: accent }">{{ linkBits }}</p>
 		</header>
 
-		<div class="mt-6 h-px bg-slate-200" />
+		<div class="mt-4 h-px bg-slate-200" />
 
 		<div :class="columns === 2 ? 'resume-columns' : ''">
 			<template v-for="sid in orderedSections" :key="sid">
 				<section
 					v-if="sid === 'summary' && resume.contact.summary && sectionVisible('summary')"
-					class="avoid-break pt-5"
+					class="avoid-break pt-4"
 				>
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
 						{{ sectionTitle('summary', 'About') }}
 					</h2>
 					<MarkdownText
 						:source="resume.contact.summary"
-						class="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-slate-600"
+						class="mt-1.5 max-w-[62ch] text-[14px] leading-relaxed text-slate-600"
 					/>
 				</section>
 
-				<section v-else-if="sid === 'education' && shown.education.length && sectionVisible('education')" class="pt-5">
+				<section v-else-if="sid === 'education' && shown.education.length && sectionVisible('education')" class="pt-4">
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
 						{{ sectionTitle('education', 'Education') }}
 					</h2>
-					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm mt-4' : 'mt-4 entry-stack-sm'">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm mt-3' : 'mt-3 entry-stack-sm'">
 						<article v-for="edu in shown.education" :key="edu.id">
 							<h3 class="text-[14px] font-semibold text-slate-900">{{ edu.school || 'School' }}</h3>
 							<p class="text-[13px] text-slate-600">{{ [edu.degree, edu.field].filter(Boolean).join(' · ') }}</p>
@@ -122,12 +122,12 @@ const shown = computed(() => ({
 
 				<section
 					v-else-if="sid === 'experience' && shown.experience.length && sectionVisible('experience')"
-					class="pt-5"
+					class="pt-4"
 				>
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
 						{{ sectionTitle('experience', 'Experience') }}
 					</h2>
-					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-4' : 'mt-4 entry-stack'">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-3' : 'mt-3 entry-stack'">
 						<article v-for="job in shown.experience" :key="job.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[16px] font-semibold text-slate-900">{{ job.role || 'Role' }}</h3>
@@ -141,18 +141,18 @@ const shown = computed(() => ({
 							<MarkdownText
 								v-if="job.bullets"
 								:source="job.bullets"
-								class="md-dot mt-2 text-[13.5px] leading-relaxed text-slate-600"
+								class="md-dot mt-1.5 text-[13.5px] leading-relaxed text-slate-600"
 								:style="{ '--md-dot-color': accent }"
 							/>
 						</article>
 					</div>
 				</section>
 
-				<section v-else-if="sid === 'projects' && shown.projects.length && sectionVisible('projects')" class="pt-5">
+				<section v-else-if="sid === 'projects' && shown.projects.length && sectionVisible('projects')" class="pt-4">
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
 						{{ sectionTitle('projects', 'Projects') }}
 					</h2>
-					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-4' : 'mt-4 entry-stack'">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-3' : 'mt-3 entry-stack'">
 						<article v-for="project in shown.projects" :key="project.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[16px] font-semibold text-slate-900">{{ project.name || 'Project' }}</h3>
@@ -166,18 +166,18 @@ const shown = computed(() => ({
 							<MarkdownText
 								v-if="project.bullets"
 								:source="project.bullets"
-								class="md-dot mt-2 text-[13.5px] leading-relaxed text-slate-600"
+								class="md-dot mt-1.5 text-[13.5px] leading-relaxed text-slate-600"
 								:style="{ '--md-dot-color': accent }"
 							/>
 						</article>
 					</div>
 				</section>
 
-				<section v-else-if="sid === 'skills' && shown.skills.length && sectionVisible('skills')" class="pt-5">
+				<section v-else-if="sid === 'skills' && shown.skills.length && sectionVisible('skills')" class="pt-4">
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
 						{{ sectionTitle('skills', 'Skills') }}
 					</h2>
-					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm mt-4' : 'mt-4 entry-stack-sm'">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row-sm mt-3' : 'mt-3 entry-stack-sm'">
 						<div v-for="group in shown.skills" :key="group.id" class="avoid-break">
 							<h3 class="text-[13px] font-semibold text-slate-900">{{ group.category || 'Category' }}</h3>
 							<p class="mt-0.5 text-[13px] leading-relaxed text-slate-600">
@@ -187,11 +187,11 @@ const shown = computed(() => ({
 					</div>
 				</section>
 
-				<section v-else-if="customSection(sid) && customSection(sid).items.length && sectionVisible(sid)" class="pt-5">
+				<section v-else-if="customSection(sid) && customSection(sid).items.length && sectionVisible(sid)" class="pt-4">
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
 						{{ customSection(sid).title }}
 					</h2>
-					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-4' : 'mt-4 entry-stack'">
+					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-3' : 'mt-3 entry-stack'">
 						<article v-for="item in customSection(sid).items" :key="item.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[16px] font-semibold text-slate-900">{{ item.heading || 'Item' }}</h3>
@@ -205,7 +205,7 @@ const shown = computed(() => ({
 							<MarkdownText
 								v-if="item.body"
 								:source="item.body"
-								class="mt-2 text-[13.5px] leading-relaxed text-slate-600"
+								class="mt-1.5 text-[13.5px] leading-relaxed text-slate-600"
 							/>
 						</article>
 					</div>

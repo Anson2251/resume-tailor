@@ -94,6 +94,10 @@ const columns = computed({
 	get: () => activeProfile.value?.columns ?? 1,
 	set: (value) => activeProfile.value && (activeProfile.value.columns = value),
 })
+const density = computed({
+	get: () => activeProfile.value?.density ?? 1,
+	set: (value) => activeProfile.value && (activeProfile.value.density = value),
+})
 // Section order / custom names / visibility are saved per profile.
 const sections = computed({
 	get: () => activeProfile.value?.sections ?? [],
@@ -140,6 +144,7 @@ function createProfile() {
 		accent: accent.value,
 		font: activeProfile.value.font,
 		columns: columns.value,
+		density: density.value,
 		title: activeProfile.value.title,
 		summary: activeProfile.value.summary,
 		sections: JSON.parse(JSON.stringify(activeProfile.value.sections ?? [])),
@@ -414,12 +419,9 @@ onMounted(() => {
 				<p
 					class="mt-3 text-center text-xs text-slate-400 sticky bottom-0 backdrop-blur-md pt-2 pb-1 dark:text-slate-500"
 				>
-					Show toggles and ↑/↓ order are saved per profile, as is the section order/names in the Sections panel — the
-					form follows the same order. Editing item content on the
-					<strong class="font-semibold">master</strong> profile changes the shared content; on other profiles it is a
-					per-profile customization. Everything auto-saves in this browser — use Import / Export to move it between
-					browsers. Export PDF opens the print dialog — choose “Save as PDF” with margins set to None for an
-					edge-to-edge A4 file. None for an edge-to-edge A4 file.
+					Show toggles, order, and section layout save per profile. Edits on
+					<strong class="font-semibold">master</strong> change shared content; elsewhere they're customizations.
+					Auto-saves in this browser — Import / Export moves it. PDF: print → “Save as PDF”, margins None.
 				</p>
 			</div>
 
@@ -430,6 +432,7 @@ onMounted(() => {
 					v-model:accent="accent"
 					v-model:font="font"
 					v-model:columns="columns"
+					v-model:density="density"
 					v-model:sections="sections"
 					@add-section="createSection"
 					@delete-section="removeSection"

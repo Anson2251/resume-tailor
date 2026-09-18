@@ -1,4 +1,4 @@
-import { ACCENTS, FONT_IDS, TEMPLATES } from './options.js'
+import { ACCENTS, FONT_IDS, TEMPLATES, normalizeDensity } from './options.js'
 import {
 	SECTION_KEYS,
 	blankContact,
@@ -34,6 +34,7 @@ export function blankProfile(
 		template = 'modern',
 		accent = ACCENTS[0],
 		columns = 1,
+		density = 1,
 		font = null,
 		title = '',
 		summary = '',
@@ -49,6 +50,7 @@ export function blankProfile(
 		template,
 		accent,
 		columns: columns === 2 ? 2 : 1,
+		density: normalizeDensity(density),
 		// null means "use the template's font".
 		font: FONT_IDS.includes(font) ? font : null,
 		title,
@@ -184,6 +186,7 @@ function normalizeProfile(master, profile, index) {
 		template: TEMPLATE_IDS.includes(profile?.template) ? profile.template : 'modern',
 		accent: typeof profile?.accent === 'string' && profile.accent ? profile.accent : ACCENTS[0],
 		columns: profile?.columns === 2 ? 2 : 1,
+		density: normalizeDensity(profile?.density),
 		font: FONT_IDS.includes(profile?.font) ? profile.font : null,
 		title: typeof profile?.title === 'string' ? profile.title : '',
 		summary: typeof profile?.summary === 'string' ? profile.summary : '',

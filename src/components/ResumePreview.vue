@@ -5,7 +5,16 @@ import ModernTemplate from './templates/ModernTemplate.vue'
 import ClassicTemplate from './templates/ClassicTemplate.vue'
 import MinimalTemplate from './templates/MinimalTemplate.vue'
 import Popover from './Popover.vue'
-import { ACCENTS, COLUMNS, FONTS, TEMPLATES, fontStack } from '../data/options.js'
+import {
+	ACCENTS,
+	COLUMNS,
+	FONTS,
+	TEMPLATES,
+	fontStack,
+	MAX_DENSITY,
+	MIN_DENSITY,
+	normalizeDensity,
+} from '../data/options.js'
 import { SECTION_IDS, blankSections, sectionLabel } from '../data/resume.js'
 import {
 	Add16Regular,
@@ -15,7 +24,7 @@ import {
 	Checkmark16Regular,
 	Color16Regular,
 	Dismiss16Regular,
-	AlignSpaceEvenlyHorizontal20Regular,
+	AlignSpaceAroundHorizontal20Regular,
 	List16Regular,
 	PaintBrush16Regular,
 	ReOrderDotsVertical16Regular,
@@ -34,6 +43,7 @@ const template = defineModel('template', { default: 'modern' })
 const accent = defineModel('accent', { default: '#4f46e5' })
 const font = defineModel('font', { default: 'sans' })
 const columns = defineModel('columns', { default: 1 })
+const density = defineModel('density', { default: 1 })
 const sections = defineModel('sections', { default: () => blankSections() })
 
 const emit = defineEmits(['add-section', 'delete-section'])
@@ -167,6 +177,17 @@ function resetZoom() {
 	zoom.value = 1
 }
 
+// --- Density (compactness): vertical spacing scale, saved per profile ---
+const densityPercent = computed(() => `${Math.round((density.value ?? 1) * 100)}%`)
+
+function setDensity(value) {
+	density.value = normalizeDensity(value)
+}
+
+function resetDensity() {
+	density.value = 1
+}
+
 function handleBeforePrint() {
 	isPrinting.value = true
 }
@@ -269,7 +290,7 @@ function onViewportWheel(event) {
 							<span class="h-3.5 w-3.5 rounded-full ring-1 ring-slate-900/15" :style="{ backgroundColor: accent }" />
 							<span v-if="template && font && columns">
 								· {{ template[0].toUpperCase() + template.slice(1) }} · {{ font[0].toUpperCase() + font.slice(1) }} ·
-								{{ columns }} Col(s)
+								{{ columns }} Col(s) · {{ densityPercent }}
 							</span>
 						</div>
 					</button>
@@ -333,6 +354,31 @@ function onViewportWheel(event) {
 							>
 								{{ c }} col{{ c > 1 ? 's' : '' }}
 							</button>
+						</div>
+					</div>
+
+					<div>
+						<p
+							class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400"
+						>
+							<Icon size="18"><AlignSpaceAroundHorizontal20Regular /></Icon> Spacing
+							<span class="ml-auto font-medium normal-case tabular-nums">{{ densityPercent }}</span>
+						</p>
+						<div class="flex items-center gap-2">
+							<span class="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">Compact</span>
+							<input
+								type="range"
+								:min="MIN_DENSITY"
+								:max="MAX_DENSITY"
+								step="0.05"
+								:value="density"
+								class="w-full accent-indigo-600"
+								aria-label="Resume spacing"
+								title="Resume spacing: tighten to fit on one page, loosen for air (double-click to reset)"
+								@input="setDensity(parseFloat($event.target.value))"
+								@dblclick="resetDensity"
+							/>
+							<span class="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">Roomy</span>
 						</div>
 					</div>
 
@@ -499,7 +545,7 @@ function onViewportWheel(event) {
 									:style="sectionDirection(s.id) === 'row' ? { backgroundColor: accent, color: '#fff' } : null"
 									@click="toggleDirection(s.id)"
 								>
-									<Icon size="16"><AlignSpaceEvenlyHorizontal20Regular /></Icon>
+									<Icon size="16"><AlignSpaceAroundHorizontal20Regular /></Icon>
 								</button>
 								<button
 									v-if="isCustomSection(s.id)"
@@ -564,7 +610,7 @@ function onViewportWheel(event) {
 		>
 			<div
 				class="resume-page overflow-hidden rounded-sm shadow-xl ring-1 ring-slate-900/10"
-				:style="{ zoom: printZoom }"
+				:style="{ zoom: printZoom, '--sp': density }"
 			>
 				<component
 					:is="activeComponent"
