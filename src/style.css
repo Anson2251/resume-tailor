@@ -31,7 +31,7 @@
 		@apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm leading-relaxed text-slate-900 placeholder-slate-400 shadow-sm transition outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-900;
 	}
 	.btn {
-		@apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition select-none;
+		@apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition select-none disabled:cursor-wait disabled:opacity-60;
 	}
 	.btn-primary {
 		@apply bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 active:bg-indigo-800;
@@ -68,6 +68,39 @@
 	color-scheme: light;
 	/* Spacing scale set from the Style panel slider (per profile). */
 	--sp: 1;
+}
+
+/* ---------- Electron title bar ---------- */
+/* The native title text is hidden (main process) so it doesn't duplicate the
+   app header. The header keeps a top strip that houses the OS controls
+   (macOS traffic lights, Windows/Linux caption buttons) and doubles as the
+   window drag handle; interactive descendants stay clickable.
+   `-webkit-app-region` is inert in browsers, so this is web-safe. */
+body[data-electron-platform] #topbar {
+	padding-top: 24px;
+	-webkit-app-region: drag;
+}
+
+body[data-electron-platform='darwin'] #topbar {
+	padding-top: 0px !important;
+}
+body[data-electron-platform='darwin'] #topbar h1 {
+	padding-left: 72px;
+}
+body[data-electron-platform] #topbar button,
+body[data-electron-platform] #topbar a,
+body[data-electron-platform] #topbar input,
+body[data-electron-platform] #topbar select,
+body[data-electron-platform] #topbar textarea,
+body[data-electron-platform] #topbar [contenteditable] {
+	-webkit-app-region: no-drag;
+}
+/* Fullscreen hides the OS controls — collapse the strip so it isn't dead space. */
+body[data-electron-fullscreen='true'] #topbar {
+	padding-top: 0;
+}
+body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar h1 {
+	padding-left: 0;
 }
 
 /* ---------- Print / Export PDF ---------- */

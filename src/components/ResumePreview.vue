@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Icon } from '@vicons/utils'
 import ModernTemplate from './templates/ModernTemplate.vue'
@@ -14,8 +14,9 @@ import {
 	MAX_DENSITY,
 	MIN_DENSITY,
 	normalizeDensity,
-} from '../data/options.js'
-import { SECTION_IDS, blankSections, sectionLabel } from '../data/resume.js'
+} from '../data/options'
+import { SECTION_IDS, blankSections, sectionLabel } from '../data/resume'
+import type { PreviewResume, SectionEntry } from '../data/types'
 import {
 	Add16Regular,
 	ArrowDown16Regular,
@@ -33,23 +34,26 @@ import {
 	Shapes16Regular,
 	ZoomIn16Regular,
 	ZoomOut16Regular,
-} from '../data/icons.js'
+} from '../data/icons'
 
-const props = defineProps({
-	resume: { type: Object, required: true },
-})
+const props = defineProps<{
+	resume: PreviewResume
+}>()
 
-const template = defineModel('template', { default: 'modern' })
-const accent = defineModel('accent', { default: '#4f46e5' })
-const font = defineModel('font', { default: 'sans' })
-const columns = defineModel('columns', { default: 1 })
-const density = defineModel('density', { default: 1 })
-const sections = defineModel('sections', { default: () => blankSections() })
+const template = defineModel<string>('template', { default: 'modern' })
+const accent = defineModel<string>('accent', { default: '#4f46e5' })
+const font = defineModel<string>('font', { default: 'sans' })
+const columns = defineModel<number>('columns', { default: 1 })
+const density = defineModel<number>('density', { default: 1 })
+const sections = defineModel<SectionEntry[]>('sections', { default: () => blankSections() })
 
-const emit = defineEmits(['add-section', 'delete-section'])
+const emit = defineEmits<{
+	(e: 'add-section'): void
+	(e: 'delete-section', id: string): void
+}>()
 
 /** Built-in sections can only be hidden; user-created ones can be deleted. */
-const isCustomSection = (id) => !SECTION_IDS.includes(id)
+const isCustomSection = (id: string): boolean => !SECTION_IDS.includes(id)
 
 const activeComponent = computed(() => {
 	switch (template.value) {
@@ -67,7 +71,7 @@ const activeComponent = computed(() => {
 const visibleSectionCount = computed(() => (sections.value || []).filter((s) => s.visible !== false).length)
 const sectionCount = computed(() => (sections.value || []).length)
 
-function moveSection(id, delta) {
+function moveSection(id: string, delta: number): void {
 	const next = [...(sections.value || [])]
 	const i = next.findIndex((s) => s.id === id)
 	const target = i + delta
@@ -77,54 +81,59 @@ function moveSection(id, delta) {
 	sections.value = next
 }
 
-function toggleSection(id, visible) {
+function toggleSection(id: string, visible: boolean): void {
 	sections.value = (sections.value || []).map((s) => (s.id === id ? { ...s, visible } : s))
 }
 
-function renameSection(id, title) {
+function renameSection(id: string, title: string): void {
 	sections.value = (sections.value || []).map((s) => (s.id === id ? { ...s, title } : s))
 }
 
-function resetSections() {
+function resetSections(): void {
 	// Built-ins go back to defaults; user-created sections are kept (shown,
 	// default names, column flow) so reset never destroys content.
 	const customs = (sections.value || [])
 		.filter((s) => isCustomSection(s.id))
-		.map((s) => ({ ...s, title: '', visible: true, direction: 'col' }))
+		.map((s) => ({ ...s, title: '', visible: true, direction: 'col' as const }))
 	sections.value = [...blankSections(), ...customs]
 }
 
-function toggleDirection(id) {
+function toggleDirection(id: string): void {
 	sections.value = (sections.value || []).map((s) =>
 		s.id === id ? { ...s, direction: s.direction === 'row' ? 'col' : 'row' } : s,
 	)
 }
 
-const sectionDirection = (id) => ((sections.value || []).find((s) => s.id === id)?.direction === 'row' ? 'row' : 'col')
+const sectionDirection = (id: string): 'row' | 'col' =>
+	(sections.value || []).find((s) => s.id === id)?.direction === 'row' ? 'row' : 'col'
 
 // Drag to reorder sections.
-const dragSectionId = ref(null)
-const dropSectionTarget = ref(null)
+const dragSectionId = ref<string | null>(null)
+const dropSectionTarget = ref<{ id: string; position: 'before' | 'after' } | null>(null)
 
-function onSectionDragStart(event, section) {
+function onSectionDragStart(event: DragEvent, section: SectionEntry): void {
 	dragSectionId.value = section.id
 	dropSectionTarget.value = null
-	event.dataTransfer.effectAllowed = 'move'
-	event.dataTransfer.setData('text/plain', section.id) // required by Firefox
+	const dt = event.dataTransfer
+	if (!dt) return
+	dt.effectAllowed = 'move'
+	dt.setData('text/plain', section.id) // required by Firefox
 }
 
-function onSectionDragOver(event, section) {
+function onSectionDragOver(event: DragEvent, section: SectionEntry): void {
 	if (!dragSectionId.value || section.id === dragSectionId.value) return
 	event.preventDefault()
-	event.dataTransfer.dropEffect = 'move'
-	const rect = event.currentTarget.getBoundingClientRect()
+	const dt = event.dataTransfer
+	const rect = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect()
+	if (!dt || !rect) return
+	dt.dropEffect = 'move'
 	dropSectionTarget.value = {
 		id: section.id,
 		position: event.clientY < rect.top + rect.height / 2 ? 'before' : 'after',
 	}
 }
 
-function onSectionDrop(event, section) {
+function onSectionDrop(event: DragEvent, section: SectionEntry): void {
 	if (!dragSectionId.value) return
 	event.preventDefault()
 	const target = dropSectionTarget.value
@@ -144,7 +153,7 @@ function onSectionDrop(event, section) {
 	onSectionDragEnd()
 }
 
-function onSectionDragEnd() {
+function onSectionDragEnd(): void {
 	dragSectionId.value = null
 	dropSectionTarget.value = null
 }
@@ -161,38 +170,38 @@ const isPrinting = ref(false)
 const printZoom = computed(() => (isPrinting.value ? 1 : zoom.value))
 const zoomPercent = computed(() => `${Math.round(zoom.value * 100)}%`)
 
-function clampZoom(value) {
+function clampZoom(value: number): number {
 	return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(value * 100) / 100))
 }
 
-function zoomIn() {
+function zoomIn(): void {
 	zoom.value = clampZoom(zoom.value + ZOOM_STEP)
 }
 
-function zoomOut() {
+function zoomOut(): void {
 	zoom.value = clampZoom(zoom.value - ZOOM_STEP)
 }
 
-function resetZoom() {
+function resetZoom(): void {
 	zoom.value = 1
 }
 
 // --- Density (compactness): vertical spacing scale, saved per profile ---
 const densityPercent = computed(() => `${Math.round((density.value ?? 1) * 100)}%`)
 
-function setDensity(value) {
+function setDensity(value: number): void {
 	density.value = normalizeDensity(value)
 }
 
-function resetDensity() {
+function resetDensity(): void {
 	density.value = 1
 }
 
-function handleBeforePrint() {
+function handleBeforePrint(): void {
 	isPrinting.value = true
 }
 
-function handleAfterPrint() {
+function handleAfterPrint(): void {
 	isPrinting.value = false
 }
 
@@ -213,14 +222,14 @@ onBeforeUnmount(() => {
 })
 
 // --- Preview viewport: drag to pan, wheel to zoom (not selectable) ---
-const printArea = ref(null)
+const printArea = ref<HTMLElement | null>(null)
 const dragging = ref(false)
 let dragX = 0
 let dragY = 0
 let dragLeft = 0
 let dragTop = 0
 
-function onViewportMouseDown(event) {
+function onViewportMouseDown(event: MouseEvent): void {
 	if (event.button !== 0) return
 	const el = printArea.value
 	if (!el) return
@@ -232,7 +241,7 @@ function onViewportMouseDown(event) {
 	event.preventDefault()
 }
 
-function onViewportMouseMove(event) {
+function onViewportMouseMove(event: MouseEvent): void {
 	if (!dragging.value) return
 	const el = printArea.value
 	if (!el) return
@@ -240,11 +249,11 @@ function onViewportMouseMove(event) {
 	el.scrollTop = dragTop - (event.clientY - dragY)
 }
 
-function onViewportMouseUp() {
+function onViewportMouseUp(): void {
 	dragging.value = false
 }
 
-function onViewportWheel(event) {
+function onViewportWheel(event: WheelEvent): void {
 	event.preventDefault()
 	const el = printArea.value
 	if (!el) return
@@ -375,7 +384,7 @@ function onViewportWheel(event) {
 								class="w-full accent-indigo-600"
 								aria-label="Resume spacing"
 								title="Resume spacing: tighten to fit on one page, loosen for air (double-click to reset)"
-								@input="setDensity(parseFloat($event.target.value))"
+								@input="setDensity(parseFloat(($event.target as HTMLInputElement).value))"
 								@dblclick="resetDensity"
 							/>
 							<span class="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">Roomy</span>
@@ -510,7 +519,7 @@ function onViewportWheel(event) {
 										type="checkbox"
 										class="h-4 w-4 rounded accent-indigo-600"
 										:checked="s.visible !== false"
-										@change="toggleSection(s.id, $event.target.checked)"
+										@change="toggleSection(s.id, ($event.target as HTMLInputElement).checked)"
 									/>
 									Show
 								</label>
@@ -520,7 +529,7 @@ function onViewportWheel(event) {
 									:placeholder="isCustomSection(s.id) ? 'Section name' : sectionLabel(s.id)"
 									:title="isCustomSection(s.id) ? 'Rename section' : `Rename “${sectionLabel(s.id)}” section`"
 									maxlength="60"
-									@input="renameSection(s.id, $event.target.value)"
+									@input="renameSection(s.id, ($event.target as HTMLInputElement).value)"
 								/>
 								<button
 									class="icon-btn"

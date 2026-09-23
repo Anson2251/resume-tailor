@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, watchEffect } from 'vue'
 import RepeatableList from './RepeatableList.vue'
 import {
@@ -7,41 +7,48 @@ import {
 	DEFAULT_SECTION_ORDER,
 	SECTION_FIELD_LABELS,
 	SECTION_FIELDS,
-	SECTION_KEYS,
 	customSectionTitle,
-} from '../data/resume.js'
+	isSectionKey,
+	readField,
+	writeField,
+} from '../data/resume'
+import type { ContentItem, CustomItem, CustomSection, MasterResume, OverridePatch, Profile } from '../data/types'
 
 // The shared master content is edited here; the active profile decides what
 // shows, in which order, and can override individual fields.
-const master = defineModel({ required: true })
-const props = defineProps({
-	profile: { type: Object, required: true },
-	// True when the active profile is the master: item edits change the shared
-	// content directly instead of creating per-profile overrides.
-	editMaster: { type: Boolean, default: false },
-})
-const emit = defineEmits(['add', 'remove'])
+const master = defineModel<MasterResume>({ required: true })
+const props = defineProps<{
+	profile: Profile
+	/** True when the active profile is the master: item edits change the shared
+	 * content directly instead of creating per-profile overrides. */
+	editMaster?: boolean
+}>()
+const emit = defineEmits<{
+	add: [payload: { key: string }]
+	remove: [payload: { key: string; id: string }]
+}>()
 
-const add = (key) => emit('add', { key })
-const remove = (key, id) => emit('remove', { key, id })
+const add = (key: string): void => emit('add', { key })
+const remove = (key: string, id: string): void => emit('remove', { key, id })
 
 // The form mirrors the resume: Tailoring (summary) + repeatable sections render
 // in the profile's section order. Contact stays pinned at the top — it is shared
 // on every profile, not a resume body section. Hidden sections stay editable here.
-const sectionOrder = computed(() => {
-	const known = new Set(['summary', 'experience', 'projects', 'education', 'skills'])
+const sectionOrder = computed<string[]>(() => {
+	const known = new Set<string>(['summary', 'experience', 'projects', 'education', 'skills'])
 	for (const s of master.value.customSections || []) known.add(s.id)
-	const ids = (props.profile?.sections || []).map((s) => s?.id).filter((id) => known.has(id))
+	const ids = (props.profile.sections || []).map((s) => s.id).filter((id) => known.has(id))
 	for (const id of DEFAULT_SECTION_ORDER) if (!ids.includes(id)) ids.push(id)
 	for (const s of master.value.customSections || []) if (!ids.includes(s.id)) ids.push(s.id)
 	return ids
 })
 
-const customSection = (sid) => (master.value.customSections || []).find((s) => s.id === sid)
-const customItems = (sid) => customSection(sid)?.items || []
+const customSection = (sid: string): CustomSection | undefined =>
+	(master.value.customSections || []).find((s) => s.id === sid)
+const customItems = (sid: string): CustomItem[] => customSection(sid)?.items || []
 
-function customTitle(sid) {
-	const entry = props.profile?.sections?.find((s) => s.id === sid)
+function customTitle(sid: string): string {
+	const entry = props.profile.sections?.find((s) => s.id === sid)
 	return customSectionTitle(customSection(sid), entry)
 }
 
@@ -56,17 +63,17 @@ watchEffect(() => {
 // The master profile has no overrides.
 const overrides = computed(() => (props.editMaster ? {} : props.profile.overrides))
 
-const readOverrides = () => props.profile.overrides || {}
+const readOverrides = (): Record<string, OverridePatch> => props.profile.overrides || {}
 
-function ensureOverrides() {
+function ensureOverrides(): Record<string, OverridePatch> {
 	if (!props.profile.overrides) props.profile.overrides = {}
 	return props.profile.overrides
 }
 
-function setField(item, field, value) {
+function setField(item: ContentItem, field: string, value: string | boolean): void {
 	const map = ensureOverrides()
 	const existing = map[item.id]
-	if (value === item[field]) {
+	if (value === readField(item, field)) {
 		// Back to the master value — drop the override so it follows master again.
 		if (!existing) return
 		delete existing[field]
@@ -82,20 +89,25 @@ function setField(item, field, value) {
  * present (otherwise the master value) and writes copy-on-write overrides.
  * User-created sections use the generic heading/sub/dates/body fields.
  */
-function fieldModel(item, section) {
-	const fields = SECTION_KEYS.includes(section) ? SECTION_FIELDS[section] : CUSTOM_ITEM_FIELDS
-	const model = {}
+// `Record<string, any>` keeps template v-models untyped (text inputs, checkboxes).
+function fieldModel(item: ContentItem, section: string): Record<string, any> {
+	const fields = isSectionKey(section) ? SECTION_FIELDS[section] : CUSTOM_ITEM_FIELDS
+	const model: Record<string, any> = {}
 	for (const field of fields) {
 		Object.defineProperty(model, field, {
 			enumerable: true,
-			get: () => (props.editMaster ? item[field] : (readOverrides()[item.id]?.[field] ?? item[field])),
-			set: (value) => (props.editMaster ? (item[field] = value) : setField(item, field, value)),
+			get: () =>
+				props.editMaster ? readField(item, field) : (readOverrides()[item.id]?.[field] ?? readField(item, field)),
+			set: (value: string | boolean) => {
+				if (props.editMaster) writeField(item, field, value)
+				else setField(item, field, value)
+			},
 		})
 	}
 	return model
 }
 
-function resetOverrides(id) {
+function resetOverrides(id: string): void {
 	if (props.editMaster) return
 	if (props.profile.overrides) delete props.profile.overrides[id]
 }

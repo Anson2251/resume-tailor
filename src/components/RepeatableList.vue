@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Icon } from '@vicons/utils'
 import {
@@ -8,29 +8,56 @@ import {
 	ArrowUp16Regular,
 	Dismiss16Regular,
 	ReOrderDotsVertical16Regular,
-} from '../data/icons.js'
+} from '../data/icons'
+import type { ContentItem, OverridePatch } from '../data/types'
 
-const props = defineProps({
-	title: { type: String, required: true },
-	sectionId: { type: String, default: '' },
-	items: { type: Array, required: true },
-	canRemove: { type: Boolean, default: false },
-	addLabel: { type: String, default: 'Add item' },
-	// Per-item field overrides for the active profile, and their display labels.
-	overrides: { type: Object, default: () => ({}) },
-	fieldLabels: { type: Object, default: () => ({}) },
-})
+const props = withDefaults(
+	defineProps<{
+		title: string
+		sectionId?: string
+		items: ContentItem[]
+		canRemove?: boolean
+		addLabel?: string
+		/** Per-item field overrides for the active profile, and their display labels. */
+		overrides?: Record<string, OverridePatch>
+		fieldLabels?: Record<string, string>
+	}>(),
+	{
+		sectionId: '',
+		canRemove: false,
+		addLabel: 'Add item',
+		overrides: () => ({}),
+		fieldLabels: () => ({}),
+	},
+)
+
+interface Row {
+	item: ContentItem
+	visible: boolean
+	orderIndex: number
+}
 
 /** Ordered ids of the items shown on the active profile (`profile.view[key]`). */
-const order = defineModel('order', { required: true })
-const emit = defineEmits(['add', 'remove', 'reset'])
+const order = defineModel<string[]>('order', { required: true })
+const emit = defineEmits<{
+	add: []
+	remove: [id: string]
+	reset: [id: string]
+}>()
+
+// Slot items stay untyped: each section renders different fields off the same
+// slots, so consumers narrow them locally.
+defineSlots<{
+	heading?: (props: { item: any; index: number; visible: boolean }) => any
+	fields?: (props: { item: any }) => any
+}>()
 
 // Shown items first, in profile order; then the ones hidden from this profile.
-const rows = computed(() => {
+const rows = computed<Row[]>(() => {
 	const byId = new Map(props.items.map((item) => [item.id, item]))
-	const seen = new Set()
-	const shown = []
-	const hidden = []
+	const seen = new Set<string>()
+	const shown: Row[] = []
+	const hidden: Row[] = []
 	for (const id of order.value) {
 		const item = byId.get(id)
 		if (!item || seen.has(id)) continue
@@ -45,11 +72,11 @@ const rows = computed(() => {
 
 const shownCount = computed(() => rows.value.filter((row) => row.visible).length)
 
-const hasOverride = (id) => Boolean(props.overrides?.[id])
-const overrideLabels = (id) =>
+const hasOverride = (id: string): boolean => Boolean(props.overrides?.[id])
+const overrideLabels = (id: string): string[] =>
 	Object.keys(props.overrides?.[id] || {}).map((field) => props.fieldLabels?.[field] || field)
 
-function toggle(id, visible) {
+function toggle(id: string, visible: boolean): void {
 	const next = [...order.value]
 	const i = next.indexOf(id)
 	if (visible && i === -1) next.push(id)
@@ -57,7 +84,7 @@ function toggle(id, visible) {
 	order.value = next
 }
 
-function move(id, delta) {
+function move(id: string, delta: number): void {
 	const next = [...order.value]
 	const i = next.indexOf(id)
 	const target = i + delta
@@ -69,38 +96,42 @@ function move(id, delta) {
 
 // --- Drag to reorder (shown items only) ---
 
-const dragId = ref(null)
-const dropTarget = ref(null)
+const dragId = ref<string | null>(null)
+const dropTarget = ref<{ id: string; position: 'before' | 'after' } | null>(null)
 
-function onDragStart(event, row) {
+function onDragStart(event: DragEvent, row: Row): void {
 	if (!row.visible) {
 		event.preventDefault()
 		return
 	}
+	const dt = event.dataTransfer
+	if (!dt) return
 	dragId.value = row.item.id
 	dropTarget.value = null
-	event.dataTransfer.effectAllowed = 'move'
-	event.dataTransfer.setData('text/plain', row.item.id) // required by Firefox
+	dt.effectAllowed = 'move'
+	dt.setData('text/plain', row.item.id) // required by Firefox
 	try {
-		const card = event.currentTarget.closest('article')
-		if (card) event.dataTransfer.setDragImage(card, 16, 16)
+		const card = (event.currentTarget as HTMLElement | null)?.closest('article')
+		if (card) dt.setDragImage(card, 16, 16)
 	} catch {
 		/* setDragImage can throw before the image is ready — fall back to default */
 	}
 }
 
-function onDragOver(event, row) {
+function onDragOver(event: DragEvent, row: Row): void {
 	if (!dragId.value || !row.visible || row.item.id === dragId.value) return
 	event.preventDefault()
-	event.dataTransfer.dropEffect = 'move'
-	const rect = event.currentTarget.getBoundingClientRect()
+	const dt = event.dataTransfer
+	const rect = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect()
+	if (!dt || !rect) return
+	dt.dropEffect = 'move'
 	dropTarget.value = {
 		id: row.item.id,
 		position: event.clientY < rect.top + rect.height / 2 ? 'before' : 'after',
 	}
 }
 
-function onDrop(event, row) {
+function onDrop(event: DragEvent, row: Row): void {
 	if (!dragId.value) return
 	event.preventDefault()
 	const target = dropTarget.value
@@ -120,7 +151,7 @@ function onDrop(event, row) {
 	onDragEnd()
 }
 
-function onDragEnd() {
+function onDragEnd(): void {
 	dragId.value = null
 	dropTarget.value = null
 }
@@ -197,7 +228,7 @@ function onDragEnd() {
 									type="checkbox"
 									class="h-4 w-4 rounded accent-indigo-600"
 									:checked="row.visible"
-									@change="toggle(row.item.id, $event.target.checked)"
+									@change="toggle(row.item.id, ($event.target as HTMLInputElement).checked)"
 								/>
 								Show
 							</label>

@@ -1,0 +1,21 @@
+{
+	// Standalone config for the Electron main + preload processes.
+	// Emits CommonJS into electron/dist (splash.html stays in place).
+	"compilerOptions": {
+		"target": "ES2022",
+		"lib": ["ES2023"],
+		"module": "CommonJS",
+		"outDir": "electron/dist",
+		"rootDir": "electron",
+		"strict": true,
+		"skipLibCheck": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"erasableSyntaxOnly": true,
+		"noFallthroughCasesInSwitch": true,
+		"declaration": false,
+		"sourceMap": false,
+		"types": ["node"]
+	},
+	"include": ["electron/main.ts", "electron/preload.ts"]
+}

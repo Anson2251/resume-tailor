@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 /**
@@ -8,19 +8,22 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
  * The panel is teleported to <body> so it is never clipped by scroll/overflow
  * containers. Closes on outside click, Escape, or by calling `close()`.
  */
-const props = defineProps({
-	align: { type: String, default: 'start' }, // 'start' | 'end'
-	width: { type: String, default: '17rem' },
-})
+const props = withDefaults(
+	defineProps<{
+		align?: 'start' | 'end'
+		width?: string
+	}>(),
+	{ align: 'start', width: '17rem' },
+)
 
 const open = ref(false)
-const root = ref(null)
-const panel = ref(null)
+const root = ref<HTMLElement | null>(null)
+const panel = ref<HTMLElement | null>(null)
 const position = ref({ top: 0, left: 0 })
 const maxHeight = ref(320)
 const MARGIN = 8
 
-function toPx(value) {
+function toPx(value: string): number {
 	const n = parseFloat(value)
 	if (Number.isNaN(n)) return 272
 	return /rem$/.test(value) ? n * 16 : n
@@ -70,12 +73,12 @@ function close() {
 	open.value = false
 }
 
-function onPointerDown(event) {
-	if (root.value?.contains(event.target) || panel.value?.contains(event.target)) return
+function onPointerDown(event: PointerEvent): void {
+	if (root.value?.contains(event.target as Node | null) || panel.value?.contains(event.target as Node | null)) return
 	close()
 }
 
-function onKeydown(event) {
+function onKeydown(event: KeyboardEvent): void {
 	if (event.key === 'Escape') close()
 }
 

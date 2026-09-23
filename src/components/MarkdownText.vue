@@ -1,11 +1,14 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import VueMarkdown from 'vue-markdown-render'
 
-const props = defineProps({
-	source: { type: String, default: '' },
-	options: { type: Object, default: null },
-})
+const props = withDefaults(
+	defineProps<{
+		source?: string
+		options?: Record<string, unknown> | null
+	}>(),
+	{ source: '', options: null },
+)
 
 // html:false keeps raw HTML escaped (safe by default); breaks keeps single
 // newlines visible so plain-text content written before markdown still reads well.

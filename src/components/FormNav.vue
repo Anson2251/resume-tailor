@@ -1,6 +1,7 @@
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { DEFAULT_SECTION_ORDER, SECTION_KEYS, customSectionTitle, sectionLabel } from '../data/resume.js'
+import { DEFAULT_SECTION_ORDER, SECTION_KEYS, customSectionTitle, isSectionKey, sectionLabel } from '../data/resume'
+import type { ContentItem, MasterResume, Profile } from '../data/types'
 
 /**
  * Anchor rail for the editing form, fixed to the window (left edge, vertically
@@ -11,11 +12,14 @@ import { DEFAULT_SECTION_ORDER, SECTION_KEYS, customSectionTitle, sectionLabel }
  * Follows the profile's section order so it always matches the form.
  * Hidden on small screens and in print.
  */
-const props = defineProps({
-	profile: { type: Object, required: true },
-	master: { type: Object, required: true },
-	accent: { type: String, default: '#4f46e5' },
-})
+const props = withDefaults(
+	defineProps<{
+		profile: Profile
+		master: MasterResume
+		accent?: string
+	}>(),
+	{ accent: '#4f46e5' },
+)
 
 // The active anchor is derived purely from the scrolled position — the nav
 // keeps no state of its own. The "current" line sits just below the sticky
@@ -39,36 +43,39 @@ function currentKey() {
 	return current
 }
 
-function itemLabel(key, item, index) {
+function itemLabel(key: string, item: ContentItem | undefined, index: number): string {
+	// Item shapes differ per section; read display fields through a plain map.
+	const fields = (item ?? {}) as Record<string, string>
 	switch (key) {
 		case 'experience':
-			if (item?.role || item?.company) return `${item.role || 'New role'}${item.company ? ` · ${item.company}` : ''}`
+			if (fields.role || fields.company)
+				return `${fields.role || 'New role'}${fields.company ? ` · ${fields.company}` : ''}`
 			return `Position ${index + 1}`
 		case 'projects':
-			return item?.name || `Project ${index + 1}`
+			return fields.name || `Project ${index + 1}`
 		case 'education':
-			return item?.school || `School ${index + 1}`
+			return fields.school || `School ${index + 1}`
 		case 'skills':
-			return item?.category || `Skill group ${index + 1}`
+			return fields.category || `Skill group ${index + 1}`
 		default:
-			return item?.heading || `Item ${index + 1}`
+			return fields.heading || `Item ${index + 1}`
 	}
 }
 
 /** Content list for a section: fixed key on master, or a user-created section's items. */
-function listFor(key) {
-	if (SECTION_KEYS.includes(key)) return props.master?.[key] || []
-	return props.master?.customSections?.find((s) => s.id === key)?.items || []
+function listFor(key: string): ContentItem[] {
+	if (isSectionKey(key)) return props.master[key]
+	return props.master.customSections.find((s) => s.id === key)?.items ?? []
 }
 
 /** Shown ids for a section: profile view order, fixed or `view.custom`. */
-function viewIdsFor(key) {
-	if (SECTION_KEYS.includes(key)) return props.profile?.view?.[key] || []
-	return props.profile?.view?.custom?.[key] || []
+function viewIdsFor(key: string): string[] {
+	if (isSectionKey(key)) return props.profile.view[key]
+	return props.profile.view.custom?.[key] ?? []
 }
 
 /** Item anchors in DOM order: shown (profile view order) first, then hidden. */
-function sectionChildren(key) {
+function sectionChildren(key: string): { id: string; label: string }[] {
 	const list = listFor(key)
 	const byId = new Map(list.map((item) => [item.id, item]))
 	const ordered = viewIdsFor(key).filter((id) => byId.has(id))
@@ -84,18 +91,24 @@ function sectionChildren(key) {
 	}))
 }
 
-function groupLabel(id) {
+function groupLabel(id: string): string {
 	if (id === 'summary') return 'Tailoring'
-	if (SECTION_KEYS.includes(id)) return sectionLabel(id)
-	const entry = props.profile?.sections?.find((s) => s.id === id)
-	const masterSection = props.master?.customSections?.find((s) => s.id === id)
+	if (isSectionKey(id)) return sectionLabel(id)
+	const entry = props.profile.sections?.find((s) => s.id === id)
+	const masterSection = props.master.customSections?.find((s) => s.id === id)
 	return customSectionTitle(masterSection, entry)
 }
 
-const groups = computed(() => {
-	const known = new Set(['summary', ...SECTION_KEYS])
-	for (const s of props.master?.customSections || []) known.add(s.id)
-	const ids = (props.profile?.sections || []).map((s) => s?.id).filter((id) => known.has(id))
+interface AnchorGroup {
+	id: string
+	label: string
+	children: { id: string; label: string }[]
+}
+
+const groups = computed<AnchorGroup[]>(() => {
+	const known = new Set<string>(['summary', ...SECTION_KEYS])
+	for (const s of props.master.customSections || []) known.add(s.id)
+	const ids = (props.profile.sections || []).map((s) => s.id).filter((id) => known.has(id))
 	for (const id of DEFAULT_SECTION_ORDER) if (!ids.includes(id)) ids.push(id)
 	for (const s of props.master?.customSections || []) if (!ids.includes(s.id)) ids.push(s.id)
 	return [
@@ -109,17 +122,19 @@ const groups = computed(() => {
 })
 
 // Flat anchor order matching DOM order (section header, then its items).
-const order = computed(() => groups.value.flatMap((group) => [group.id, ...group.children.map((child) => child.id)]))
+const order = computed<string[]>(() =>
+	groups.value.flatMap((group) => [group.id, ...group.children.map((child) => child.id)]),
+)
 
-const isSection = (key) => groups.value.some((group) => group.id === key)
-const elIdFor = (key) => (isSection(key) ? `form-section-${key}` : `form-item-${key}`)
-const elFor = (key) => document.getElementById(elIdFor(key))
+const isSection = (key: string): boolean => groups.value.some((group) => group.id === key)
+const elIdFor = (key: string): string => (isSection(key) ? `form-section-${key}` : `form-item-${key}`)
+const elFor = (key: string): HTMLElement | null => document.getElementById(elIdFor(key))
 
 const activeKey = ref('contact')
 const open = ref(false)
 
-function nearestScroller(el) {
-	let node = el?.parentElement
+function nearestScroller(el: HTMLElement | null): HTMLElement | Window {
+	let node: HTMLElement | null = el?.parentElement ?? null
 	while (node) {
 		const overflowY = getComputedStyle(node).overflowY
 		if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) return node
@@ -130,7 +145,7 @@ function nearestScroller(el) {
 
 // No optimistic highlight here: the scrolled position is the only source of
 // truth, and scroll events during the animation update the highlight.
-function scrollTo(key) {
+function scrollTo(key: string): void {
 	const el = elFor(key)
 	if (!el) return
 	const delta = el.getBoundingClientRect().top - thresholdY()

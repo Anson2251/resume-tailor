@@ -1,14 +1,56 @@
 {
 	"name": "resume-tailor",
+	"productName": "Resume Tailor",
 	"private": true,
 	"version": "0.1.0",
 	"type": "module",
+	"description": "One master resume — a tailored view per profile. Desktop app.",
+	"main": "electron/dist/main.js",
 	"scripts": {
 		"dev": "vite",
-		"build": "vite build",
+		"build": "vue-tsc -b && vite build",
+		"typecheck": "vue-tsc -b",
+		"build:electron": "tsc -p tsconfig.electron.json && node electron/sync-dist-meta.mjs",
 		"preview": "vite preview",
+		"electron:start": "pnpm build:electron && electron .",
+		"electron:dev": "concurrently \"vite\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on http://localhost:5173 electron/dist/main.js && electron .\"",
+		"electron:build": "pnpm build:electron && vite build && electron-builder",
+		"dist": "pnpm build:electron && vite build && electron-builder",
+		"dist:mac": "pnpm build:electron && vite build && electron-builder --mac",
+		"dist:win": "pnpm build:electron && vite build && electron-builder --win",
+		"dist:linux": "pnpm build:electron && vite build && electron-builder --linux",
 		"format": "prettier --write .",
 		"format:check": "prettier --check ."
+	},
+	"build": {
+		"appId": "com.resumetailor.app",
+		"productName": "Resume Tailor",
+		"directories": {
+			"output": "release"
+		},
+		"files": [
+			"dist/**",
+			"electron/dist/**",
+			"electron/splash.html",
+			"package.json"
+		],
+		"mac": {
+			"category": "public.app-category.productivity",
+			"target": [
+				"dmg"
+			]
+		},
+		"win": {
+			"target": [
+				"nsis"
+			]
+		},
+		"linux": {
+			"category": "Office",
+			"target": [
+				"AppImage"
+			]
+		}
 	},
 	"dependencies": {
 		"vue": "^3.5.42",
@@ -16,11 +58,18 @@
 	},
 	"devDependencies": {
 		"@tailwindcss/vite": "^4.3.3",
+		"@types/node": "^26.6.2",
 		"@vicons/fluent": "^0.13.0",
 		"@vicons/utils": "^0.1.4",
 		"@vitejs/plugin-vue": "^6.0.8",
+		"concurrently": "^9.2.1",
+		"electron": "^38.2.2",
+		"electron-builder": "^26.0.12",
 		"prettier": "^3.9.6",
 		"tailwindcss": "^4.3.3",
-		"vite": "^8.2.2"
+		"typescript": "^5.9.3",
+		"vite": "^8.2.2",
+		"vue-tsc": "^3.3.11",
+		"wait-on": "^9.0.0"
 	}
 }

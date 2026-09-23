@@ -1,11 +1,18 @@
-export const TEMPLATES = [
+export interface TemplateOption {
+	id: string
+	name: string
+	hint: string
+	font: string
+}
+
+export const TEMPLATES: TemplateOption[] = [
 	{ id: 'modern', name: 'Modern', hint: 'Accent header', font: 'sans' },
 	{ id: 'classic', name: 'Classic', hint: 'Centered serif', font: 'serif' },
 	{ id: 'minimal', name: 'Minimal', hint: 'Airy + hairlines', font: 'sans' },
 ]
 
 /** The body can flow in 1 or 2 columns (per profile). */
-export const COLUMNS = [1, 2]
+export const COLUMNS: number[] = [1, 2]
 
 /** Resume spacing scale (per profile). 1 = normal; <1 compacts, >1 loosens. */
 export const DEFAULT_DENSITY = 1
@@ -13,16 +20,23 @@ export const MIN_DENSITY = 0.7
 export const MAX_DENSITY = 1.3
 
 /** Clamp a raw value to the density range, falling back to the default. */
-export function normalizeDensity(value) {
+export function normalizeDensity(value: unknown): number {
 	const n = typeof value === 'string' ? parseFloat(value) : value
 	if (typeof n !== 'number' || Number.isNaN(n)) return DEFAULT_DENSITY
 	return Math.min(MAX_DENSITY, Math.max(MIN_DENSITY, Math.round(n * 100) / 100))
 }
 
-export const ACCENTS = ['#4f46e5', '#0f766e', '#1e3a5f', '#b45309', '#be123c', '#334155']
+export const ACCENTS: string[] = ['#4f46e5', '#0f766e', '#1e3a5f', '#b45309', '#be123c', '#334155']
 
 /** Body font choices for the resume. `family` is the CSS font-family stack. */
-export const FONTS = [
+export interface FontOption {
+	id: string
+	name: string
+	hint: string
+	family: string
+}
+
+export const FONTS: FontOption[] = [
 	{
 		id: 'sans',
 		name: 'Sans',
@@ -43,16 +57,16 @@ export const FONTS = [
 	},
 ]
 
-export const DEFAULT_FONT = FONTS[0].id
+export const DEFAULT_FONT: string = FONTS[0].id
 
-export const FONT_IDS = FONTS.map((font) => font.id)
+export const FONT_IDS: string[] = FONTS.map((font) => font.id)
 
 /** Resolve a font id to its CSS font-family stack (falling back to the default). */
-export function fontStack(fontId) {
+export function fontStack(fontId: string): string {
 	return (FONTS.find((font) => font.id === fontId) ?? FONTS[0]).family
 }
 
 /** The font a template uses unless the profile overrides it. */
-export function templateFont(templateId) {
+export function templateFont(templateId: string): string {
 	return TEMPLATES.find((template) => template.id === templateId)?.font ?? DEFAULT_FONT
 }

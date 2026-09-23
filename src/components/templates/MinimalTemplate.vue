@@ -1,16 +1,20 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import MarkdownText from '../MarkdownText.vue'
-import { splitComma, visibleItems, DEFAULT_SECTION_ORDER } from '../../data/resume.js'
-import { fontStack } from '../../data/options.js'
+import { splitComma, visibleItems, DEFAULT_SECTION_ORDER } from '../../data/resume'
+import { fontStack } from '../../data/options'
+import type { CustomItem, CustomSection, PreviewResume, SectionEntry } from '../../data/types'
 
-const props = defineProps({
-	resume: { type: Object, required: true },
-	accent: { type: String, default: '#0f766e' },
-	font: { type: String, default: 'sans' },
-	columns: { type: Number, default: 1 },
-	sections: { type: Array, default: () => [] },
-})
+const props = withDefaults(
+	defineProps<{
+		resume: PreviewResume
+		accent?: string
+		font?: string
+		columns?: number
+		sections?: SectionEntry[]
+	}>(),
+	{ accent: '#0f766e', font: 'sans', columns: 1, sections: () => [] },
+)
 
 const fontFamily = computed(() => fontStack(props.font))
 
@@ -35,29 +39,37 @@ const orderedSections = computed(() => {
 	return ids
 })
 
-function customSection(id) {
+function customSection(id: string): CustomSection | undefined {
 	return (props.resume.customSections || []).find((c) => c.id === id)
 }
 
-function sectionConfig(id) {
-	return (props.sections || []).find((s) => s?.id === id)
+function customItems(id: string): CustomItem[] {
+	return customSection(id)?.items ?? []
 }
 
-function sectionVisible(id) {
+function customTitleText(id: string): string {
+	return customSection(id)?.title ?? ''
+}
+
+function sectionConfig(id: string): SectionEntry | undefined {
+	return (props.sections || []).find((s) => s.id === id)
+}
+
+function sectionVisible(id: string): boolean {
 	const s = sectionConfig(id)
 	return !s || s.visible !== false
 }
 
-function sectionTitle(id, fallback) {
+function sectionTitle(id: string, fallback: string): string {
 	const t = sectionConfig(id)?.title
 	return t && t.trim() ? t.trim() : fallback
 }
 
-function sectionDirection(id) {
+function sectionDirection(id: string): 'row' | 'col' {
 	return sectionConfig(id)?.direction === 'row' ? 'row' : 'col'
 }
 
-function dateRange(start, end, current) {
+function dateRange(start: string, end: string, current: boolean): string {
 	const s = (start || '').trim()
 	const e = current ? 'Present' : (end || '').trim()
 	if (s && e) return `${s} — ${e}`
@@ -187,12 +199,12 @@ const shown = computed(() => ({
 					</div>
 				</section>
 
-				<section v-else-if="customSection(sid) && customSection(sid).items.length && sectionVisible(sid)" class="pt-4">
+				<section v-else-if="customItems(sid).length && sectionVisible(sid)" class="pt-4">
 					<h2 class="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
-						{{ customSection(sid).title }}
+						{{ customTitleText(sid) }}
 					</h2>
 					<div :class="sectionDirection(sid) === 'row' ? 'entry-row mt-3' : 'mt-3 entry-stack'">
-						<article v-for="item in customSection(sid).items" :key="item.id">
+						<article v-for="item in customItems(sid)" :key="item.id">
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-[16px] font-semibold text-slate-900">{{ item.heading || 'Item' }}</h3>
 								<span

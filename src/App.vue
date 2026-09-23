@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Icon } from '@vicons/utils'
 import {
@@ -9,61 +9,63 @@ import {
 	DocumentArrowDown16Regular,
 	WeatherMoon16Regular,
 	WeatherSunny16Regular,
-} from './data/icons.js'
+} from './data/icons'
 import ResumeForm from './components/ResumeForm.vue'
 import FormNav from './components/FormNav.vue'
 import ResumePreview from './components/ResumePreview.vue'
 import ProfileBar from './components/ProfileBar.vue'
-import { ACCENTS, templateFont } from './data/options.js'
-import { SECTION_FACTORY, SECTION_KEYS, blankCustomItem, uid } from './data/resume.js'
+import AppSplash from './components/AppSplash.vue'
+import { ACCENTS, templateFont } from './data/options'
+import { SECTION_FACTORY, appendMasterItem, blankCustomItem, isSectionKey, uid } from './data/resume'
+import { blankProfile, blankWorkspace, buildPreview, cloneProfile, migrate, sampleWorkspace } from './data/workspace'
 import {
-	LEGACY_STORAGE_KEY,
-	STORAGE_KEY,
-	blankProfile,
-	blankWorkspace,
-	buildPreview,
-	cloneProfile,
-	migrate,
-	sampleWorkspace,
-} from './data/workspace.js'
+	isElectron,
+	exportPdfFile,
+	loadPersistedState,
+	notifyRendererReady,
+	revealInFolder,
+	savePersistedState,
+	saveThemeLocal,
+} from './data/persistence'
+import type { ContentItem, Profile, ThemeName } from './data/types'
 
 const workspace = reactive(blankWorkspace())
 const loaded = ref(false)
-const fileInput = ref(null)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 // --- Theme (light/dark): app chrome only, the resume page stays light ---
 const THEME_KEY = 'resume-tailor-theme'
-const theme = ref('light')
+const theme = ref<ThemeName>('light')
 const isDark = computed(() => theme.value === 'dark')
 
-function applyTheme(value) {
+function applyTheme(value: ThemeName): void {
 	theme.value = value
 	document.documentElement.classList.toggle('dark', value === 'dark')
 	document.documentElement.style.colorScheme = value
-	try {
-		localStorage.setItem(THEME_KEY, value)
-	} catch {
-		/* storage unavailable — ignore */
-	}
+	saveThemeLocal(value)
+	schedulePersist()
 }
 
-function toggleTheme() {
+function toggleTheme(): void {
 	applyTheme(isDark.value ? 'light' : 'dark')
 }
 
-function initTheme() {
-	let stored = null
+function initTheme(): void {
+	let stored: string | null = null
 	try {
 		stored = localStorage.getItem(THEME_KEY)
 	} catch {
 		/* storage unavailable — fall back to the pre-paint class */
 	}
-	if (stored !== 'light' && stored !== 'dark') {
+	let next: ThemeName
+	if (stored === 'light' || stored === 'dark') {
+		next = stored
+	} else {
 		// index.html already applied the prefers-color-scheme fallback before
 		// first paint; mirror whatever it chose instead of flashing.
-		stored = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+		next = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 	}
-	applyTheme(stored)
+	applyTheme(next)
 }
 
 const activeProfile = computed(
@@ -78,56 +80,81 @@ const isMaster = computed(() => activeProfile.value?.master === true)
 
 // Template, accent & font are saved per profile.
 const template = computed({
-	get: () => activeProfile.value?.template ?? 'modern',
-	set: (value) => activeProfile.value && (activeProfile.value.template = value),
+	get: (): string => activeProfile.value?.template ?? 'modern',
+	set: (value: string) => {
+		if (activeProfile.value) activeProfile.value.template = value
+	},
 })
 const accent = computed({
-	get: () => activeProfile.value?.accent ?? ACCENTS[0],
-	set: (value) => activeProfile.value && (activeProfile.value.accent = value),
+	get: (): string => activeProfile.value?.accent ?? ACCENTS[0],
+	set: (value: string) => {
+		if (activeProfile.value) activeProfile.value.accent = value
+	},
 })
 // Font falls back to the template's default font until the user picks one.
 const font = computed({
-	get: () => activeProfile.value?.font ?? templateFont(activeProfile.value?.template ?? 'modern'),
-	set: (value) => activeProfile.value && (activeProfile.value.font = value),
+	get: (): string => activeProfile.value?.font ?? templateFont(activeProfile.value?.template ?? 'modern'),
+	set: (value: string) => {
+		if (activeProfile.value) activeProfile.value.font = value
+	},
 })
 const columns = computed({
-	get: () => activeProfile.value?.columns ?? 1,
-	set: (value) => activeProfile.value && (activeProfile.value.columns = value),
+	get: (): number => activeProfile.value?.columns ?? 1,
+	set: (value: number) => {
+		if (activeProfile.value) activeProfile.value.columns = value === 2 ? 2 : 1
+	},
 })
 const density = computed({
-	get: () => activeProfile.value?.density ?? 1,
-	set: (value) => activeProfile.value && (activeProfile.value.density = value),
+	get: (): number => activeProfile.value?.density ?? 1,
+	set: (value: number) => {
+		if (activeProfile.value) activeProfile.value.density = value
+	},
 })
 // Section order / custom names / visibility are saved per profile.
 const sections = computed({
 	get: () => activeProfile.value?.sections ?? [],
-	set: (value) => activeProfile.value && (activeProfile.value.sections = value),
+	set: (value) => {
+		if (activeProfile.value) activeProfile.value.sections = value
+	},
 })
 
-function persist() {
+function persist(): void {
 	if (!loaded.value) return
-	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace))
-	} catch {
-		/* storage unavailable — ignore */
-	}
+	void savePersistedState({ workspace, theme: theme.value })
 }
 
-function restore() {
+// Debounce file writes so every keystroke doesn't hit the disk.
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+function schedulePersist(): void {
+	if (!loaded.value) return
+	if (!isElectron()) {
+		persist()
+		return
+	}
+	if (persistTimer !== null) clearTimeout(persistTimer)
+	persistTimer = setTimeout(persist, 300)
+}
+
+async function restore(): Promise<void> {
+	const { workspaceRaw, theme: storedTheme } = await loadPersistedState()
+	if (storedTheme === 'light' || storedTheme === 'dark') {
+		theme.value = storedTheme
+		document.documentElement.classList.toggle('dark', storedTheme === 'dark')
+		document.documentElement.style.colorScheme = storedTheme
+	}
 	try {
-		const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY)
-		const restored = raw ? migrate(JSON.parse(raw)) : null
+		const restored = workspaceRaw ? migrate(workspaceRaw) : null
 		Object.assign(workspace, restored ?? sampleWorkspace())
 	} catch {
 		Object.assign(workspace, sampleWorkspace())
 	}
 }
 
-function loadSample() {
+function loadSample(): void {
 	Object.assign(workspace, sampleWorkspace())
 }
 
-function clearAll() {
+function clearAll(): void {
 	if (!confirm('Clear all resume content and profiles?')) return
 	Object.assign(workspace, blankWorkspace())
 }
@@ -180,20 +207,20 @@ function removeProfile() {
 
 // --- Master items ---
 
-function findItemList(key) {
-	if (SECTION_KEYS.includes(key)) return workspace.master[key]
+function findItemList(key: string): ContentItem[] | undefined {
+	if (isSectionKey(key)) return workspace.master[key]
 	return workspace.master.customSections.find((s) => s.id === key)?.items
 }
 
-function viewOrderFor(profile, key) {
-	if (SECTION_KEYS.includes(key)) return profile.view[key]
+function viewOrderFor(profile: Profile, key: string): string[] | undefined {
+	if (isSectionKey(key)) return profile.view[key]
 	return profile.view.custom?.[key]
 }
 
-function addItem({ key }) {
-	if (SECTION_KEYS.includes(key)) {
+function addItem({ key }: { key: string }): void {
+	if (isSectionKey(key)) {
 		const item = SECTION_FACTORY[key]()
-		workspace.master[key].push(item)
+		appendMasterItem(workspace.master, key, item)
 		// Show the new item on the active profile, at the end of the section.
 		activeProfile.value.view[key].push(item.id)
 		return
@@ -207,22 +234,22 @@ function addItem({ key }) {
 	;(custom[key] ??= []).push(item.id)
 }
 
-function removeItem({ key, id }) {
+function removeItem({ key, id }: { key: string; id: string }): void {
 	const list = findItemList(key)
 	const index = list?.findIndex((item) => item.id === id) ?? -1
-	if (index !== -1) list.splice(index, 1)
+	if (index !== -1) list?.splice(index, 1)
 	// Remove references from every profile so no dangling ids are saved.
 	for (const profile of workspace.profiles) {
 		const order = viewOrderFor(profile, key)
 		const i = order?.indexOf(id) ?? -1
-		if (i !== -1) order.splice(i, 1)
+		if (i !== -1) order?.splice(i, 1)
 		if (profile.overrides) delete profile.overrides[id]
 	}
 }
 
 // --- User-created sections ---
 
-function createSection() {
+function createSection(): void {
 	const name = prompt('Name the new section (e.g. “Certifications”)', 'Certifications')
 	const title = name?.trim()
 	if (!title) return
@@ -230,13 +257,13 @@ function createSection() {
 	workspace.master.customSections.push(section)
 	// Every profile gets the new section (shown, at the end) under its name.
 	for (const profile of workspace.profiles) {
-		profile.sections.push({ id: section.id, title, visible: true, direction: 'col' })
+		profile.sections.push({ id: section.id, title, visible: true, direction: 'col' as const })
 		const custom = (profile.view.custom ??= {})
 		custom[section.id] = section.items.map((item) => item.id)
 	}
 }
 
-function removeSection(id) {
+function removeSection(id: string): void {
 	const index = workspace.master.customSections.findIndex((s) => s.id === id)
 	if (index === -1) return
 	const section = workspace.master.customSections[index]
@@ -258,7 +285,7 @@ function removeSection(id) {
 
 const overrideCount = computed(() => (isMaster.value ? 0 : Object.keys(activeProfile.value?.overrides || {}).length))
 
-function clearOverrides() {
+function clearOverrides(): void {
 	if (!overrideCount.value) return
 	if (!confirm(`Reset all customized fields on “${activeProfile.value.name}” back to master?`)) return
 	activeProfile.value.overrides = {}
@@ -266,7 +293,7 @@ function clearOverrides() {
 
 // --- Import / export ---
 
-function exportJson() {
+function exportJson(): void {
 	const data = JSON.stringify(workspace)
 	const name = (workspace.master.contact.fullName || 'resume').trim().replace(/\s+/g, '-').toLowerCase()
 	const blob = new Blob([data], { type: 'application/json' })
@@ -280,15 +307,16 @@ function exportJson() {
 	URL.revokeObjectURL(url)
 }
 
-function triggerImport() {
+function triggerImport(): void {
 	fileInput.value?.click()
 }
 
-async function handleImportFile(event) {
-	const file = event.target.files?.[0]
-	event.target.value = ''
+async function handleImportFile(event: Event): Promise<void> {
+	const input = event.target as HTMLInputElement | null
+	const file = input?.files?.[0]
+	if (input) input.value = ''
 	if (!file) return
-	let parsed
+	let parsed: unknown
 	try {
 		parsed = JSON.parse(await file.text())
 	} catch {
@@ -305,26 +333,62 @@ async function handleImportFile(event) {
 	Object.assign(workspace, incoming)
 }
 
-function exportPdf() {
+function exportPdf(): void {
 	const name = (workspace.master.contact.fullName || 'resume').trim().replace(/\s+/g, '-').toLowerCase()
+	if (isElectron()) {
+		void exportPdfNative(`${name || 'resume'}.pdf`)
+		return
+	}
 	const prevTitle = document.title
 	document.title = name || 'resume'
 	window.print()
 	document.title = prevTitle
 }
 
-watch(workspace, persist, { deep: true })
+const exportingPdf = ref(false)
 
-onMounted(() => {
+// Native export (Electron): save dialog + webContents.printToPDF, no print dialog.
+async function exportPdfNative(filename: string): Promise<void> {
+	if (exportingPdf.value) return
+	exportingPdf.value = true
+	try {
+		const result = await exportPdfFile(filename)
+		if (!result) return // fell back — should not happen when isElectron()
+		if (result.canceled) return
+		if (result.ok && result.path) {
+			// Offer a quick way to the file; the save dialog already confirmed it.
+			if (confirm(`Saved to ${result.path}\n\nShow in folder?`)) revealInFolder(result.path)
+		} else {
+			alert('Could not export the PDF. Please try again.')
+		}
+	} finally {
+		exportingPdf.value = false
+	}
+}
+
+watch(workspace, schedulePersist, { deep: true })
+
+onMounted(async () => {
 	initTheme()
-	restore()
-	loaded.value = true
+	try {
+		await restore()
+	} finally {
+		loaded.value = true
+	}
 	persist() // write back after migration from an older save
+	// Let the Electron main process swap the splash screen for the app window.
+	// requestAnimationFrame waits for first paint so the splash never lifts
+	// onto a blank window.
+	requestAnimationFrame(() => requestAnimationFrame(notifyRendererReady))
 })
 </script>
 
 <template>
-	<div class="flex min-h-screen flex-col bg-slate-100 text-slate-900 lg:h-dvh dark:bg-slate-950 dark:text-slate-100">
+	<AppSplash v-if="!loaded" />
+	<div
+		v-else
+		class="flex min-h-screen flex-col bg-slate-100 text-slate-900 lg:h-dvh dark:bg-slate-950 dark:text-slate-100"
+	>
 		<!-- Top bar -->
 		<header
 			id="topbar"
@@ -349,8 +413,8 @@ onMounted(() => {
 					<button class="btn btn-ghost text-[13px]" @click="exportJson">
 						<Icon size="16"><DocumentArrowDown16Regular /></Icon> Export
 					</button>
-					<button class="btn btn-primary text-[13px]" @click="exportPdf">
-						<Icon size="16"><ArrowDownload16Regular /></Icon> Export PDF
+					<button class="btn btn-primary text-[13px]" :disabled="exportingPdf" @click="exportPdf">
+						<Icon size="16"><ArrowDownload16Regular /></Icon> {{ exportingPdf ? 'Exporting…' : 'Export PDF' }}
 					</button>
 					<span class="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
 					<button

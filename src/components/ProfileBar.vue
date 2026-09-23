@@ -1,15 +1,25 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { Icon } from '@vicons/utils'
-import { Add16Regular, ArrowReset20Regular, Copy16Regular, Delete16Regular, Edit16Regular } from '../data/icons.js'
+import { Add16Regular, ArrowReset20Regular, Copy16Regular, Delete16Regular, Edit16Regular } from '../data/icons'
+import type { Profile } from '../data/types'
 
-const activeId = defineModel({ required: true })
-const props = defineProps({
-	profiles: { type: Array, required: true },
-	overrideCount: { type: Number, default: 0 },
-	accent: { type: String, default: '#4f46e5' },
-})
-const emit = defineEmits(['create', 'duplicate', 'rename', 'remove', 'clear-overrides'])
+const activeId = defineModel<string>({ required: true })
+const props = withDefaults(
+	defineProps<{
+		profiles: Profile[]
+		overrideCount?: number
+		accent?: string
+	}>(),
+	{ overrideCount: 0, accent: '#4f46e5' },
+)
+const emit = defineEmits<{
+	(e: 'create'): void
+	(e: 'duplicate'): void
+	(e: 'rename'): void
+	(e: 'remove'): void
+	(e: 'clear-overrides'): void
+}>()
 
 // Up to five profiles render as tabs; beyond that a select keeps the bar tidy.
 const asTabs = computed(() => props.profiles.length <= 5)

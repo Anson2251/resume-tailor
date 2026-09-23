@@ -7,7 +7,7 @@
 
 ![Resume Tailor — master resume on the left, live A4 preview on the right](docs/screenshot.png)
 
-Built with Vue 3 + Tailwind CSS v4 + Vite. Your data never leaves your browser.
+Built with Vue 3 + TypeScript + Tailwind CSS v4 + Vite. Your data never leaves your browser.
 
 ---
 
@@ -45,7 +45,9 @@ No accounts, no uploads, no duplicated content.
 
 ### 💾 Private by design
 
-- The whole workspace **auto-saves to localStorage**; **Load sample** / **Clear** helpers in the top bar.
+- The whole workspace **auto-saves locally** — to `localStorage` on the web,
+  or to `resume-tailor.json` in the OS app-data directory in the desktop app;
+  **Load sample** / **Clear** helpers in the top bar.
 - **Import / Export buttons** — move your workspace (master + all profiles) between browsers as a minified JSON file. Import also accepts older single-resume files, which are migrated into a profile, and asks before replacing your current content.
 - **Light / dark workspace** toggle in the top bar (persisted, follows the OS setting until you pick one) — the resume page itself always stays light so the printout never changes. The GitHub icon next to it links to the repo.
 
@@ -53,11 +55,56 @@ No accounts, no uploads, no duplicated content.
 
 ```sh
 pnpm install
-pnpm dev      # dev server
-pnpm build    # production build → dist/
-pnpm preview  # preview the build
-pnpm format   # format everything with Prettier
+pnpm dev        # dev server
+pnpm build      # typecheck (vue-tsc) + production build → dist/
+pnpm typecheck  # vue-tsc only, no emit
+pnpm preview    # preview the build
+pnpm format     # format everything with Prettier
 ```
+
+## Desktop app (Electron)
+
+The same UI ships as a desktop app. In Electron the workspace + theme are
+stored as JSON in the OS app-data directory
+(`resume-tailor.json` inside `app.getPath('userData')`), instead of
+`localStorage`. A splash screen covers both the native window boot and the
+in-app workspace load, so the window is never blank during initialization.
+
+```sh
+pnpm electron:dev    # Vite dev server + Electron (with HMR)
+pnpm electron:start  # run Electron against the last vite build
+pnpm dist            # package for the current OS → release/
+pnpm dist:mac | pnpm dist:win | pnpm dist:linux
+```
+
+How it works:
+
+- `electron/main.ts` + `electron/preload.ts` — main process and bridge,
+  compiled with `tsc -p tsconfig.electron.json` (`pnpm build:electron`) into
+  `electron/dist/` (CommonJS + a nested `package.json`, since the repo root
+  is `"type": "module"`). The main process owns the native splash window,
+  the main window (shown only after the renderer signals first paint, with
+  an 8s fallback), the `resume-tailor:store-*` IPC handlers that read/write
+  the JSON file, and the `resume-tailor:export-pdf` handler (save dialog +
+  `webContents.printToPDF`, reusing the same print CSS as the web flow).
+- **Single title bar**: the native title text is hidden (`hiddenInset` on
+  macOS, `hidden` + window-controls overlay on Windows/Linux) so it never
+  duplicates the app header — the header keeps a 36px top strip housing the
+  OS controls that also serves as the drag handle, the overlay colors follow
+  the app theme, and the strip collapses in fullscreen (where the OS hides
+  its controls).
+- `electron/preload.cjs` — minimal `window.electronAPI` bridge
+  (`store.load/save/getPath`, `notifyReady`); no Node access in the renderer.
+- `electron/splash.html` — static native splash (no bundle needed).
+- `src/data/persistence.js` — picks the file store in Electron and
+  `localStorage` on the web; first run in Electron adopts an existing
+  browser save. Writes from the app are debounced (300ms).
+- `src/components/AppSplash.vue` + the `#boot-splash` placeholder in
+  `index.html` — in-app loading state until the workspace file is read.
+- **Export PDF** in the desktop app skips the print dialog: it asks where to
+  save, renders the resume page with `printToPDF` (A4, zero margins,
+  backgrounds on — identical output to the web flow), and offers to reveal
+  the file afterwards. On the web it still uses the print dialog.
 
 ---
 
@@ -67,16 +114,25 @@ pnpm format   # format everything with Prettier
 
 ```
 index.html
+electron/
+  main.ts                 # main process: splash + main windows, app-data JSON store
+  preload.ts              # window.electronAPI bridge (store.load/save, notifyReady)
+  splash.html             # static native splash screen
+  sync-dist-meta.mjs      # stamps electron/dist/package.json (CommonJS) on build
 src/
-  main.js                 # app entry
+  main.ts                 # app entry
   style.css               # tailwind + shared form classes + print CSS
   App.vue                 # top bar, workspace state, profile actions, form/preview layout
+  electron-api.d.ts       # window.electronAPI bridge types
   data/
-    resume.js             # master content shape, blank/sample factories, parsing helpers
-    workspace.js          # profiles (views + overrides), migration from old saves, preview builder
-    options.js            # templates, accent & font lists
-    icons.js              # per-icon ESM re-exports (from @vicons/fluent)
+    types.ts              # shared domain model (resume, profile, workspace)
+    resume.ts             # master content shape, blank/sample factories, parsing helpers
+    workspace.ts          # profiles (views + overrides), migration from old saves, preview builder
+    persistence.ts        # file store (Electron) vs localStorage (web) + ready signal
+    options.ts            # templates, accent & font lists
+    icons.ts              # per-icon ESM re-exports (from @vicons/fluent)
   components/
+    AppSplash.vue         # in-app loading state while the workspace file is read
     MarkdownText.vue      # markdown renderer (vue-markdown-render + shared options)
     Popover.vue           # generic slot-driven popover (trigger + content slots)
     ProfileBar.vue        # profile switcher + new/duplicate/rename/delete + clear customizations
@@ -108,6 +164,12 @@ The preview is derived by resolving the active profile's view into the resume sh
 Older saves (`{ resume, template, accent }`) and bare resume JSON are migrated on load/import into a single “Master” profile, preserving which items were visible.
 
 ### Notes
+
+- The codebase is strict TypeScript (`pnpm typecheck`, part of `pnpm build`).
+  The domain model lives in `src/data/types.ts`; raw persisted JSON stays
+  `unknown`/`any` at the normalization boundary (`workspace.ts`) and comes
+  out fully typed. Renderer imports are extensionless (`.js` suffixes don't
+  resolve to `.ts` under Vite).
 
 - Long-form fields (summary, achievements, highlights, details) are **markdown** — the old “one line = one bullet” convention is gone; write `- ` for bullets. Skill inputs are still **comma-separated**. Markdown is rendered by `MarkdownText.vue` with `{ html: false, linkify: true, breaks: true }`: `html: false` escapes raw HTML, `linkify` auto-links bare URLs, and `breaks` keeps single newlines readable so content written before markdown still reads well.
 - Per-template markdown styling lives in `style.css` under `.md` (and `.md-dot` for the Minimal template's accent dots); it is unlayered so it overrides Tailwind Preflight, which strips list styles. The rhythm is deliberately tight: **no margins inside `.md` by default**, with a small gap only between _adjacent top-level blocks_ (`0.4em`) and between list items (`0.2em`). That keeps a single paragraph/list exactly as tight as plain text, and keeps “loose” markdown lists (items separated by blank lines, which markdown-it wraps in `<p>`) from ballooning — so the sample still fits one A4 page in all three templates.
