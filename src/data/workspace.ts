@@ -1,6 +1,11 @@
 import { ACCENTS, FONT_IDS, TEMPLATES, normalizeDensity } from './options'
-import { blankThread } from '../agent/threads'
-import type { ChatThread } from '../agent/threads'
+import {
+	blankConversation,
+	blankConversations,
+	conversationsFromThread,
+	type Conversation,
+} from '../agent/conversations'
+import { normalizeThread } from '../agent/threads'
 import {
 	SECTION_KEYS,
 	blankContact,
@@ -104,6 +109,7 @@ export interface BlankJobOptions extends BlankProfileOptions {
 export function blankJob(name: string, master: MasterResume, opts: BlankJobOptions = {}): Job {
 	const { company = '', jobTitleTarget = '', ...rest } = opts
 	const profile = blankProfile(name, master, rest)
+	const first = blankConversation()
 	return {
 		...profile,
 		kind: rest.isMaster ? 'master' : 'job',
@@ -113,7 +119,8 @@ export function blankJob(name: string, master: MasterResume, opts: BlankJobOptio
 		jobUrl: '',
 		coverLetter: '',
 		jdSource: null,
-		chat: blankThread(),
+		conversations: [first],
+		activeConversationId: first.id,
 	}
 }
 
@@ -152,14 +159,16 @@ export function sampleWorkspace(): Workspace & WorkspaceV3 {
 	}
 }
 
-/** Deep-copy a job (view, tailoring, letter and JD text) with a fresh chat. */
+/** Deep-copy a job (view, tailoring, letter and JD text) with fresh conversations. */
 export function cloneJob(job: Job, name?: string): Job {
 	const copy = JSON.parse(JSON.stringify(job)) as Job
 	copy.id = uid()
 	copy.name = name || `${job.name} copy`
 	copy.master = false
 	copy.kind = 'job'
-	copy.chat = blankThread()
+	const first = blankConversation()
+	copy.conversations = [first]
+	copy.activeConversationId = first.id
 	return copy
 }
 
@@ -338,6 +347,7 @@ function normalizeCustomSections(raw: any): CustomSection[] {
 
 /** Lift a normalized profile into a Job, preserving v3 fields when present. */
 function toJob(profile: Profile, raw: any): Job {
+	const conversations = normalizeConversations(raw)
 	return {
 		...profile,
 		kind: raw?.kind === 'job' || raw?.kind === 'master' ? raw.kind : profile.master ? 'master' : 'job',
@@ -355,16 +365,36 @@ function toJob(profile: Profile, raw: any): Job {
 						pdfRefId: raw.jdSource.pdfRefId,
 					}
 				: null,
-		chat:
-			raw?.chat && typeof raw.chat === 'object' && raw.chat.messages && typeof raw.chat.edges === 'object'
-				? {
-						entryId: typeof raw.chat.entryId === 'string' ? raw.chat.entryId : null,
-						edges: raw.chat.edges as Record<string, string | null>,
-						messages: raw.chat.messages as ChatThread['messages'],
-						decisions: Array.isArray(raw.chat.decisions) ? (raw.chat.decisions as number[]) : null,
-					}
-				: blankThread(),
+		conversations,
+		activeConversationId:
+			typeof raw?.activeConversationId === 'string' && conversations.some((c) => c.id === raw.activeConversationId)
+				? (raw.activeConversationId as string)
+				: null,
 	}
+}
+
+/** Normalize the conversation list; legacy single `chat` threads become one conversation. */
+function normalizeConversations(raw: any): Conversation[] {
+	if (Array.isArray(raw?.conversations) && raw.conversations.length) {
+		const clean: Conversation[] = []
+		const seen = new Set<string>()
+		for (const item of raw.conversations) {
+			if (!item || typeof item !== 'object') continue
+			const id = typeof item.id === 'string' && item.id && !seen.has(item.id) ? item.id : uid()
+			seen.add(id)
+			clean.push({
+				id,
+				title: typeof item.title === 'string' ? item.title.slice(0, 120) : '',
+				updatedAt: typeof item.updatedAt === 'number' && Number.isFinite(item.updatedAt) ? item.updatedAt : 0,
+				thread: normalizeThread(item.thread),
+			})
+		}
+		if (clean.length) return clean
+	}
+	if (raw?.chat && typeof raw.chat === 'object') {
+		return conversationsFromThread(normalizeThread(raw.chat))
+	}
+	return blankConversations()
 }
 
 export function normalizeWorkspace(ws: any): Workspace & WorkspaceV3 {

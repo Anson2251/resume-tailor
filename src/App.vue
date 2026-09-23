@@ -18,28 +18,25 @@ import AgentPanel from './components/AgentPanel.vue'
 import JDViewer from './components/JDViewer.vue'
 import { FwbDropdown } from 'flowbite-vue'
 import AppSplash from './components/AppSplash.vue'
-import SettingsModal from './components/SettingsModal.vue'
+import SettingsPage from './components/SettingsPage.vue'
+import { hydrateAgentSettings, useAgentSettings, useAgentSettingsMutable } from './agent/agentSettings'
+import { hydrateProviderSettings, loadProviderSettings } from './agent/providerSettings'
 import { ACCENTS, templateFont } from './data/options'
 import { SECTION_FACTORY, appendMasterItem, blankCustomItem, isSectionKey, uid } from './data/resume'
-import {
-	blankJob,
-	blankWorkspace,
-	buildPreview,
-	cloneJob,
-	migrate,
-	sampleWorkspace,
-} from './data/workspace'
+import { blankJob, blankWorkspace, buildPreview, cloneJob, migrate, sampleWorkspace } from './data/workspace'
 import { resolvePaneViews, type PaneView } from './agent/panes'
-import { attachJdPdf } from './agent/jd'
+import { attachJdPdf, copyJdPdf, loadJdPdf, pruneJdPdfs, referencedJdPdfs } from './agent/jd'
+import { isElectron, exportPdfFile, notifyRendererReady, revealInFolder } from './data/persistence'
+import { getStore } from './data/store'
 import {
-	isElectron,
-	exportPdfFile,
-	loadPersistedState,
-	notifyRendererReady,
-	revealInFolder,
-	savePersistedState,
-	saveThemeLocal,
-} from './data/persistence'
+	collectSettingsDoc,
+	normalizeSettingsDoc,
+	persistSettingsNow,
+	scheduleSettingsPersist,
+	setCurrentTheme,
+} from './data/store/settings'
+import { migrateWebLegacy } from './data/store/migrate'
+import { buildExportZip, parseImportBytes } from './data/transfer'
 import type { ContentItem, Job, Profile, ThemeName } from './data/types'
 
 const workspace = reactive(blankWorkspace())
@@ -47,39 +44,40 @@ const loaded = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const settingsOpen = ref(false)
 
+// Agent identity for the chat panels: remounts them when the configured
+// model or behavior changes in the settings page.
+const { settings: agentSettings } = useAgentSettings()
+const agentKey = computed(() =>
+	[agentSettings.provider, agentSettings.modelId, agentSettings.systemPrompt, agentSettings.contextChars].join('|'),
+)
+
 // --- Theme (light/dark): app chrome only, the resume page stays light ---
-const THEME_KEY = 'resume-tailor-theme'
+// Persisted inside the merged settings doc (see `data/store/settings.ts`).
 const theme = ref<ThemeName>('light')
 const isDark = computed(() => theme.value === 'dark')
 
-function applyTheme(value: ThemeName): void {
+function applyTheme(value: ThemeName, persist = true): void {
 	theme.value = value
 	document.documentElement.classList.toggle('dark', value === 'dark')
 	document.documentElement.style.colorScheme = value
-	saveThemeLocal(value)
-	schedulePersist()
+	setCurrentTheme(value)
+	if (persist) scheduleSettingsPersist()
 }
 
 function toggleTheme(): void {
 	applyTheme(isDark.value ? 'light' : 'dark')
 }
 
-function initTheme(): void {
-	let stored: string | null = null
-	try {
-		stored = localStorage.getItem(THEME_KEY)
-	} catch {
-		/* storage unavailable — fall back to the pre-paint class */
-	}
-	let next: ThemeName
-	if (stored === 'light' || stored === 'dark') {
-		next = stored
-	} else {
-		// index.html already applied the prefers-color-scheme fallback before
-		// first paint; mirror whatever it chose instead of flashing.
-		next = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
-	}
-	applyTheme(next)
+function initTheme(stored: unknown): void {
+	// index.html already applied the prefers-color-scheme fallback before
+	// first paint; mirror whatever it chose instead of flashing.
+	const next: ThemeName =
+		stored === 'light' || stored === 'dark'
+			? stored
+			: document.documentElement.classList.contains('dark')
+				? 'dark'
+				: 'light'
+	applyTheme(next, false)
 }
 
 const activeJob = computed(() => workspace.jobs.find((j) => j.id === workspace.activeJobId) || workspace.jobs[0])
@@ -145,34 +143,78 @@ const sections = computed({
 	},
 })
 
-function persist(): void {
+async function persistWorkspaceNow(): Promise<void> {
 	if (!loaded.value) return
 	// jobs is the source of truth; mirror into legacy profiles so old
 	// readers stay compatible.
 	workspace.profiles.splice(0, workspace.profiles.length, ...workspace.jobs)
 	workspace.activeProfileId = workspace.activeJobId
-	void savePersistedState({ workspace, theme: theme.value })
+	try {
+		await getStore().setDoc('workspace', JSON.parse(JSON.stringify(workspace)))
+	} catch {
+		/* store write failed — ignore, next save will retry */
+	}
 }
 
-// Debounce file writes so every keystroke doesn't hit the disk.
+// One debounced funnel for workspace writes on both platforms, so token
+// streaming into a chat draft coalesces instead of hammering the store.
 let persistTimer: ReturnType<typeof setTimeout> | null = null
 function schedulePersist(): void {
 	if (!loaded.value) return
-	if (!isElectron()) {
-		persist()
-		return
-	}
 	if (persistTimer !== null) clearTimeout(persistTimer)
-	persistTimer = setTimeout(persist, 300)
+	persistTimer = setTimeout(() => {
+		persistTimer = null
+		void persistWorkspaceNow()
+	}, 300)
 }
 
 async function restore(): Promise<void> {
-	const { workspaceRaw, theme: storedTheme } = await loadPersistedState()
-	if (storedTheme === 'light' || storedTheme === 'dark') {
-		theme.value = storedTheme
-		document.documentElement.classList.toggle('dark', storedTheme === 'dark')
-		document.documentElement.style.colorScheme = storedTheme
+	const store = getStore()
+	let workspaceRaw: unknown | null = null
+	let settingsRaw: unknown | null = null
+	try {
+		workspaceRaw = await store.getDoc('workspace')
+		settingsRaw = await store.getDoc('settings')
+	} catch {
+		workspaceRaw = null
+		settingsRaw = null
 	}
+	if (workspaceRaw === null && settingsRaw === null) {
+		// One-time production v2 migration into the unified store.
+		try {
+			if (isElectron() && window.electronAPI?.db) {
+				const legacy = await window.electronAPI.db.migrateLegacy()
+				workspaceRaw = legacy.workspace
+				// Blob bytes were moved into the store by the main process;
+				// refs (`<jobId>.pdf`) stay valid as-is.
+				settingsRaw = normalizeSettingsDoc({ theme: legacy.theme, agent: null, providers: null })
+			} else {
+				const legacy = migrateWebLegacy()
+				workspaceRaw = legacy.workspaceRaw
+				settingsRaw = legacy.settings
+			}
+		} catch {
+			/* migration best-effort — fall through to defaults */
+		}
+		if (workspaceRaw !== null) {
+			try {
+				await store.setDoc('workspace', workspaceRaw)
+			} catch {
+				/* ignore */
+			}
+		}
+		if (settingsRaw !== null) {
+			try {
+				await store.setDoc('settings', settingsRaw)
+			} catch {
+				/* ignore */
+			}
+		}
+	}
+	const settings = normalizeSettingsDoc(settingsRaw)
+	hydrateAgentSettings(settings.agent)
+	hydrateProviderSettings(settings.providers)
+	initTheme(settings.theme)
 	try {
 		const restored = workspaceRaw ? migrate(workspaceRaw) : null
 		Object.assign(workspace, restored ?? sampleWorkspace())
@@ -188,6 +230,7 @@ function loadSample(): void {
 function clearAll(): void {
 	if (!confirm('Clear all resume content and jobs?')) return
 	Object.assign(workspace, blankWorkspace())
+	void pruneJdPdfs(new Set())
 }
 
 // --- Jobs ---
@@ -227,6 +270,20 @@ function duplicateJob(id: string) {
 	workspace.profiles.push(copy)
 	workspace.activeJobId = copy.id
 	workspace.activeProfileId = copy.id
+	// The clone shares the source's pdfRefId — give it its own blob copy so
+	// the two jobs own their bytes independently.
+	const refId = source.jdSource?.pdfRefId
+	if (refId) {
+		void copyJdPdf(copy.id, refId).then((next) => {
+			if (copy.jdSource) {
+				if (next) copy.jdSource.pdfRefId = next
+				else {
+					console.warn('[jd] duplicate lost its PDF bytes; re-attach to restore the viewer.')
+					copy.jdSource = null
+				}
+			}
+		})
+	}
 }
 
 function renameJob(id: string) {
@@ -247,7 +304,7 @@ function removeJob(id: string) {
 	const index = workspace.jobs.findIndex((j) => j.id === id)
 	const job = workspace.jobs[index]
 	if (!job || job.kind === 'master') return
-	if (!confirm(`Delete job “${job.name}”? Its tailored view, cover letter and chat go too.`)) return
+	if (!confirm(`Delete job “${job.name}”? Its tailored view, cover letter and sessions go too.`)) return
 	undoSnapshot.value = {
 		jobs: JSON.parse(JSON.stringify(workspace.jobs)),
 		activeJobId: workspace.activeJobId,
@@ -255,6 +312,9 @@ function removeJob(id: string) {
 	if (undoTimer !== null) clearTimeout(undoTimer)
 	undoTimer = setTimeout(() => {
 		undoSnapshot.value = null
+		// Undo expired: the removed job can't come back, so its JD bytes are
+		// safe to prune when no live job references them.
+		void pruneJdPdfs(referencedJdPdfs(workspace.jobs))
 	}, 5000)
 	workspace.jobs.splice(index, 1)
 	workspace.profiles.splice(
@@ -345,9 +405,7 @@ function removeSection(id: string): void {
 	const section = workspace.master.customSections[index]
 	const itemIds = new Set((section.items || []).map((item) => item.id))
 	if (
-		!confirm(
-			`Delete section “${section.title || 'Untitled section'}”? This removes it from the master and every job.`,
-		)
+		!confirm(`Delete section “${section.title || 'Untitled section'}”? This removes it from the master and every job.`)
 	)
 		return
 	workspace.master.customSections.splice(index, 1)
@@ -367,20 +425,41 @@ function clearOverrides(): void {
 	activeProfile.value.overrides = {}
 }
 
-// --- Import / export ---
+// --- Import / export (self-contained .zip: workspace + settings + JD PDFs) ---
 
-function exportJson(): void {
-	const data = JSON.stringify(workspace)
-	const name = (workspace.master.contact.fullName || 'resume').trim().replace(/\s+/g, '-').toLowerCase()
-	const blob = new Blob([data], { type: 'application/json' })
-	const url = URL.createObjectURL(blob)
-	const a = document.createElement('a')
-	a.href = url
-	a.download = `${name || 'resume'}.json`
-	document.body.appendChild(a)
-	a.click()
-	a.remove()
-	URL.revokeObjectURL(url)
+const exportingZip = ref(false)
+
+async function exportZip(): Promise<void> {
+	if (exportingZip.value) return
+	exportingZip.value = true
+	try {
+		const refs = referencedJdPdfs(workspace.jobs)
+		const blobs: { name: string; data: ArrayBuffer }[] = []
+		for (const refId of refs) {
+			try {
+				const data = await loadJdPdf(refId)
+				if (data) blobs.push({ name: refId, data })
+			} catch {
+				/* skip unreadable blobs — the JD text still exports */
+			}
+		}
+		const bytes = await buildExportZip({ workspace, settings: collectSettingsDoc(), blobs })
+		const name = (workspace.master.contact.fullName || 'resume').trim().replace(/\s+/g, '-').toLowerCase()
+		const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/zip' })
+		const url = URL.createObjectURL(blob)
+		const a = document.createElement('a')
+		a.href = url
+		a.download = `${name || 'resume'}.resume-tailor.zip`
+		document.body.appendChild(a)
+		a.click()
+		a.remove()
+		URL.revokeObjectURL(url)
+	} catch (error) {
+		console.error('[export] zip failed:', error)
+		alert('Could not build the export file. Please try again.')
+	} finally {
+		exportingZip.value = false
+	}
 }
 
 function triggerImport(): void {
@@ -392,21 +471,48 @@ async function handleImportFile(event: Event): Promise<void> {
 	const file = input?.files?.[0]
 	if (input) input.value = ''
 	if (!file) return
-	let parsed: unknown
+	let parsed
 	try {
-		parsed = JSON.parse(await file.text())
+		parsed = await parseImportBytes(new Uint8Array(await file.arrayBuffer()))
 	} catch {
-		alert('Could not read that file — it is not valid JSON.')
+		alert('Could not read that file.')
+		return
+	}
+	if (parsed.kind === 'unrecognized') {
+		alert('That file does not look like a Resume Tailor export.')
 		return
 	}
 	// Accepts v2 workspaces, legacy { resume, template, accent } exports, and bare resumes.
-	const incoming = migrate(parsed)
+	const incoming = migrate(parsed.kind === 'zip' ? parsed.bundle.workspaceRaw : parsed.workspaceRaw)
 	if (!incoming) {
 		alert('That file does not look like a Resume Tailor export.')
 		return
 	}
-	if (!confirm(`Import workspace from "${file.name}"? Your current content and jobs will be replaced.`)) return
+	const jobCount = parsed.kind === 'zip' ? '' : ' (JD PDFs are not part of JSON exports)'
+	if (!confirm(`Import workspace from "${file.name}"? Your current content and jobs will be replaced.${jobCount}`))
+		return
+	if (parsed.kind === 'zip') {
+		// Restore embedded PDFs under their referenced ids, then drop any
+		// stored blobs the incoming workspace no longer references.
+		const store = getStore()
+		for (const [refId, bytes] of Object.entries(parsed.bundle.blobs)) {
+			try {
+				const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+				await store.putBlob(refId, buf)
+			} catch {
+				/* keep going — the JD text still imports */
+			}
+		}
+		if (parsed.bundle.settingsRaw !== null) {
+			const settings = normalizeSettingsDoc(parsed.bundle.settingsRaw)
+			hydrateAgentSettings(settings.agent)
+			hydrateProviderSettings(settings.providers)
+			initTheme(settings.theme)
+			void persistSettingsNow()
+		}
+	}
 	Object.assign(workspace, incoming)
+	void pruneJdPdfs(referencedJdPdfs(workspace.jobs))
 }
 
 function exportPdf(): void {
@@ -444,6 +550,12 @@ async function exportPdfNative(filename: string): Promise<void> {
 
 watch(workspace, schedulePersist, { deep: true })
 
+// Settings (theme + agent + provider singletons) share one debounced flush
+// into the merged settings doc.
+const { settings: mutableAgentSettings } = useAgentSettingsMutable()
+const providerSettingsState = loadProviderSettings()
+watch([theme, mutableAgentSettings, providerSettingsState], scheduleSettingsPersist, { deep: true })
+
 // Keep the legacy profile pointer aligned when the rail switches jobs.
 watch(
 	() => workspace.activeJobId,
@@ -453,13 +565,14 @@ watch(
 )
 
 onMounted(async () => {
-	initTheme()
 	try {
 		await restore()
 	} finally {
 		loaded.value = true
 	}
-	persist() // write back after migration from an older save
+	// Write back after migration from an older save.
+	void persistWorkspaceNow()
+	void persistSettingsNow()
 	// Let the Electron main process swap the splash screen for the app window.
 	// requestAnimationFrame waits for first paint so the splash never lifts
 	// onto a blank window.
@@ -494,8 +607,8 @@ onMounted(async () => {
 					<button class="btn btn-ghost text-[13px]" @click="triggerImport">
 						<Icon size="16"><ArrowUpload16Regular /></Icon> Import
 					</button>
-					<button class="btn btn-ghost text-[13px]" @click="exportJson">
-						<Icon size="16"><DocumentArrowDown16Regular /></Icon> Export
+					<button class="btn btn-ghost text-[13px]" :disabled="exportingZip" @click="exportZip">
+						<Icon size="16"><DocumentArrowDown16Regular /></Icon> {{ exportingZip ? 'Exporting…' : 'Export' }}
 					</button>
 					<button class="btn btn-primary text-[13px]" :disabled="exportingPdf" @click="exportPdf">
 						<Icon size="16"><ArrowDownload16Regular /></Icon> {{ exportingPdf ? 'Exporting…' : 'Export PDF' }}
@@ -503,7 +616,7 @@ onMounted(async () => {
 					<span class="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
 					<button
 						class="btn btn-ghost px-2.5 text-[13px]"
-						title="Agent settings (API keys)"
+						title="Agent settings"
 						aria-label="Agent settings"
 						@click="settingsOpen = true"
 					>
@@ -534,16 +647,15 @@ onMounted(async () => {
 					<input
 						ref="fileInput"
 						type="file"
-						accept=".json,application/json"
+						accept=".zip,.json,application/zip,application/json"
 						class="hidden"
 						@change="handleImportFile"
 					/>
 				</div>
 			</div>
-
 		</header>
 
-		<SettingsModal v-model="settingsOpen" />
+		<SettingsPage v-model="settingsOpen" />
 
 		<!-- Anchor rail for the form (fixed to the window) -->
 		<FormNav :profile="activeProfile" :master="workspace.master" :accent="accent" />
@@ -616,7 +728,7 @@ onMounted(async () => {
 				/>
 				<AgentPanel
 					v-else-if="paneA === 'agent'"
-					:key="activeJob.id"
+					:key="`${activeJob.id}-${agentKey}`"
 					:job="activeJob"
 					:master="workspace.master"
 					@open-settings="settingsOpen = true"
@@ -669,7 +781,7 @@ onMounted(async () => {
 				/>
 				<AgentPanel
 					v-else-if="paneB === 'agent'"
-					:key="activeJob.id"
+					:key="`${activeJob.id}-${agentKey}`"
 					:job="activeJob"
 					:master="workspace.master"
 					@open-settings="settingsOpen = true"

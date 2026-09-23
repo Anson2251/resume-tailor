@@ -22,12 +22,13 @@ describe('v2 profiles -> v3 jobs', () => {
 		}
 		const ws = migrate(v2) as unknown as {
 			version: number
-			jobs: { kind: string; chat: { entryId: null } }[]
+			jobs: { kind: string; conversations: { thread: { entryId: null } }[]; activeConversationId: null }[]
 			activeJobId: string
 		}
 		expect(ws.version).toBe(3)
 		expect(ws.jobs[0].kind).toBe('master')
-		expect(ws.jobs[0].chat.entryId).toBe(null)
+		expect(ws.jobs[0].conversations).toHaveLength(1)
+		expect(ws.jobs[0].conversations[0].thread.entryId).toBe(null)
 		expect(ws.activeJobId).toBe('p1')
 	})
 })

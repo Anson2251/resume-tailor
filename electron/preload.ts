@@ -1,19 +1,38 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-// Minimal, auditable bridge: the renderer can only load/save its own JSON
-// document and signal that first paint is done. No Node access is exposed.
-const AGENT_CHANNELS = ['agent-key:set', 'agent-key:get', 'agent-key:delete', 'agent-jd:save', 'agent-jd:load']
+// Minimal, auditable bridge: the renderer reaches the unified SQLite store
+// (docs + blobs) and its own keychain entries through allowlisted channels.
+// No Node access and no broad `invoke` are exposed.
+const AGENT_KEY_CHANNELS = ['agent-key:set', 'agent-key:get', 'agent-key:delete']
+const DB_CHANNELS = [
+	'resume-tailor:db-doc-get',
+	'resume-tailor:db-doc-set',
+	'resume-tailor:db-blob-put',
+	'resume-tailor:db-blob-get',
+	'resume-tailor:db-blob-delete',
+	'resume-tailor:db-blob-list',
+	'resume-tailor:db-migrate-legacy',
+]
+
+function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
+	if (!AGENT_KEY_CHANNELS.includes(channel) && !DB_CHANNELS.includes(channel)) {
+		throw new Error(`blocked channel: ${channel}`)
+	}
+	return ipcRenderer.invoke(channel, ...args)
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
 	isElectron: true,
 	platform: process.platform,
-	invoke: (channel: string, ...args: unknown[]) => {
-		if (!AGENT_CHANNELS.includes(channel)) throw new Error(`blocked channel: ${channel}`)
-		return ipcRenderer.invoke(channel, ...args)
-	},
-	store: {
-		load: () => ipcRenderer.invoke('resume-tailor:store-load'),
-		save: (payload: { workspace: unknown; theme: unknown }) => ipcRenderer.invoke('resume-tailor:store-save', payload),
-		getPath: () => ipcRenderer.invoke('resume-tailor:store-path'),
+	invoke,
+	db: {
+		getDoc: (key: string) => invoke('resume-tailor:db-doc-get', key),
+		setDoc: (key: string, value: unknown) => invoke('resume-tailor:db-doc-set', key, value),
+		putBlob: (key: string, data: number[]) => invoke('resume-tailor:db-blob-put', key, data),
+		getBlob: (key: string) => invoke('resume-tailor:db-blob-get', key),
+		deleteBlob: (key: string) => invoke('resume-tailor:db-blob-delete', key),
+		listBlobs: () => invoke('resume-tailor:db-blob-list'),
+		migrateLegacy: () => invoke('resume-tailor:db-migrate-legacy'),
 	},
 	notifyReady: () => ipcRenderer.send('resume-tailor:renderer-ready'),
 	// Fullscreen enter/leave (OS hides its controls there). Returns an

@@ -145,7 +145,7 @@ export interface Workspace {
 	activeProfileId: string
 }
 
-import type { ChatThread } from '../agent/threads'
+import type { Conversation } from '../agent/conversations'
 
 export interface Job extends Profile {
 	kind: 'master' | 'job'
@@ -155,7 +155,8 @@ export interface Job extends Profile {
 	jobUrl: string
 	coverLetter: string
 	jdSource: { filename: string; pageCount: number; extractedAt: string; pdfRefId: string } | null
-	chat: ChatThread
+	conversations: Conversation[]
+	activeConversationId: string | null
 }
 
 export interface WorkspaceV3 {

@@ -1,4 +1,4 @@
-import { getChildren, getParent, type ChatThread } from './threads'
+import { getChildren, getDefaultLeaf, getParent, type ChatThread } from './threads'
 
 export type PaneView = 'form' | 'preview' | 'agent' | 'jdpdf'
 
@@ -44,4 +44,41 @@ export function selectSibling(t: ChatThread, leafId: string, dir: 1 | -1): strin
 	t.edges[next] = v
 	t.decisions = decisionsForLeaf(t, next)
 	return next
+}
+
+/**
+ * Make an arbitrary leaf the viewed branch by moving each ancestor step to
+ * the last-child position (the default leaf always follows last children).
+ * Persists decisions. Returns the leaf id, or the current default when the
+ * target is unknown.
+ */
+export function selectLeaf(t: ChatThread, leafId: string): string {
+	const fallback = getDefaultLeaf(t)
+	if (!t.messages[leafId]) return fallback ?? leafId
+	const path: string[] = []
+	let cur: string | null | undefined = leafId
+	while (typeof cur === 'string') {
+		path.unshift(cur)
+		if (cur === t.entryId) break
+		cur = t.edges[cur]
+		if (cur === undefined) break
+	}
+	if (path[0] !== t.entryId) return fallback ?? leafId
+	for (let i = 1; i < path.length; i++) {
+		const parent = path[i - 1]
+		const child = path[i]
+		const sibs = getChildren(t, parent)
+		if (sibs[sibs.length - 1] === child) continue
+		for (const id of sibs) {
+			if (id === child) continue
+			const v = t.edges[id]
+			delete t.edges[id]
+			t.edges[id] = v
+		}
+		const v = t.edges[child]
+		delete t.edges[child]
+		t.edges[child] = v
+	}
+	t.decisions = decisionsForLeaf(t, leafId)
+	return leafId
 }

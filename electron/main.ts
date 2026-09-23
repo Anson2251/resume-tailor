@@ -2,74 +2,15 @@ import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electro
 import type { IpcMainInvokeEvent } from 'electron'
 import * as path from 'node:path'
 import * as fs from 'node:fs/promises'
+import { getBackend, peekStoredTheme, registerDbIpc } from './db'
 
 const DEV_URL = process.env.ELECTRON_DEV_URL || 'http://localhost:5173'
-const STORE_FILENAME = 'resume-tailor.json'
-
-interface StoredState {
-	theme: string | null
-	workspace: unknown
-}
 
 interface PdfExportResult {
 	ok: boolean
 	canceled?: boolean
 	path?: string
 	error?: string
-}
-
-// ---------------------------------------------------------------------------
-// JSON file store in the OS app-data directory
-// (~/Library/Application Support/Resume Tailor, %APPDATA%\..., ~/.config/...)
-// File shape: { version: 1, updatedAt: ISO string, theme, workspace }
-// ---------------------------------------------------------------------------
-function storeFilePath(): string {
-	return path.join(app.getPath('userData'), STORE_FILENAME)
-}
-
-async function readStoreFile(): Promise<StoredState | null> {
-	try {
-		const raw = await fs.readFile(storeFilePath(), 'utf-8')
-		const parsed: unknown = JSON.parse(raw)
-		if (!parsed || typeof parsed !== 'object') return null
-		const doc = parsed as { theme?: unknown; workspace?: unknown }
-		return {
-			theme: typeof doc.theme === 'string' ? doc.theme : null,
-			workspace: doc.workspace && typeof doc.workspace === 'object' ? doc.workspace : null,
-		}
-	} catch (err) {
-		if (err instanceof Error && 'code' in err && err.code === 'ENOENT') return null
-		console.error('[store] read failed:', err)
-		return null
-	}
-}
-
-async function writeStoreFile(payload: { theme?: unknown; workspace?: unknown }): Promise<boolean> {
-	try {
-		await fs.mkdir(path.dirname(storeFilePath()), { recursive: true })
-		const doc = {
-			version: 1,
-			updatedAt: new Date().toISOString(),
-			theme: typeof payload?.theme === 'string' ? payload.theme : null,
-			workspace: payload?.workspace && typeof payload.workspace === 'object' ? payload.workspace : null,
-		}
-		await fs.writeFile(storeFilePath(), JSON.stringify(doc), 'utf-8')
-		return true
-	} catch (err) {
-		console.error('[store] write failed:', err)
-		return false
-	}
-}
-
-function registerStoreIpc(): void {
-	ipcMain.handle('resume-tailor:store-load', () => readStoreFile())
-	ipcMain.handle('resume-tailor:store-save', (_event, payload) => {
-		// Theme rides along with every save — reuse it for the caption buttons.
-		const theme = (payload as { theme?: unknown } | null)?.theme
-		if (theme === 'light' || theme === 'dark') syncTitleBarOverlay(theme)
-		return writeStoreFile(payload)
-	})
-	ipcMain.handle('resume-tailor:store-path', () => storeFilePath())
 }
 
 // ---------------------------------------------------------------------------
@@ -124,21 +65,15 @@ function registerPdfIpc(): void {
 
 // ---------------------------------------------------------------------------
 // Agent keys (OS keychain via safeStorage) + JD PDFs (app-data files).
-// Neither ever enters the workspace JSON: keys live encrypted in
-// agent-keys.json, PDF bytes in jd-pdfs/<jobId>.pdf.
+// ---------------------------------------------------------------------------
+// Agent keys (OS keychain via safeStorage, encrypted in agent-keys.json).
+// Workspace/settings docs and JD PDF blobs live in the unified SQLite store
+// instead (see db.ts) and never enter the workspace JSON as bytes.
 // ---------------------------------------------------------------------------
 const KEYS_FILENAME = 'agent-keys.json'
 
 function keysFilePath(): string {
 	return path.join(app.getPath('userData'), KEYS_FILENAME)
-}
-
-function jdDir(): string {
-	return path.join(app.getPath('userData'), 'jd-pdfs')
-}
-
-function safeJobId(jobId: unknown): string | null {
-	return typeof jobId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(jobId) ? jobId : null
 }
 
 async function readKeyFile(): Promise<Record<string, string>> {
@@ -179,25 +114,6 @@ function registerAgentIpc(): void {
 		delete store[provider]
 		await fs.writeFile(keysFilePath(), JSON.stringify(store), 'utf-8')
 		return true
-	})
-	ipcMain.handle('agent-jd:save', async (_event, payload: unknown) => {
-		const doc = payload as { jobId?: unknown; data?: unknown } | null
-		const jobId = safeJobId(doc?.jobId)
-		if (!jobId || !Array.isArray(doc?.data)) return null
-		await fs.mkdir(jdDir(), { recursive: true })
-		await fs.writeFile(path.join(jdDir(), `${jobId}.pdf`), Buffer.from(doc.data as number[]))
-		return `${jobId}.pdf`
-	})
-	ipcMain.handle('agent-jd:load', async (_event, pdfRefId: unknown) => {
-		if (typeof pdfRefId !== 'string' || !pdfRefId.endsWith('.pdf')) return null
-		const jobId = safeJobId(pdfRefId.slice(0, -4))
-		if (!jobId) return null
-		try {
-			const buf = await fs.readFile(path.join(jdDir(), `${jobId}.pdf`))
-			return Array.from(buf)
-		} catch {
-			return null
-		}
 	})
 }
 
@@ -333,7 +249,7 @@ async function loadRenderer(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
-	registerStoreIpc()
+	registerDbIpc()
 	registerPdfIpc()
 	registerAgentIpc()
 
@@ -345,8 +261,10 @@ async function boot(): Promise<void> {
 	await createSplashWindow()
 	createMainWindow()
 	// Theme the caption buttons before first paint from the stored theme.
-	readStoreFile().then((state) => {
-		if (state?.theme === 'light' || state?.theme === 'dark') syncTitleBarOverlay(state.theme)
+	// Touch the backend early so the SQLite/file store is ready for the renderer.
+	void getBackend()
+	peekStoredTheme().then((theme) => {
+		if (theme === 'light' || theme === 'dark') syncTitleBarOverlay(theme)
 	})
 
 	// Safety net: never leave the user staring at the splash forever.

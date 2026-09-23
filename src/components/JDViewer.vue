@@ -9,6 +9,7 @@ const props = defineProps<{
 
 const blobUrl = ref<string | null>(null)
 const loading = ref(false)
+const busy = ref(false)
 const notice = ref('')
 const missing = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -37,23 +38,28 @@ async function load(): Promise<void> {
 	}
 }
 
-watch(
-	() => [props.job.id, props.job.jdSource?.pdfRefId, props.job.jdSource?.extractedAt],
-	load,
-	{ immediate: true },
-)
+watch(() => [props.job.id, props.job.jdSource?.pdfRefId, props.job.jdSource?.extractedAt], load, { immediate: true })
 onBeforeUnmount(revoke)
 
 async function onPick(event: Event): Promise<void> {
 	const input = event.target as HTMLInputElement | null
 	const f = input?.files?.[0]
 	if (input) input.value = ''
-	if (!f) return
+	if (!f || busy.value) return
 	notice.value = ''
-	const res = await attachJdPdf(props.job, f)
-	if (res.error) notice.value = res.error
-	else if (res.warning) notice.value = res.warning
-	await load()
+	busy.value = true
+	try {
+		const res = await attachJdPdf(props.job, f)
+		// load() clears the notice first, so report the result after it.
+		await load()
+		if (res.error) notice.value = res.error
+		else if (res.warning) notice.value = res.warning
+	} catch (error) {
+		console.error('[jd] replace failed:', error)
+		notice.value = 'Could not read that PDF.'
+	} finally {
+		busy.value = false
+	}
 }
 </script>
 
@@ -64,7 +70,9 @@ async function onPick(event: Event): Promise<void> {
 			<span v-if="job.jdSource" class="text-xs text-slate-500">
 				{{ job.jdSource.filename }} · {{ job.jdSource.pageCount }} pages
 			</span>
-			<button class="btn btn-ghost px-2 py-1 text-xs" @click="fileInput?.click()">Replace JD</button>
+			<button class="btn btn-ghost px-2 py-1 text-xs" :disabled="busy" @click="fileInput?.click()">
+				{{ busy ? 'Reading…' : 'Replace JD' }}
+			</button>
 			<input ref="fileInput" type="file" accept="application/pdf,.pdf" class="hidden" @change="onPick" />
 		</div>
 		<p v-if="notice" class="text-xs text-amber-600">{{ notice }}</p>
@@ -84,7 +92,9 @@ async function onPick(event: Event): Promise<void> {
 		</div>
 		<div v-if="job.jobDescription" class="min-h-0 overflow-y-auto">
 			<p class="label">Extracted text (read-only)</p>
-			<pre class="rounded-lg bg-slate-50 p-3 text-xs whitespace-pre-wrap text-slate-700 dark:bg-slate-900 dark:text-slate-300">{{ job.jobDescription }}</pre>
+			<pre
+				class="rounded-lg bg-slate-50 p-3 text-xs whitespace-pre-wrap text-slate-700 dark:bg-slate-900 dark:text-slate-300"
+				>{{ job.jobDescription }}</pre>
 		</div>
 	</div>
 </template>

@@ -55,14 +55,20 @@
 	"dependencies": {
 		"@earendil-works/pi-agent-core": "^0.87.1",
 		"@earendil-works/pi-ai": "^0.87.1",
+		"fflate": "^0.8.3",
 		"flowbite": "^4.0.2",
 		"flowbite-vue": "^0.4.0",
-		"pdf-parse": "^2.4.5",
+		"localforage": "^1.10.0",
+		"remark-gfm": "^4.0.1",
+		"remark-parse": "^11.0.0",
+		"unified": "^11.0.5",
+		"unpdf": "^1.8.1",
 		"vue": "^3.5.42",
 		"vue-markdown-render": "^2.3.1"
 	},
 	"devDependencies": {
 		"@tailwindcss/vite": "^4.3.3",
+		"@types/mdast": "^4.0.4",
 		"@types/node": "^26.6.2",
 		"@vicons/fluent": "^0.13.0",
 		"@vicons/utils": "^0.1.4",

@@ -1,6 +1,11 @@
 // Central icon registry. Per-icon ESM deep imports (instead of the package
 // barrel) keep both the dev optimizer and the production bundle small.
 export { default as Add16Regular } from '@vicons/fluent/es/Add16Regular'
+export { default as Bot24Regular } from '@vicons/fluent/es/Bot24Regular'
+export { default as ChatMultiple16Regular } from '@vicons/fluent/es/ChatMultiple16Regular'
+export { default as CheckmarkCircle16Regular } from '@vicons/fluent/es/CheckmarkCircle16Regular'
+export { default as Key16Regular } from '@vicons/fluent/es/Key16Regular'
+export { default as Settings16Regular } from '@vicons/fluent/es/Settings16Regular'
 export { default as ArrowDownload16Regular } from '@vicons/fluent/es/ArrowDownload16Regular'
 export { default as ArrowDown16Regular } from '@vicons/fluent/es/ArrowDown16Regular'
 export { default as ArrowReset20Regular } from '@vicons/fluent/es/ArrowReset20Regular'

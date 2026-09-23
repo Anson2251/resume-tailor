@@ -17,5 +17,5 @@
 		"sourceMap": false,
 		"types": ["node"]
 	},
-	"include": ["electron/main.ts", "electron/preload.ts"]
+	"include": ["electron/main.ts", "electron/preload.ts", "electron/db.ts"]
 }
