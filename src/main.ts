@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import './style.css'
+import { initFlowbite } from 'flowbite'
 
 // Tag the OS for Electron title-bar CSS (top strip for the OS controls).
 if (window.electronAPI?.platform) {
@@ -14,6 +15,7 @@ window.electronAPI?.onFullscreenChanged?.((fullscreen) => {
 
 const app = createApp(App)
 app.mount('#app')
+initFlowbite()
 
 // Remove the static boot splash once Vue has mounted; AppSplash takes over
 // until the workspace file has loaded.

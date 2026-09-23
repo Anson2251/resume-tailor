@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+@import 'flowbite-vue/index.css';
+@plugin 'flowbite/plugin';
 
 /* Class-based dark mode: the theme toggle adds/removes `.dark` on <html>.
    The resume page itself stays light (see below) so the printout never changes. */

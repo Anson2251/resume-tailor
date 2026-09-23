@@ -53,6 +53,11 @@
 		}
 	},
 	"dependencies": {
+		"@earendil-works/pi-agent-core": "^0.87.1",
+		"@earendil-works/pi-ai": "^0.87.1",
+		"flowbite": "^4.0.2",
+		"flowbite-vue": "^0.4.0",
+		"pdf-parse": "^2.4.5",
 		"vue": "^3.5.42",
 		"vue-markdown-render": "^2.3.1"
 	},
@@ -69,6 +74,7 @@
 		"tailwindcss": "^4.3.3",
 		"typescript": "^5.9.3",
 		"vite": "^8.2.2",
+		"vitest": "^5.0.1",
 		"vue-tsc": "^3.3.11",
 		"wait-on": "^9.0.0"
 	}
