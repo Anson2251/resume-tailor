@@ -13,12 +13,24 @@ import {
 import ResumeForm from './components/ResumeForm.vue'
 import FormNav from './components/FormNav.vue'
 import ResumePreview from './components/ResumePreview.vue'
-import ProfileBar from './components/ProfileBar.vue'
-import SettingsModal from './components/SettingsModal.vue'
+import JobList from './components/JobList.vue'
+import AgentPanel from './components/AgentPanel.vue'
+import JDViewer from './components/JDViewer.vue'
+import Popover from './components/Popover.vue'
 import AppSplash from './components/AppSplash.vue'
+import SettingsModal from './components/SettingsModal.vue'
 import { ACCENTS, templateFont } from './data/options'
 import { SECTION_FACTORY, appendMasterItem, blankCustomItem, isSectionKey, uid } from './data/resume'
-import { blankProfile, blankWorkspace, buildPreview, cloneProfile, migrate, sampleWorkspace } from './data/workspace'
+import {
+	blankJob,
+	blankWorkspace,
+	buildPreview,
+	cloneJob,
+	migrate,
+	sampleWorkspace,
+} from './data/workspace'
+import { resolvePaneViews, type PaneView } from './agent/panes'
+import { attachJdPdf } from './agent/jd'
 import {
 	isElectron,
 	exportPdfFile,
@@ -28,7 +40,7 @@ import {
 	savePersistedState,
 	saveThemeLocal,
 } from './data/persistence'
-import type { ContentItem, Profile, ThemeName } from './data/types'
+import type { ContentItem, Job, Profile, ThemeName } from './data/types'
 
 const workspace = reactive(blankWorkspace())
 const loaded = ref(false)
@@ -70,15 +82,28 @@ function initTheme(): void {
 	applyTheme(next)
 }
 
-const activeProfile = computed(
-	() => workspace.profiles.find((p) => p.id === workspace.activeProfileId) || workspace.profiles[0],
-)
+const activeJob = computed(() => workspace.jobs.find((j) => j.id === workspace.activeJobId) || workspace.jobs[0])
+
+// Alias: form/preview components consume the Job as a Profile (Job extends Profile).
+const activeProfile = computed(() => activeJob.value)
+
+// Dual panes: each hosts Form | Preview | Agent | JD PDF (Form in one pane only).
+const paneA = ref<PaneView>('form')
+const paneB = ref<PaneView>('preview')
+
+const PANE_LABELS: Record<PaneView, string> = { form: 'Form', preview: 'Preview', agent: 'Agent', jdpdf: 'JD PDF' }
+
+function setPane(which: 'a' | 'b', view: PaneView): void {
+	const [a, b] = resolvePaneViews(which === 'a' ? view : paneA.value, which === 'b' ? view : paneB.value)
+	paneA.value = a
+	paneB.value = b
+}
 
 // The preview is derived: master content sliced and ordered by the active profile.
 const previewResume = computed(() => buildPreview(workspace.master, activeProfile.value))
 
-// The master profile edits the shared content directly (no overrides).
-const isMaster = computed(() => activeProfile.value?.master === true)
+// The master job edits the shared content directly (no overrides).
+const isMaster = computed(() => activeJob.value?.kind === 'master')
 
 // Template, accent & font are saved per profile.
 const template = computed({
@@ -122,6 +147,10 @@ const sections = computed({
 
 function persist(): void {
 	if (!loaded.value) return
+	// jobs is the source of truth; mirror into legacy profiles so old
+	// readers stay compatible.
+	workspace.profiles.splice(0, workspace.profiles.length, ...workspace.jobs)
+	workspace.activeProfileId = workspace.activeJobId
 	void savePersistedState({ workspace, theme: theme.value })
 }
 
@@ -157,18 +186,17 @@ function loadSample(): void {
 }
 
 function clearAll(): void {
-	if (!confirm('Clear all resume content and profiles?')) return
+	if (!confirm('Clear all resume content and jobs?')) return
 	Object.assign(workspace, blankWorkspace())
 }
 
-// --- Profiles ---
+// --- Jobs ---
 
-function createProfile() {
-	const name = prompt('Name this profile (e.g. “Backend roles”)', `Profile ${workspace.profiles.length + 1}`)
-	if (!name) return
-	// A new profile starts with all master content shown, and the current
+function createJob(payload: { company: string; role: string; file: File | null }) {
+	const name = payload.role || payload.company || `Job ${workspace.jobs.length}`
+	// A new job starts with all master content shown, and the current
 	// title/summary/template/accent/sections as its starting point.
-	const profile = blankProfile(name, workspace.master, {
+	const job = blankJob(name, workspace.master, {
 		template: template.value,
 		accent: accent.value,
 		font: activeProfile.value.font,
@@ -177,34 +205,80 @@ function createProfile() {
 		title: activeProfile.value.title,
 		summary: activeProfile.value.summary,
 		sections: JSON.parse(JSON.stringify(activeProfile.value.sections ?? [])),
+		company: payload.company,
+		jobTitleTarget: payload.role,
 	})
-	workspace.profiles.push(profile)
-	workspace.activeProfileId = profile.id
+	workspace.jobs.push(job)
+	workspace.profiles.push(job)
+	workspace.activeJobId = job.id
+	workspace.activeProfileId = job.id
+	if (payload.file) {
+		void attachJdPdf(job, payload.file).then((res) => {
+			if (res.error) alert(res.error)
+			else if (res.warning) alert(res.warning)
+		})
+	}
 }
 
-function duplicateProfile() {
-	const copy = cloneProfile(activeProfile.value)
+function duplicateJob(id: string) {
+	const source = workspace.jobs.find((j) => j.id === id) || activeJob.value
+	const copy = cloneJob(source)
+	workspace.jobs.push(copy)
 	workspace.profiles.push(copy)
+	workspace.activeJobId = copy.id
 	workspace.activeProfileId = copy.id
 }
 
-function renameProfile() {
-	const name = prompt('Rename profile', activeProfile.value.name)
-	if (name) activeProfile.value.name = name
+function renameJob(id: string) {
+	const job = workspace.jobs.find((j) => j.id === id)
+	if (!job) return
+	const name = prompt(job.kind === 'master' ? 'Rename' : 'Rename job', job.name)
+	if (name) job.name = name
 }
 
-function removeProfile() {
-	if (workspace.profiles.length <= 1) {
-		alert('Keep at least one profile.')
-		return
+interface UndoSnapshot {
+	jobs: Job[]
+	activeJobId: string
+}
+const undoSnapshot = ref<UndoSnapshot | null>(null)
+let undoTimer: ReturnType<typeof setTimeout> | null = null
+
+function removeJob(id: string) {
+	const index = workspace.jobs.findIndex((j) => j.id === id)
+	const job = workspace.jobs[index]
+	if (!job || job.kind === 'master') return
+	if (!confirm(`Delete job “${job.name}”? Its tailored view, cover letter and chat go too.`)) return
+	undoSnapshot.value = {
+		jobs: JSON.parse(JSON.stringify(workspace.jobs)),
+		activeJobId: workspace.activeJobId,
 	}
-	if (!confirm(`Delete profile “${activeProfile.value.name}”?`)) return
-	const index = workspace.profiles.findIndex((p) => p.id === workspace.activeProfileId)
-	const wasMaster = workspace.profiles[index]?.master
-	workspace.profiles.splice(index, 1)
-	// The master profile may be deleted; the first remaining profile takes over.
-	if (wasMaster) workspace.profiles[0].master = true
-	workspace.activeProfileId = workspace.profiles[0].id
+	if (undoTimer !== null) clearTimeout(undoTimer)
+	undoTimer = setTimeout(() => {
+		undoSnapshot.value = null
+	}, 5000)
+	workspace.jobs.splice(index, 1)
+	workspace.profiles.splice(
+		workspace.profiles.findIndex((p) => p.id === id),
+		1,
+	)
+	if (workspace.activeJobId === id) {
+		workspace.activeJobId = workspace.jobs[0].id
+		workspace.activeProfileId = workspace.jobs[0].id
+	}
+}
+
+function undoRemove(): void {
+	if (!undoSnapshot.value) return
+	const snap = undoSnapshot.value
+	undoSnapshot.value = null
+	if (undoTimer !== null) {
+		clearTimeout(undoTimer)
+		undoTimer = null
+	}
+	workspace.jobs.splice(0, workspace.jobs.length, ...snap.jobs)
+	workspace.profiles.splice(0, workspace.profiles.length, ...snap.jobs)
+	workspace.activeJobId = snap.activeJobId
+	workspace.activeProfileId = snap.activeJobId
 }
 
 // --- Master items ---
@@ -240,8 +314,8 @@ function removeItem({ key, id }: { key: string; id: string }): void {
 	const list = findItemList(key)
 	const index = list?.findIndex((item) => item.id === id) ?? -1
 	if (index !== -1) list?.splice(index, 1)
-	// Remove references from every profile so no dangling ids are saved.
-	for (const profile of workspace.profiles) {
+	// Remove references from every job so no dangling ids are saved.
+	for (const profile of workspace.jobs) {
 		const order = viewOrderFor(profile, key)
 		const i = order?.indexOf(id) ?? -1
 		if (i !== -1) order?.splice(i, 1)
@@ -257,8 +331,8 @@ function createSection(): void {
 	if (!title) return
 	const section = { id: uid(), title, items: [blankCustomItem()] }
 	workspace.master.customSections.push(section)
-	// Every profile gets the new section (shown, at the end) under its name.
-	for (const profile of workspace.profiles) {
+	// Every job gets the new section (shown, at the end) under its name.
+	for (const profile of workspace.jobs) {
 		profile.sections.push({ id: section.id, title, visible: true, direction: 'col' as const })
 		const custom = (profile.view.custom ??= {})
 		custom[section.id] = section.items.map((item) => item.id)
@@ -272,13 +346,13 @@ function removeSection(id: string): void {
 	const itemIds = new Set((section.items || []).map((item) => item.id))
 	if (
 		!confirm(
-			`Delete section “${section.title || 'Untitled section'}”? This removes it from the master and every profile.`,
+			`Delete section “${section.title || 'Untitled section'}”? This removes it from the master and every job.`,
 		)
 	)
 		return
 	workspace.master.customSections.splice(index, 1)
-	// Remove references from every profile so no dangling ids are saved.
-	for (const profile of workspace.profiles) {
+	// Remove references from every job so no dangling ids are saved.
+	for (const profile of workspace.jobs) {
 		profile.sections = (profile.sections || []).filter((s) => s.id !== id)
 		if (profile.view.custom) delete profile.view.custom[id]
 		if (profile.overrides) for (const itemId of itemIds) delete profile.overrides[itemId]
@@ -331,7 +405,7 @@ async function handleImportFile(event: Event): Promise<void> {
 		alert('That file does not look like a Resume Tailor export.')
 		return
 	}
-	if (!confirm(`Import workspace from "${file.name}"? Your current content and profiles will be replaced.`)) return
+	if (!confirm(`Import workspace from "${file.name}"? Your current content and jobs will be replaced.`)) return
 	Object.assign(workspace, incoming)
 }
 
@@ -370,6 +444,14 @@ async function exportPdfNative(filename: string): Promise<void> {
 
 watch(workspace, schedulePersist, { deep: true })
 
+// Keep the legacy profile pointer aligned when the rail switches jobs.
+watch(
+	() => workspace.activeJobId,
+	(id) => {
+		workspace.activeProfileId = id
+	},
+)
+
 onMounted(async () => {
 	initTheme()
 	try {
@@ -387,9 +469,8 @@ onMounted(async () => {
 
 <template>
 	<AppSplash v-if="!loaded" />
-	<SettingsModal v-model="settingsOpen" />
 	<div
-		v-else
+		v-if="loaded"
 		class="flex min-h-screen flex-col bg-slate-100 text-slate-900 lg:h-dvh dark:bg-slate-950 dark:text-slate-100"
 	>
 		<!-- Top bar -->
@@ -397,10 +478,10 @@ onMounted(async () => {
 			id="topbar"
 			class="no-print sticky top-0 z-10 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
 		>
-			<div class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-3 px-4 py-3">
+			<div class="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3">
 				<div class="mr-auto">
 					<h1 class="text-lg font-extrabold tracking-tight">Resume Tailor</h1>
-					<p class="text-xs text-slate-500 dark:text-slate-400">One master resume — a tailored view per profile.</p>
+					<p class="text-xs text-slate-500 dark:text-slate-400">One master resume — a tailored view per job.</p>
 				</div>
 
 				<div class="flex items-center gap-2">
@@ -460,48 +541,70 @@ onMounted(async () => {
 				</div>
 			</div>
 
-			<!-- Profile switcher -->
-			<div class="mx-auto w-full max-w-[1400px] border-t border-slate-100 px-4 py-2 dark:border-slate-800">
-				<ProfileBar
-					v-model="workspace.activeProfileId"
-					:profiles="workspace.profiles"
-					:accent="accent"
-					:override-count="overrideCount"
-					@create="createProfile"
-					@duplicate="duplicateProfile"
-					@rename="renameProfile"
-					@remove="removeProfile"
-					@clear-overrides="clearOverrides"
-				/>
-			</div>
 		</header>
+
+		<SettingsModal v-model="settingsOpen" />
 
 		<!-- Anchor rail for the form (fixed to the window) -->
 		<FormNav :profile="activeProfile" :master="workspace.master" :accent="accent" />
 
-		<!-- Main: form mirrors resume layout, preview on the right -->
+		<!-- Main: job rail + two panes (Form / Preview / Agent / JD PDF) -->
 		<main
-			class="mx-auto grid w-full max-w-[1400px] flex-1 grid-cols-1 gap-6 px-4 py-6 lg:min-h-0 lg:grid-cols-[460px_minmax(0,1fr)]"
+			class="mx-auto grid w-full max-w-[1600px] flex-1 grid-cols-1 gap-6 px-4 py-6 lg:min-h-0 lg:grid-cols-[260px_minmax(0,1fr)_minmax(0,1fr)]"
 		>
 			<div class="no-print min-w-0 lg:min-h-0 lg:overflow-y-auto">
-				<ResumeForm
-					v-model="workspace.master"
-					:profile="activeProfile"
-					:edit-master="isMaster"
-					@add="addItem"
-					@remove="removeItem"
+				<JobList
+					v-model="workspace.activeJobId"
+					:jobs="workspace.jobs"
+					@create="createJob"
+					@duplicate="duplicateJob"
+					@rename="renameJob"
+					@remove="removeJob"
+					@clear-overrides="clearOverrides"
 				/>
-				<p
-					class="mt-3 text-center text-xs text-slate-400 sticky bottom-0 backdrop-blur-md pt-2 pb-1 dark:text-slate-500"
-				>
-					Show toggles, order, and section layout save per profile. Edits on
-					<strong class="font-semibold">master</strong> change shared content; elsewhere they're customizations.
-					Auto-saves in this browser — Import / Export moves it. PDF: print → “Save as PDF”, margins None.
-				</p>
 			</div>
 
-			<div class="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
+			<div class="min-w-0 lg:min-h-0 lg:overflow-y-auto">
+				<div class="no-print mb-2 flex items-center gap-2">
+					<Popover width="12rem">
+						<template #trigger="{ toggle }">
+							<button class="btn btn-ghost text-[13px]" @click="toggle">
+								{{ PANE_LABELS[paneA] }} ▾
+							</button>
+						</template>
+						<template #default="{ close }">
+							<div class="flex flex-col gap-1">
+								<button
+									v-for="view in ['form', 'preview', 'agent', 'jdpdf'] as PaneView[]"
+									:key="view"
+									class="btn btn-ghost justify-start text-[13px]"
+									:class="{ 'bg-slate-100 dark:bg-slate-800': paneA === view }"
+									@click="setPane('a', view); close()"
+								>
+									{{ PANE_LABELS[view] }}
+								</button>
+							</div>
+						</template>
+					</Popover>
+				</div>
+				<div v-if="paneA === 'form'">
+					<ResumeForm
+						v-model="workspace.master"
+						:profile="activeProfile"
+						:edit-master="isMaster"
+						@add="addItem"
+						@remove="removeItem"
+					/>
+					<p
+						class="mt-3 text-center text-xs text-slate-400 sticky bottom-0 backdrop-blur-md pt-2 pb-1 dark:text-slate-500"
+					>
+						Show toggles, order, and section layout save per job. Edits on
+						<strong class="font-semibold">master</strong> change shared content; elsewhere they're customizations.
+						Auto-saves in this browser — Import / Export moves it. PDF: print → “Save as PDF”, margins None.
+					</p>
+				</div>
 				<ResumePreview
+					v-else-if="paneA === 'preview'"
 					:resume="previewResume"
 					v-model:template="template"
 					v-model:accent="accent"
@@ -512,7 +615,77 @@ onMounted(async () => {
 					@add-section="createSection"
 					@delete-section="removeSection"
 				/>
+				<AgentPanel
+					v-else-if="paneA === 'agent'"
+					:key="activeJob.id"
+					:job="activeJob"
+					:master="workspace.master"
+					@open-settings="settingsOpen = true"
+				/>
+				<JDViewer v-else :key="activeJob.id" :job="activeJob" />
+			</div>
+
+			<div class="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
+				<div class="no-print mb-2 flex items-center gap-2">
+					<Popover width="12rem" align="end">
+						<template #trigger="{ toggle }">
+							<button class="btn btn-ghost text-[13px]" @click="toggle">
+								{{ PANE_LABELS[paneB] }} ▾
+							</button>
+						</template>
+						<template #default="{ close }">
+							<div class="flex flex-col gap-1">
+								<button
+									v-for="view in ['form', 'preview', 'agent', 'jdpdf'] as PaneView[]"
+									:key="view"
+									class="btn btn-ghost justify-start text-[13px]"
+									:class="{ 'bg-slate-100 dark:bg-slate-800': paneB === view }"
+									@click="setPane('b', view); close()"
+								>
+									{{ PANE_LABELS[view] }}
+								</button>
+							</div>
+						</template>
+					</Popover>
+				</div>
+				<div v-if="paneB === 'form'" class="lg:min-h-0 lg:overflow-y-auto">
+					<ResumeForm
+						v-model="workspace.master"
+						:profile="activeProfile"
+						:edit-master="isMaster"
+						@add="addItem"
+						@remove="removeItem"
+					/>
+				</div>
+				<ResumePreview
+					v-else-if="paneB === 'preview'"
+					:resume="previewResume"
+					v-model:template="template"
+					v-model:accent="accent"
+					v-model:font="font"
+					v-model:columns="columns"
+					v-model:density="density"
+					v-model:sections="sections"
+					@add-section="createSection"
+					@delete-section="removeSection"
+				/>
+				<AgentPanel
+					v-else-if="paneB === 'agent'"
+					:key="activeJob.id"
+					:job="activeJob"
+					:master="workspace.master"
+					@open-settings="settingsOpen = true"
+				/>
+				<JDViewer v-else :key="activeJob.id" :job="activeJob" />
 			</div>
 		</main>
+
+		<div
+			v-if="undoSnapshot"
+			class="no-print fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+		>
+			<span class="text-sm">Job deleted.</span>
+			<button class="btn btn-primary px-3 py-1 text-sm" @click="undoRemove">Undo</button>
+		</div>
 	</div>
 </template>

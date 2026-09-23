@@ -1,5 +1,6 @@
 import { PDFParse } from 'pdf-parse'
 import { isElectron } from '../data/persistence'
+import type { Job } from '../data/types'
 
 export const JD_MAX_BYTES = 10 * 1024 * 1024
 export const JD_MAX_PAGES = 20
@@ -67,4 +68,33 @@ export async function loadJdPdf(pdfRefId: string): Promise<ArrayBuffer | null> {
 /** Object URL for the pdfium `<iframe>` viewer. Caller must revoke it. */
 export function jdBlobUrl(data: ArrayBuffer, mime = 'application/pdf'): string {
 	return URL.createObjectURL(new Blob([data], { type: mime }))
+}
+
+export interface AttachResult {
+	error?: string
+	warning?: string
+}
+
+/** Replace a job's JD from a picked PDF file. Updates jobDescription (readonly) + jdSource. */
+export async function attachJdPdf(
+	job: Job,
+	file: { name: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> },
+): Promise<AttachResult> {
+	if (file.size > JD_MAX_BYTES) return { error: 'That PDF is larger than 10MB.' }
+	const buf = await file.arrayBuffer()
+	try {
+		const { text, pageCount } = await extractJdText(buf)
+		const pdfRefId = await saveJdPdf(job.id, buf)
+		job.jobDescription = text
+		job.jdSource = {
+			filename: file.name,
+			pageCount,
+			extractedAt: new Date().toISOString(),
+			pdfRefId,
+		}
+		if (!text) return { warning: 'No selectable text in this PDF — the agent will work from the filename only.' }
+		return {}
+	} catch {
+		return { error: 'Could not read that PDF.' }
+	}
 }

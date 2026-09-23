@@ -96,13 +96,42 @@ export function blankProfile(name: string, master: MasterResume, opts: BlankProf
 	}
 }
 
-export function blankWorkspace(): Workspace {
-	const master = blankResume()
-	const profile = blankProfile('Master', master, { isMaster: true })
-	return { version: WORKSPACE_VERSION, master, profiles: [profile], activeProfileId: profile.id }
+export interface BlankJobOptions extends BlankProfileOptions {
+	company?: string
+	jobTitleTarget?: string
 }
 
-export function sampleWorkspace(): Workspace {
+export function blankJob(name: string, master: MasterResume, opts: BlankJobOptions = {}): Job {
+	const { company = '', jobTitleTarget = '', ...rest } = opts
+	const profile = blankProfile(name, master, rest)
+	return {
+		...profile,
+		kind: rest.isMaster ? 'master' : 'job',
+		company,
+		jobTitleTarget,
+		jobDescription: '',
+		jobUrl: '',
+		coverLetter: '',
+		jdSource: null,
+		chat: blankThread(),
+	}
+}
+
+export function blankWorkspace(): Workspace & WorkspaceV3 {
+	const master = blankResume()
+	const profile = blankProfile('Master', master, { isMaster: true })
+	const jobs = [toJob(profile, { kind: 'master' })]
+	return {
+		version: WORKSPACE_VERSION,
+		master,
+		profiles: [profile],
+		activeProfileId: profile.id,
+		jobs,
+		activeJobId: profile.id,
+	}
+}
+
+export function sampleWorkspace(): Workspace & WorkspaceV3 {
 	const master = sampleResume()
 	const profile = blankProfile('Frontend Engineer', master, {
 		template: 'modern',
@@ -112,15 +141,25 @@ export function sampleWorkspace(): Workspace {
 			'**Frontend engineer** with **5 years** of experience building responsive web apps with **Vue** and **React**.\nPassionate about design systems, performance, and turning ambiguous product ideas into polished user experiences.',
 		isMaster: true,
 	})
-	return { version: WORKSPACE_VERSION, master, profiles: [profile], activeProfileId: profile.id }
+	const jobs = [toJob(profile, { kind: 'master' })]
+	return {
+		version: WORKSPACE_VERSION,
+		master,
+		profiles: [profile],
+		activeProfileId: profile.id,
+		jobs,
+		activeJobId: profile.id,
+	}
 }
 
-/** Deep-copy a profile (view, tailoring and presentation) under a new name. */
-export function cloneProfile(profile: Profile, name?: string): Profile {
-	const copy = JSON.parse(JSON.stringify(profile)) as Profile
+/** Deep-copy a job (view, tailoring, letter and JD text) with a fresh chat. */
+export function cloneJob(job: Job, name?: string): Job {
+	const copy = JSON.parse(JSON.stringify(job)) as Job
 	copy.id = uid()
-	copy.name = name || `${profile.name} copy`
+	copy.name = name || `${job.name} copy`
 	copy.master = false
+	copy.kind = 'job'
+	copy.chat = blankThread()
 	return copy
 }
 
