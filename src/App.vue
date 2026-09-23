@@ -16,7 +16,7 @@ import ResumePreview from './components/ResumePreview.vue'
 import JobList from './components/JobList.vue'
 import AgentPanel from './components/AgentPanel.vue'
 import JDViewer from './components/JDViewer.vue'
-import Popover from './components/Popover.vue'
+import { FwbDropdown } from 'flowbite-vue'
 import AppSplash from './components/AppSplash.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import { ACCENTS, templateFont } from './data/options'
@@ -566,26 +566,25 @@ onMounted(async () => {
 
 			<div class="min-w-0 lg:min-h-0 lg:overflow-y-auto">
 				<div class="no-print mb-2 flex items-center gap-2">
-					<Popover width="12rem">
-						<template #trigger="{ toggle }">
-							<button class="btn btn-ghost text-[13px]" @click="toggle">
+					<FwbDropdown close-inside placement="bottom">
+						<template #trigger>
+							<button type="button" class="btn btn-ghost text-[13px]" title="Switch left pane view">
 								{{ PANE_LABELS[paneA] }} ▾
 							</button>
 						</template>
-						<template #default="{ close }">
-							<div class="flex flex-col gap-1">
-								<button
-									v-for="view in ['form', 'preview', 'agent', 'jdpdf'] as PaneView[]"
-									:key="view"
-									class="btn btn-ghost justify-start text-[13px]"
-									:class="{ 'bg-slate-100 dark:bg-slate-800': paneA === view }"
-									@click="setPane('a', view); close()"
-								>
-									{{ PANE_LABELS[view] }}
-								</button>
-							</div>
-						</template>
-					</Popover>
+						<div class="flex min-w-32 flex-col gap-1 p-1">
+							<button
+								v-for="view in ['form', 'preview', 'agent', 'jdpdf'] as PaneView[]"
+								:key="view"
+								type="button"
+								class="btn btn-ghost justify-start text-[13px] dark:text-slate-200"
+								:class="{ 'bg-slate-100 dark:bg-slate-600': paneA === view }"
+								@click="setPane('a', view)"
+							>
+								{{ PANE_LABELS[view] }}
+							</button>
+						</div>
+					</FwbDropdown>
 				</div>
 				<div v-if="paneA === 'form'">
 					<ResumeForm
@@ -627,26 +626,25 @@ onMounted(async () => {
 
 			<div class="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
 				<div class="no-print mb-2 flex items-center gap-2">
-					<Popover width="12rem" align="end">
-						<template #trigger="{ toggle }">
-							<button class="btn btn-ghost text-[13px]" @click="toggle">
+					<FwbDropdown close-inside placement="bottom" align-to-end>
+						<template #trigger>
+							<button type="button" class="btn btn-ghost text-[13px]" title="Switch right pane view">
 								{{ PANE_LABELS[paneB] }} ▾
 							</button>
 						</template>
-						<template #default="{ close }">
-							<div class="flex flex-col gap-1">
-								<button
-									v-for="view in ['form', 'preview', 'agent', 'jdpdf'] as PaneView[]"
-									:key="view"
-									class="btn btn-ghost justify-start text-[13px]"
-									:class="{ 'bg-slate-100 dark:bg-slate-800': paneB === view }"
-									@click="setPane('b', view); close()"
-								>
-									{{ PANE_LABELS[view] }}
-								</button>
-							</div>
-						</template>
-					</Popover>
+						<div class="flex min-w-32 flex-col gap-1 p-1">
+							<button
+								v-for="view in ['form', 'preview', 'agent', 'jdpdf'] as PaneView[]"
+								:key="view"
+								type="button"
+								class="btn btn-ghost justify-start text-[13px] dark:text-slate-200"
+								:class="{ 'bg-slate-100 dark:bg-slate-600': paneB === view }"
+								@click="setPane('b', view)"
+							>
+								{{ PANE_LABELS[view] }}
+							</button>
+						</div>
+					</FwbDropdown>
 				</div>
 				<div v-if="paneB === 'form'" class="lg:min-h-0 lg:overflow-y-auto">
 					<ResumeForm

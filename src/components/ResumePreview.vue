@@ -4,7 +4,7 @@ import { Icon } from '@vicons/utils'
 import ModernTemplate from './templates/ModernTemplate.vue'
 import ClassicTemplate from './templates/ClassicTemplate.vue'
 import MinimalTemplate from './templates/MinimalTemplate.vue'
-import Popover from './Popover.vue'
+import { FwbDropdown } from 'flowbite-vue'
 import {
 	ACCENTS,
 	COLUMNS,
@@ -274,21 +274,14 @@ function onViewportWheel(event: WheelEvent): void {
 
 <template>
 	<div class="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-		<div class="no-print mb-2 flex shrink-0 items-center gap-4 overflow-x-auto">
+		<div class="no-print mb-2 flex shrink-0 flex-wrap items-center gap-4">
 			<!-- Style -->
-			<Popover align="start" width="17rem">
-				<template #trigger="{ open, toggle }">
+			<FwbDropdown placement="bottom" content-wrapper-class="w-[17rem] p-4">
+				<template #trigger>
 					<button
 						type="button"
-						class="btn gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] shadow-sm ring-1 ring-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700"
-						:class="
-							open
-								? 'text-slate-900 dark:text-slate-50'
-								: 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
-						"
-						:aria-expanded="open"
+						class="btn gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-slate-500 shadow-sm ring-1 ring-slate-200 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700 dark:hover:text-slate-100"
 						title="Accent color and font"
-						@click="toggle"
 					>
 						<div class="flex gap-2 items-center">
 							<div class="flex gap-1 items-center">
@@ -451,21 +444,14 @@ function onViewportWheel(event: WheelEvent): void {
 						</div>
 					</div>
 				</div>
-			</Popover>
+			</FwbDropdown>
 			<!-- Sections: order, names, visibility (saved per profile) -->
-			<Popover align="start" width="19rem">
-				<template #trigger="{ open, toggle }">
+			<FwbDropdown placement="bottom" content-wrapper-class="w-[19rem] p-4">
+				<template #trigger>
 					<button
 						type="button"
-						class="btn gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] shadow-sm ring-1 ring-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700"
-						:class="
-							open
-								? 'text-slate-900 dark:text-slate-50'
-								: 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
-						"
-						:aria-expanded="open"
+						class="btn gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-slate-500 shadow-sm ring-1 ring-slate-200 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700 dark:hover:text-slate-100"
 						title="Reorder, rename, show/hide, lay out resume sections"
-						@click="toggle"
 					>
 						<div class="flex items-center gap-2">
 							<div class="flex items-center gap-1">
@@ -576,7 +562,7 @@ function onViewportWheel(event: WheelEvent): void {
 						</button>
 					</div>
 				</div>
-			</Popover>
+			</FwbDropdown>
 			<!-- Zoom: out / percent / in -->
 			<div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
 				<button
