@@ -14,6 +14,7 @@ import ResumeForm from './components/ResumeForm.vue'
 import FormNav from './components/FormNav.vue'
 import ResumePreview from './components/ResumePreview.vue'
 import ProfileBar from './components/ProfileBar.vue'
+import SettingsModal from './components/SettingsModal.vue'
 import AppSplash from './components/AppSplash.vue'
 import { ACCENTS, templateFont } from './data/options'
 import { SECTION_FACTORY, appendMasterItem, blankCustomItem, isSectionKey, uid } from './data/resume'
@@ -32,6 +33,7 @@ import type { ContentItem, Profile, ThemeName } from './data/types'
 const workspace = reactive(blankWorkspace())
 const loaded = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const settingsOpen = ref(false)
 
 // --- Theme (light/dark): app chrome only, the resume page stays light ---
 const THEME_KEY = 'resume-tailor-theme'
@@ -385,6 +387,7 @@ onMounted(async () => {
 
 <template>
 	<AppSplash v-if="!loaded" />
+	<SettingsModal v-model="settingsOpen" />
 	<div
 		v-else
 		class="flex min-h-screen flex-col bg-slate-100 text-slate-900 lg:h-dvh dark:bg-slate-950 dark:text-slate-100"
@@ -417,6 +420,14 @@ onMounted(async () => {
 						<Icon size="16"><ArrowDownload16Regular /></Icon> {{ exportingPdf ? 'Exporting…' : 'Export PDF' }}
 					</button>
 					<span class="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
+					<button
+						class="btn btn-ghost px-2.5 text-[13px]"
+						title="Agent settings (API keys)"
+						aria-label="Agent settings"
+						@click="settingsOpen = true"
+					>
+						Agent
+					</button>
 					<button
 						class="btn btn-ghost px-2.5"
 						:title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"

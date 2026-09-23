@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import * as path from 'node:path'
 import * as fs from 'node:fs/promises'
@@ -119,6 +119,85 @@ function registerPdfIpc(): void {
 	ipcMain.handle('resume-tailor:export-pdf', (event, filename: unknown) => exportPdf(event, filename))
 	ipcMain.on('resume-tailor:reveal-in-folder', (_event, filePath: unknown) => {
 		if (typeof filePath === 'string' && filePath) shell.showItemInFolder(filePath)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Agent keys (OS keychain via safeStorage) + JD PDFs (app-data files).
+// Neither ever enters the workspace JSON: keys live encrypted in
+// agent-keys.json, PDF bytes in jd-pdfs/<jobId>.pdf.
+// ---------------------------------------------------------------------------
+const KEYS_FILENAME = 'agent-keys.json'
+
+function keysFilePath(): string {
+	return path.join(app.getPath('userData'), KEYS_FILENAME)
+}
+
+function jdDir(): string {
+	return path.join(app.getPath('userData'), 'jd-pdfs')
+}
+
+function safeJobId(jobId: unknown): string | null {
+	return typeof jobId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(jobId) ? jobId : null
+}
+
+async function readKeyFile(): Promise<Record<string, string>> {
+	try {
+		const raw = await fs.readFile(keysFilePath(), 'utf-8')
+		const parsed: unknown = JSON.parse(raw)
+		return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {}
+	} catch {
+		return {}
+	}
+}
+
+function registerAgentIpc(): void {
+	ipcMain.handle('agent-key:set', async (_event, provider: unknown, key: unknown) => {
+		if (typeof provider !== 'string' || typeof key !== 'string' || !provider || !key) return false
+		if (!safeStorage.isEncryptionAvailable()) return false
+		const store = await readKeyFile()
+		store[provider] = safeStorage.encryptString(key).toString('base64')
+		await fs.mkdir(path.dirname(keysFilePath()), { recursive: true })
+		await fs.writeFile(keysFilePath(), JSON.stringify(store), 'utf-8')
+		return true
+	})
+	ipcMain.handle('agent-key:get', async (_event, provider: unknown) => {
+		if (typeof provider !== 'string' || !provider) return null
+		const store = await readKeyFile()
+		const cipher = store[provider]
+		if (!cipher) return null
+		try {
+			return safeStorage.decryptString(Buffer.from(cipher, 'base64'))
+		} catch (err) {
+			console.error('[agent-key] decrypt failed:', err)
+			return null
+		}
+	})
+	ipcMain.handle('agent-key:delete', async (_event, provider: unknown) => {
+		if (typeof provider !== 'string' || !provider) return false
+		const store = await readKeyFile()
+		delete store[provider]
+		await fs.writeFile(keysFilePath(), JSON.stringify(store), 'utf-8')
+		return true
+	})
+	ipcMain.handle('agent-jd:save', async (_event, payload: unknown) => {
+		const doc = payload as { jobId?: unknown; data?: unknown } | null
+		const jobId = safeJobId(doc?.jobId)
+		if (!jobId || !Array.isArray(doc?.data)) return null
+		await fs.mkdir(jdDir(), { recursive: true })
+		await fs.writeFile(path.join(jdDir(), `${jobId}.pdf`), Buffer.from(doc.data as number[]))
+		return `${jobId}.pdf`
+	})
+	ipcMain.handle('agent-jd:load', async (_event, pdfRefId: unknown) => {
+		if (typeof pdfRefId !== 'string' || !pdfRefId.endsWith('.pdf')) return null
+		const jobId = safeJobId(pdfRefId.slice(0, -4))
+		if (!jobId) return null
+		try {
+			const buf = await fs.readFile(path.join(jdDir(), `${jobId}.pdf`))
+			return Array.from(buf)
+		} catch {
+			return null
+		}
 	})
 }
 
@@ -256,6 +335,7 @@ async function loadRenderer(): Promise<void> {
 async function boot(): Promise<void> {
 	registerStoreIpc()
 	registerPdfIpc()
+	registerAgentIpc()
 
 	ipcMain.on('resume-tailor:renderer-ready', () => {
 		rendererReady = true

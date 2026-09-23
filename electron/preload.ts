@@ -2,9 +2,14 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 // Minimal, auditable bridge: the renderer can only load/save its own JSON
 // document and signal that first paint is done. No Node access is exposed.
+const AGENT_CHANNELS = ['agent-key:set', 'agent-key:get', 'agent-key:delete', 'agent-jd:save', 'agent-jd:load']
 contextBridge.exposeInMainWorld('electronAPI', {
 	isElectron: true,
 	platform: process.platform,
+	invoke: (channel: string, ...args: unknown[]) => {
+		if (!AGENT_CHANNELS.includes(channel)) throw new Error(`blocked channel: ${channel}`)
+		return ipcRenderer.invoke(channel, ...args)
+	},
 	store: {
 		load: () => ipcRenderer.invoke('resume-tailor:store-load'),
 		save: (payload: { workspace: unknown; theme: unknown }) => ipcRenderer.invoke('resume-tailor:store-save', payload),

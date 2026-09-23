@@ -17,6 +17,8 @@ export interface PdfExportResult {
 export interface ElectronAPI {
 	isElectron: boolean
 	platform: string
+	/** Allowlisted agent channels only (agent-key:*, agent-jd:*). */
+	invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
 	store: {
 		load: () => Promise<StoreFile | null>
 		save: (payload: { workspace: Workspace; theme: string | null }) => Promise<boolean>
