@@ -144,3 +144,23 @@ export interface Workspace {
 	profiles: Profile[]
 	activeProfileId: string
 }
+
+import type { ChatThread } from '../agent/threads'
+
+export interface Job extends Profile {
+	kind: 'master' | 'job'
+	company: string
+	jobTitleTarget: string
+	jobDescription: string
+	jobUrl: string
+	coverLetter: string
+	jdSource: { filename: string; pageCount: number; extractedAt: string; pdfRefId: string } | null
+	chat: ChatThread
+}
+
+export interface WorkspaceV3 {
+	version: 3
+	master: MasterResume
+	jobs: Job[]
+	activeJobId: string
+}

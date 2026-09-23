@@ -1,4 +1,6 @@
 import { ACCENTS, FONT_IDS, TEMPLATES, normalizeDensity } from './options'
+import { blankThread } from '../agent/threads'
+import type { ChatThread } from '../agent/threads'
 import {
 	SECTION_KEYS,
 	blankContact,
@@ -17,6 +19,7 @@ import type {
 	Contact,
 	ContentItem,
 	CustomSection,
+	Job,
 	MasterResume,
 	OverridePatch,
 	PreviewContact,
@@ -25,9 +28,10 @@ import type {
 	ProfileView,
 	SectionEntry,
 	Workspace,
+	WorkspaceV3,
 } from './types'
 
-export const WORKSPACE_VERSION = 2
+export const WORKSPACE_VERSION = 3
 export const STORAGE_KEY = 'resume-tailor-data-v2'
 export const LEGACY_STORAGE_KEY = 'resume-tailor-data-v1'
 
@@ -293,7 +297,38 @@ function normalizeCustomSections(raw: any): CustomSection[] {
 		}))
 }
 
-export function normalizeWorkspace(ws: any): Workspace {
+/** Lift a normalized profile into a Job, preserving v3 fields when present. */
+function toJob(profile: Profile, raw: any): Job {
+	return {
+		...profile,
+		kind: raw?.kind === 'job' || raw?.kind === 'master' ? raw.kind : profile.master ? 'master' : 'job',
+		company: typeof raw?.company === 'string' ? raw.company : '',
+		jobTitleTarget: typeof raw?.jobTitleTarget === 'string' ? raw.jobTitleTarget : '',
+		jobDescription: typeof raw?.jobDescription === 'string' ? raw.jobDescription : '',
+		jobUrl: typeof raw?.jobUrl === 'string' ? raw.jobUrl : '',
+		coverLetter: typeof raw?.coverLetter === 'string' ? raw.coverLetter : '',
+		jdSource:
+			raw?.jdSource && typeof raw.jdSource === 'object' && typeof raw.jdSource.pdfRefId === 'string'
+				? {
+						filename: typeof raw.jdSource.filename === 'string' ? raw.jdSource.filename : '',
+						pageCount: typeof raw.jdSource.pageCount === 'number' ? raw.jdSource.pageCount : 0,
+						extractedAt: typeof raw.jdSource.extractedAt === 'string' ? raw.jdSource.extractedAt : '',
+						pdfRefId: raw.jdSource.pdfRefId,
+					}
+				: null,
+		chat:
+			raw?.chat && typeof raw.chat === 'object' && raw.chat.messages && typeof raw.chat.edges === 'object'
+				? {
+						entryId: typeof raw.chat.entryId === 'string' ? raw.chat.entryId : null,
+						edges: raw.chat.edges as Record<string, string | null>,
+						messages: raw.chat.messages as ChatThread['messages'],
+						decisions: Array.isArray(raw.chat.decisions) ? (raw.chat.decisions as number[]) : null,
+					}
+				: blankThread(),
+	}
+}
+
+export function normalizeWorkspace(ws: any): Workspace & WorkspaceV3 {
 	const masterIn = ws.master || {}
 	const master: MasterResume = { contact: normalizeContact(masterIn.contact) } as MasterResume
 	for (const key of SECTION_KEYS) {
@@ -307,9 +342,11 @@ export function normalizeWorkspace(ws: any): Workspace {
 	}
 	master.customSections = normalizeCustomSections(masterIn.customSections)
 
-	let profiles: Profile[] = Array.isArray(ws.profiles)
-		? ws.profiles.map((p: any, i: number) => normalizeProfile(master, p, i))
-		: []
+	let profiles: Profile[] = Array.isArray(ws.jobs)
+		? ws.jobs.map((p: any, i: number) => normalizeProfile(master, p, i))
+		: Array.isArray(ws.profiles)
+			? ws.profiles.map((p: any, i: number) => normalizeProfile(master, p, i))
+			: []
 	if (!profiles.length)
 		profiles = [blankProfile('Master', master, { isMaster: true })].map((p, i) => normalizeProfile(master, p, i))
 
@@ -325,9 +362,15 @@ export function normalizeWorkspace(ws: any): Workspace {
 	const activeProfileId =
 		typeof ws.activeProfileId === 'string' && profiles.some((p) => p.id === ws.activeProfileId)
 			? ws.activeProfileId
-			: profiles[0].id
+			: typeof ws.activeJobId === 'string' && profiles.some((p) => p.id === ws.activeJobId)
+				? ws.activeJobId
+				: profiles[0].id
 
-	return { version: WORKSPACE_VERSION, master, profiles, activeProfileId }
+	const raws: any[] = Array.isArray(ws.jobs) ? ws.jobs : Array.isArray(ws.profiles) ? ws.profiles : []
+	const jobs: Job[] = profiles.map((p, i) => toJob(p, raws[i]))
+	const activeJobId = activeProfileId
+
+	return { version: WORKSPACE_VERSION, master, profiles, activeProfileId, jobs, activeJobId }
 }
 
 /** Move a profile's field overrides into the shared master content. */
