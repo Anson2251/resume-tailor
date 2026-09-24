@@ -47,7 +47,9 @@ function fieldAllowed(itemId: string, field: string, master: MasterResume): { se
 	if (!found) return { error: `Unknown item id "${itemId}". Call read_resume first to list valid ids.` }
 	const fields = allowedFields(found.section)
 	if (!fields || !fields.includes(field)) {
-		return { error: `Field "${field}" is not editable on this item. Allowed: ${(fields || []).join(', ') || '(none)'}.` }
+		return {
+			error: `Field "${field}" is not editable on this item. Allowed: ${(fields || []).join(', ') || '(none)'}.`,
+		}
 	}
 	return { section: found.section }
 }
@@ -151,12 +153,15 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 			const before = found ? readField(found.item, p.field) : undefined
 			const overrideBefore = job.overrides?.[p.itemId]?.[p.field]
 			mutate.applyOverride(p.itemId, { [p.field]: p.value })
-			return ok(`Override applied: ${p.itemId}.${p.field} (${String(before ?? '').length} → ${p.value.length} chars).`, {
-				itemId: p.itemId,
-				field: p.field,
-				before: overrideBefore ?? before ?? null,
-				after: p.value,
-			})
+			return ok(
+				`Override applied: ${p.itemId}.${p.field} (${String(before ?? '').length} → ${p.value.length} chars).`,
+				{
+					itemId: p.itemId,
+					field: p.field,
+					before: overrideBefore ?? before ?? null,
+					after: p.value,
+				},
+			)
 		},
 	}
 
@@ -216,9 +221,7 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 			const view = job.view as unknown as Record<string, string[]>
 			const shown = view[p.section]
 			if (!Array.isArray(shown)) {
-				return err(
-					`Unknown section "${p.section}". Use a repeatable section id from read_resume (not "summary").`,
-				)
+				return err(`Unknown section "${p.section}". Use a repeatable section id from read_resume (not "summary").`)
 			}
 			const byId = allMasterItems(master)
 			const unknown = p.ids.filter((id) => !byId.has(id))

@@ -1,4 +1,5 @@
 import { reactive, readonly } from 'vue'
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import { scheduleSettingsPersist } from '../data/store/settings'
 
 export const AGENT_SETTINGS_KEY = 'resume-tailor-agent-settings-v1'
@@ -20,6 +21,7 @@ export const DEFAULT_AGENT_SETTINGS = {
 	modelId: 'claude-sonnet-4-5',
 	systemPrompt: DEFAULT_SYSTEM_PROMPT,
 	contextChars: 8000,
+	thinkingLevel: 'off',
 } as const
 
 export interface AgentSettings {
@@ -27,6 +29,15 @@ export interface AgentSettings {
 	modelId: string
 	systemPrompt: string
 	contextChars: number
+	thinkingLevel: ThinkingLevel
+}
+
+const THINKING_LEVELS: readonly ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+
+export function normalizeThinkingLevel(raw: unknown): ThinkingLevel {
+	return typeof raw === 'string' && (THINKING_LEVELS as readonly string[]).includes(raw)
+		? (raw as ThinkingLevel)
+		: DEFAULT_AGENT_SETTINGS.thinkingLevel
 }
 
 export type AgentSettingsState = AgentSettings
@@ -41,6 +52,7 @@ export function normalizeAgentSettings(raw: unknown): AgentSettings {
 	if (typeof doc.systemPrompt === 'string' && doc.systemPrompt.trim()) base.systemPrompt = doc.systemPrompt
 	if (typeof doc.contextChars === 'number' && Number.isFinite(doc.contextChars))
 		base.contextChars = Math.min(50000, Math.max(1000, Math.round(doc.contextChars)))
+	base.thinkingLevel = normalizeThinkingLevel(doc.thinkingLevel)
 	return base
 }
 

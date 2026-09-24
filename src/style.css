@@ -328,6 +328,18 @@ body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar h
 	line-height: calc(1.625 * (0.9 + 0.1 * var(--sp, 1)));
 }
 
+
+
+button > span[class=""] {
+    display: flex;
+    align-items: center;
+}
+
+button {
+    display: flex;
+    align-items: center;
+}
+
 /* ---------- Markdown content ----------
    Unlayered so it beats Tailwind Preflight, which strips list styles.
    Rhythm: no margins by default (the surrounding template spacing already

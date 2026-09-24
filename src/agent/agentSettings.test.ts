@@ -15,26 +15,34 @@ it('loads defaults on first run', () => {
 	expect(loadAgentSettings()).toEqual({ ...DEFAULT_AGENT_SETTINGS })
 })
 
-it('round-trips provider, model, prompt and context chars', () => {
+it('round-trips provider, model, prompt, context chars and thinking level', () => {
 	saveAgentSettings({
 		provider: 'openai',
 		modelId: 'gpt-4o',
 		systemPrompt: 'Be concise.',
 		contextChars: 16000,
+		thinkingLevel: 'medium',
 	})
 	expect(loadAgentSettings()).toEqual({
 		provider: 'openai',
 		modelId: 'gpt-4o',
 		systemPrompt: 'Be concise.',
 		contextChars: 16000,
+		thinkingLevel: 'medium',
 	})
 })
 
 it('keeps the "not configured" empty state', () => {
-	saveAgentSettings({ provider: '', modelId: '', systemPrompt: 'x', contextChars: 8000 })
+	saveAgentSettings({ provider: '', modelId: '', systemPrompt: 'x', contextChars: 8000, thinkingLevel: 'off' })
 	const loaded = loadAgentSettings()
 	expect(loaded.provider).toBe('')
 	expect(loaded.modelId).toBe('')
+})
+
+it('falls back to off for unknown thinking levels', () => {
+	expect(normalizeAgentSettings({ thinkingLevel: 'ultra' }).thinkingLevel).toBe('off')
+	expect(normalizeAgentSettings({ thinkingLevel: 'high' }).thinkingLevel).toBe('high')
+	expect(normalizeAgentSettings({}).thinkingLevel).toBe('off')
 })
 
 it('clamps context chars into range', () => {

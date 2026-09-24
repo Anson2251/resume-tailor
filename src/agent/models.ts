@@ -2,13 +2,8 @@ import { builtinModels } from '@earendil-works/pi-ai/providers/all'
 import { createProvider } from '@earendil-works/pi-ai'
 import { envApiKeyAuth, openAICompletionsApi } from '@earendil-works/pi-ai/compat'
 import type { Api, Model } from '@earendil-works/pi-ai'
-import type { StreamFn } from '@earendil-works/pi-agent-core'
-import {
-	disabledKey,
-	loadProviderSettings,
-	saveProviderSettings,
-	type CustomProvider,
-} from './providerSettings'
+import type { StreamFn, ThinkingLevel } from '@earendil-works/pi-agent-core'
+import { disabledKey, loadProviderSettings, saveProviderSettings, type CustomProvider } from './providerSettings'
 
 export interface ModelChoice {
 	provider: string
@@ -236,3 +231,42 @@ export function removeCustomProvider(id: string): void {
 
 /** Bound stream function for `new Agent({ streamFn })`. */
 export const streamFn: StreamFn = (model, ctx, opts) => models.streamSimple(model, ctx, opts)
+
+/** Reasoning-effort stops in slider order. `off` is always available. */
+export const THINKING_LEVELS: readonly ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+
+/**
+ * Adjustable reasoning levels for one model: `off` plus every level the
+ * model's `thinkingLevelMap` maps to a native value. Unknown models (or maps
+ * with nothing adjustable, e.g. `{"off": null}`) yield `['off']` — the UI
+ * hides the slider then.
+ */
+export function thinkingLevelsFor(provider: string, id: string): ThinkingLevel[] {
+	if (!provider || !id) return ['off']
+	const map = resolveModel(provider, id)?.thinkingLevelMap as Partial<Record<ThinkingLevel, string | null>> | undefined
+	if (!map) return ['off']
+	const out: ThinkingLevel[] = ['off']
+	for (const level of THINKING_LEVELS) {
+		if (level === 'off') continue
+		if (typeof map[level] === 'string' && (map[level] as string).length > 0) out.push(level)
+	}
+	return out
+}
+
+/**
+ * Clamp a stored level to what the model supports: the highest supported
+ * level at or below the stored one, else `off` (never silently upgrade —
+ * higher reasoning costs more). Unknown models yield `off`; the agent can't
+ * run them anyway until they resolve.
+ */
+export function resolveThinkingLevel(provider: string, id: string, stored: ThinkingLevel): ThinkingLevel {
+	if (!provider || !id) return stored
+	const supported = new Set(thinkingLevelsFor(provider, id))
+	if (supported.size <= 1) return 'off'
+	if (supported.has(stored)) return stored
+	const order = THINKING_LEVELS as readonly ThinkingLevel[]
+	let idx = order.indexOf(stored)
+	if (idx < 0) return 'off'
+	while (idx >= 0 && !supported.has(order[idx])) idx--
+	return idx >= 0 ? order[idx] : 'off'
+}

@@ -80,6 +80,23 @@ describe('tool activity persistence', () => {
 		])
 	})
 
+	it('preserves reasoning on assistant turns and drops it elsewhere', () => {
+		const raw = {
+			entryId: 'u1',
+			edges: { u1: null, a1: 'u1' },
+			messages: {
+				u1: { id: 'u1', role: 'user', text: 'hi', timestamp: 1, reasoning: 'should not stick' },
+				a1: { id: 'a1', role: 'assistant', text: 'Checking…', timestamp: 2, reasoning: 'Let me think.' },
+				a2: { id: 'a2', role: 'assistant', text: 'Done.', timestamp: 3, reasoning: 42 },
+			},
+			decisions: null,
+		}
+		const t = normalizeThread(raw)
+		expect(t.messages['u1'].reasoning).toBeUndefined()
+		expect(t.messages['a1'].reasoning).toBe('Let me think.')
+		expect(t.messages['a2'].reasoning).toBeUndefined()
+	})
+
 	it('drops corrupt tool entries but keeps the message', () => {
 		const raw = {
 			entryId: 'u1',

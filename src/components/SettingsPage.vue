@@ -22,13 +22,13 @@ import {
 	modelsForProvider,
 	removeCustomModel,
 	removeCustomProvider,
+	resolveModel,
+	resolveThinkingLevel,
 	setModelEnabled,
+	thinkingLevelsFor,
 } from '../agent/models'
-import {
-	normalizeBaseUrl,
-	validateModelId,
-	validateProviderId,
-} from '../agent/providerSettings'
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
+import { normalizeBaseUrl, validateModelId, validateProviderId } from '../agent/providerSettings'
 import { DEFAULT_AGENT_SETTINGS, DEFAULT_SYSTEM_PROMPT, useAgentSettingsMutable } from '../agent/agentSettings'
 import { isElectron } from '../data/persistence'
 import { Bot24Regular, ChatMultiple16Regular, Dismiss16Regular, Settings16Regular } from '../data/icons'
@@ -119,7 +119,11 @@ function scheduleModelSave(): void {
 	modelTimer = setTimeout(() => {
 		modelTimer = null
 		try {
-			const json = JSON.stringify({ provider: settings.provider, modelId: settings.modelId })
+			const json = JSON.stringify({
+				provider: settings.provider,
+				modelId: settings.modelId,
+				thinkingLevel: settings.thinkingLevel,
+			})
 			if (json !== lastModelSavedJson) {
 				lastModelSavedJson = json
 				save()
@@ -131,7 +135,7 @@ function scheduleModelSave(): void {
 	}, 500)
 }
 
-watch(() => [settings.provider, settings.modelId], scheduleModelSave)
+watch(() => [settings.provider, settings.modelId, settings.thinkingLevel], scheduleModelSave)
 
 // --- Providers section (wisp-pro ProvidersView pattern, pi-ai data) ---
 // Configures keys and model inventories. Picking the default model lives on
@@ -187,6 +191,12 @@ async function refreshKeys(): Promise<void> {
 			}
 		}),
 	)
+}
+
+/** IME composition Enter confirms the candidate — it must not submit the key. */
+function saveKeyOnEnter(e: KeyboardEvent, provider: string): void {
+	if (e.isComposing) return
+	void saveKey(provider)
 }
 
 async function saveKey(provider: string): Promise<void> {
@@ -317,14 +327,23 @@ const allEnabledModels = computed<ModelOption[]>(() =>
 
 const defaultOption = ref<ModelOption | null>(null)
 
+/** Free-text filter narrowing the model picker (matches label, id, provider). */
+const modelFilter = ref('')
+
+const filteredEnabledModels = computed<ModelOption[]>(() => {
+	const query = modelFilter.value.trim().toLowerCase()
+	if (!query) return allEnabledModels.value
+	return allEnabledModels.value.filter((m) =>
+		[m.label, m.id, m.providerName].some((field) => field.toLowerCase().includes(query)),
+	)
+})
+
 function syncDefaultOption(): void {
 	if (!settings.modelId) {
 		defaultOption.value = null
 		return
 	}
-	const match = allEnabledModels.value.find(
-		(m) => m.provider === settings.provider && m.id === settings.modelId,
-	)
+	const match = allEnabledModels.value.find((m) => m.provider === settings.provider && m.id === settings.modelId)
 	defaultOption.value = match ?? {
 		provider: settings.provider,
 		providerName: settings.provider,
@@ -356,6 +375,39 @@ function clearModel(): void {
 	settings.provider = ''
 	settings.modelId = ''
 }
+
+// --- Reasoning effort slider (pi-ai thinking levels, per-model support) ---
+
+const supportedThinking = computed<ThinkingLevel[]>(() => thinkingLevelsFor(settings.provider, settings.modelId))
+
+const thinkingLabel = computed(() => {
+	const level = settings.thinkingLevel
+	return level.charAt(0).toUpperCase() + level.slice(1)
+})
+
+/** Native effort value the provider receives (often mirrors the level name). */
+const thinkingNativeHint = computed(() => {
+	if (settings.thinkingLevel === 'off') return ''
+	const mapped = resolveModel(settings.provider, settings.modelId)?.thinkingLevelMap?.[settings.thinkingLevel] as
+		string | null | undefined
+	return typeof mapped === 'string' && mapped.length > 0 ? mapped : ''
+})
+
+const thinkingIndex = computed(() => Math.max(0, supportedThinking.value.indexOf(settings.thinkingLevel)))
+
+function setThinkingIndex(raw: number): void {
+	const idx = Math.min(supportedThinking.value.length - 1, Math.max(0, Math.round(raw)))
+	const level = supportedThinking.value[idx] ?? 'off'
+	settings.thinkingLevel = resolveThinkingLevel(settings.provider, settings.modelId, level)
+}
+
+/** Keep a stored level valid when the model changes (clamp down, never up). */
+function clampThinkingLevel(): void {
+	const resolved = resolveThinkingLevel(settings.provider, settings.modelId, settings.thinkingLevel)
+	if (resolved !== settings.thinkingLevel) settings.thinkingLevel = resolved
+}
+
+watch(() => [settings.provider, settings.modelId], clampThinkingLevel)
 
 // --- Conversation section (autosaved, debounced) ---
 
@@ -409,15 +461,23 @@ watch(
 watch(open, async (isOpen) => {
 	if (isOpen) {
 		activeSection.value = 'providers'
-		lastModelSavedJson = JSON.stringify({ provider: settings.provider, modelId: settings.modelId })
+		lastModelSavedJson = JSON.stringify({
+			provider: settings.provider,
+			modelId: settings.modelId,
+			thinkingLevel: settings.thinkingLevel,
+		})
+		// Self-heal a level the current model no longer supports (e.g. after
+		// a model switch outside this page); snapshotted above, so the clamp
+		// below persists through the debounced model save.
+		clampThinkingLevel()
 		lastConvSavedJson = JSON.stringify({ prompt: settings.systemPrompt, chars: settings.contextChars })
 		modelSaveState.value = 'idle'
 		convSaveState.value = 'idle'
 		const ids = providerList.value.map((p) => p.value)
-		selectedProviderId.value =
-			settings.provider && ids.includes(settings.provider) ? settings.provider : (ids[0] ?? '')
+		selectedProviderId.value = settings.provider && ids.includes(settings.provider) ? settings.provider : (ids[0] ?? '')
 		syncDefaultOption()
 		syncConversationDraft()
+		modelFilter.value = ''
 		resetAddForm()
 		showAddProvider.value = false
 		await refreshKeys()
@@ -451,7 +511,7 @@ function onKeydown(event: KeyboardEvent): void {
 					</p>
 				</div>
 				<FwbBadge :type="statusBadge">{{ statusLabel }}</FwbBadge>
-				<FwbButton size="sm" color="alternative" aria-label="Close settings" @click="close">
+				<FwbButton size="sm" color="alternative" square aria-label="Close settings" @click="close">
 					<Icon size="16"><Dismiss16Regular /></Icon>
 				</FwbButton>
 			</div>
@@ -510,7 +570,12 @@ function onKeydown(event: KeyboardEvent): void {
 								<span class="text-sm font-semibold text-slate-900 dark:text-slate-100">Providers</span>
 								<div class="flex items-center gap-2">
 									<FwbBadge type="default">{{ providerCountLabel }}</FwbBadge>
-									<FwbButton size="xs" color="alternative" aria-label="Add custom provider" @click="showAddProvider = !showAddProvider">
+									<FwbButton
+										size="xs"
+										color="alternative"
+										aria-label="Add custom provider"
+										@click="showAddProvider = !showAddProvider"
+									>
 										Add
 									</FwbButton>
 								</div>
@@ -526,9 +591,7 @@ function onKeydown(event: KeyboardEvent): void {
 								<FwbInput v-model="addModelName" label="First model name (optional)" placeholder="Llama 3.3 70B" />
 								<p v-if="addError" class="text-xs text-red-600 dark:text-red-400">{{ addError }}</p>
 								<div class="flex justify-end gap-2">
-									<FwbButton size="xs" color="alternative" @click="showAddProvider = false">
-										Cancel
-									</FwbButton>
+									<FwbButton size="xs" color="alternative" @click="showAddProvider = false"> Cancel </FwbButton>
 									<FwbButton size="xs" @click="handleAddProvider">Add provider</FwbButton>
 								</div>
 							</div>
@@ -557,11 +620,7 @@ function onKeydown(event: KeyboardEvent): void {
 											}}
 										</span>
 									</span>
-									<FwbBadge
-										v-if="settings.provider === provider.value && isModelConfigured"
-										size="xs"
-										type="green"
-									>
+									<FwbBadge v-if="settings.provider === provider.value && isModelConfigured" size="xs" type="green">
 										Default
 									</FwbBadge>
 								</button>
@@ -585,19 +644,14 @@ function onKeydown(event: KeyboardEvent): void {
 									<span class="font-mono text-xs text-slate-400 dark:text-slate-500">
 										ID: {{ detailProvider.value }}
 									</span>
-									<FwbButton
-										v-if="detailProvider.custom"
-										size="xs"
-										color="alternative"
-										@click="handleRemoveProvider"
-									>
+									<FwbButton v-if="detailProvider.custom" size="xs" color="alternative" @click="handleRemoveProvider">
 										Delete
 									</FwbButton>
 								</div>
 							</header>
 
 							<div class="flex flex-col gap-4">
-								<FwbCard>
+								<FwbCard class="p-5">
 									<div class="flex items-center gap-2">
 										<h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">API key</h4>
 										<FwbBadge :type="hasKeys[detailProvider.value] ? 'green' : 'default'" size="xs">
@@ -616,7 +670,7 @@ function onKeydown(event: KeyboardEvent): void {
 												type="password"
 												placeholder="sk-…"
 												:disabled="!!keyBusy[detailProvider.value]"
-												@keyup.enter="saveKey(detailProvider.value)"
+												@keyup.enter="saveKeyOnEnter($event, detailProvider.value)"
 											/>
 										</div>
 										<div class="flex gap-2">
@@ -630,9 +684,7 @@ function onKeydown(event: KeyboardEvent): void {
 											</FwbButton>
 											<FwbButton
 												size="sm"
-												:disabled="
-													!!keyBusy[detailProvider.value] || !(keyInputs[detailProvider.value] ?? '').trim()
-												"
+												:disabled="!!keyBusy[detailProvider.value] || !(keyInputs[detailProvider.value] ?? '').trim()"
 												@click="saveKey(detailProvider.value)"
 											>
 												Save key
@@ -644,7 +696,7 @@ function onKeydown(event: KeyboardEvent): void {
 									</p>
 								</FwbCard>
 
-								<FwbCard>
+								<FwbCard class="p-5">
 									<div class="flex items-center gap-2">
 										<h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Models</h4>
 										<FwbTooltip placement="right">
@@ -656,11 +708,27 @@ function onKeydown(event: KeyboardEvent): void {
 												</span>
 											</template>
 											<template #content>
-												Disabled models stay hidden from the Model page. Only custom models can be
-												deleted.
+												Disabled models stay hidden from the Model page. Only custom models can be deleted.
 											</template>
 										</FwbTooltip>
 									</div>
+									<p v-if="!detailModels.length" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+										This provider lists no models — add a custom one below.
+									</p>
+									<div class="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row dark:border-slate-800">
+										<div class="flex-1">
+											<FwbInput size="sm" v-model="newModelId" placeholder="New model id" />
+										</div>
+										<div class="flex-1">
+											<FwbInput size="sm" v-model="newModelName" placeholder="Display name (optional)" />
+										</div>
+										<div class="flex gap-2">
+											<FwbButton size="sm" @click="handleAddModel"> Add Model</FwbButton>
+										</div>
+									</div>
+									<p v-if="newModelError" class="mt-2 text-xs text-red-600 dark:text-red-400">
+										{{ newModelError }}
+									</p>
 									<ul class="mt-3 flex flex-col gap-1">
 										<li
 											v-for="model in detailModels"
@@ -692,26 +760,6 @@ function onKeydown(event: KeyboardEvent): void {
 											</FwbButton>
 										</li>
 									</ul>
-									<p
-										v-if="!detailModels.length"
-										class="mt-2 text-xs text-amber-600 dark:text-amber-400"
-									>
-										This provider lists no models — add a custom one below.
-									</p>
-									<div class="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row dark:border-slate-800">
-										<div class="flex-1">
-											<FwbInput v-model="newModelId" placeholder="New model id" />
-										</div>
-										<div class="flex-1">
-											<FwbInput v-model="newModelName" placeholder="Display name (optional)" />
-										</div>
-										<FwbButton size="sm" class="shrink-0 self-end" @click="handleAddModel">
-											Add model
-										</FwbButton>
-									</div>
-									<p v-if="newModelError" class="mt-2 text-xs text-red-600 dark:text-red-400">
-										{{ newModelError }}
-									</p>
 								</FwbCard>
 							</div>
 						</div>
@@ -719,7 +767,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 					<!-- Dedicated Model page: pick the default agent model -->
 					<div v-else-if="activeSection === 'model'" class="flex flex-col gap-4">
-						<FwbCard>
+						<FwbCard class="p-5">
 							<div class="flex items-center gap-2">
 								<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Default agent model</h3>
 								<FwbTooltip placement="right">
@@ -731,18 +779,19 @@ function onKeydown(event: KeyboardEvent): void {
 										</span>
 									</template>
 									<template #content>
-										Used for chat, tailoring, and cover letters in every job. Only enabled models are
-										listed — manage them under Providers.
+										Used for chat, tailoring, and cover letters in every job. Only enabled models are listed — manage
+										them under Providers.
 									</template>
 								</FwbTooltip>
 							</div>
-							<div class="mt-4">
+							<div class="mt-4 flex flex-col gap-3">
+								<FwbInput v-model="modelFilter" placeholder="Filter by name, id, or provider…" />
 								<FwbAutocomplete
 									v-model="defaultOption"
 									label="Model"
 									placeholder="Search models…"
 									no-results-text="No models match."
-									:options="allEnabledModels"
+									:options="filteredEnabledModels"
 									:search-fields="['label', 'id', 'providerName']"
 									display="label"
 									:z-index="60"
@@ -771,11 +820,60 @@ function onKeydown(event: KeyboardEvent): void {
 								</div>
 							</div>
 						</FwbCard>
+						<FwbCard class="p-5">
+							<div class="flex items-center gap-2">
+								<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Reasoning effort</h3>
+								<FwbTooltip placement="right">
+									<template #trigger>
+										<span
+											class="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-slate-100 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+										>
+											?
+										</span>
+									</template>
+									<template #content>
+										How hard the model thinks before answering. Off disables reasoning; higher levels spend more
+										thinking tokens for harder tasks. Only models with adjustable reasoning show the slider.
+									</template>
+								</FwbTooltip>
+								<span
+									class="ml-auto rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 tabular-nums dark:bg-indigo-900 dark:text-indigo-200"
+								>
+									{{ thinkingLabel }}
+								</span>
+							</div>
+							<div v-if="supportedThinking.length > 1" class="mt-4">
+								<div class="flex items-center gap-2">
+									<span class="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">Off</span>
+									<input
+										type="range"
+										:min="0"
+										:max="supportedThinking.length - 1"
+										:step="1"
+										:value="thinkingIndex"
+										class="w-full accent-indigo-600"
+										aria-label="Reasoning effort"
+										:title="`Reasoning effort: ${thinkingLabel}`"
+										@input="setThinkingIndex(Number(($event.target as HTMLInputElement).value))"
+									/>
+									<span class="shrink-0 text-[11px] text-slate-400 capitalize dark:text-slate-500">{{
+										supportedThinking[supportedThinking.length - 1]
+									}}</span>
+								</div>
+								<p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+									Effort {{ thinkingLabel.toLowerCase()
+									}}<span v-if="thinkingNativeHint"> · sends “{{ thinkingNativeHint }}” to the provider</span>.
+								</p>
+							</div>
+							<p v-else class="mt-4 text-xs text-slate-500 dark:text-slate-400">
+								This model doesn't support adjustable reasoning.
+							</p>
+						</FwbCard>
 					</div>
 
 					<!-- Conversation -->
 					<div v-else class="flex flex-col gap-4">
-						<FwbCard>
+						<FwbCard class="p-5">
 							<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Assistant behavior</h3>
 							<div class="mt-4">
 								<FwbTextarea

@@ -359,6 +359,93 @@ it('signals waiting (not streaming) while the post-tool follow-up is pending', a
 	expect(chat.assistantStreaming.value).toBe(false)
 })
 
+/** One assistant turn: thinking chunks, then text, then a tool call. */
+function thinkingTextToolTurn(
+	thinkingChunks: string[],
+	text: string,
+	callId: string,
+	name: string,
+	inputJson: string,
+): string {
+	const thinkingBlocks = thinkingChunks.map(
+		(c) =>
+			'event: content_block_delta\n' +
+			`data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":${JSON.stringify(c)}}}\n\n`,
+	)
+	return [
+		'event: message_start',
+		'data: {"type":"message_start","message":{"id":"msg_4","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}}',
+		'',
+		'event: content_block_start',
+		'data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}',
+		'',
+		...thinkingBlocks,
+		'event: content_block_stop',
+		'data: {"type":"content_block_stop","index":0}',
+		'',
+		'event: content_block_start',
+		'data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}',
+		'',
+		'event: content_block_delta',
+		`data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":${JSON.stringify(text)}}}`,
+		'',
+		'event: content_block_stop',
+		'data: {"type":"content_block_stop","index":1}',
+		'',
+		'event: content_block_start',
+		`data: {"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":${JSON.stringify(callId)},"name":${JSON.stringify(name)},"input":{}}}`,
+		'',
+		'event: content_block_delta',
+		`data: {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":${JSON.stringify(inputJson)}}}`,
+		'',
+		'event: content_block_stop',
+		'data: {"type":"content_block_stop","index":2}',
+		'',
+		'event: message_delta',
+		'data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":2}}',
+		'',
+		'event: message_stop',
+		'data: {"type":"message_stop"}',
+		'',
+	].join('\n')
+}
+
+it('captures thinking per turn and carries it into the post-tool follow-up', async () => {
+	// Reasoning models think before answering and calling tools. The thinking
+	// is stored on the turn for the Thinking panel, while pi-agent keeps the
+	// full blocks (with signatures) in its live transcript and re-sends them
+	// on the post-tool follow-up — our pass-through convertToLlm preserves that.
+	mockFetch([
+		thinkingTextToolTurn(['Let me ', 'check the posting…'], 'Checking…', 'toolu_think', 'read_jd', '{}'),
+		textTurn('Done.'),
+	])
+	await setApiKey('anthropic', 'sk-test-key')
+	const master = blankResume()
+	const job = blankJob('Test job', master)
+	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
+	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
+		systemPrompt: 'Test system prompt.',
+		contextChars: 8000,
+	})
+
+	await chat.send('Tailor me.')
+
+	expect(chat.error.value).toBe(null)
+	expect(requests.length).toBe(2)
+	const thread = activeConversation(job.conversations, job.activeConversationId).thread
+	const assistants = Object.values(thread.messages).filter((m) => m.role === 'assistant')
+	expect(assistants).toHaveLength(2)
+	// Thinking landed on the requesting turn, exactly once, beside the text.
+	expect(assistants[0].reasoning).toBe('Let me check the posting…')
+	expect(assistants[0].text).toBe('Checking…')
+	expect(assistants[0].toolCalls).toHaveLength(1)
+	// …and pi-agent carried it into the post-tool follow-up request.
+	const followUp = JSON.parse(String(requests[1].init.body))
+	expect(JSON.stringify(followUp.messages)).toContain('Let me check the posting…')
+	expect(assistants[1].text).toBe('Done.')
+	expect(assistants[1].reasoning ?? '').toBe('')
+})
+
 it('rehydrates the persisted thread on remount so history survives', async () => {
 	mockFetch([textTurn('First reply.'), textTurn('Second reply.')])
 	await setApiKey('anthropic', 'sk-test-key')

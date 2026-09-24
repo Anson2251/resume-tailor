@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { contentText, type Message } from '@earendil-works/pi-ai'
-import { Agent, type AgentMessage } from '@earendil-works/pi-agent-core'
+import { Agent, type AgentMessage, type ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { Job, MasterResume } from '../data/types'
 import type { ChatThread } from './threads'
 import { uid } from '../data/resume'
@@ -47,6 +47,9 @@ const TOOL_ARGS_DISPLAY_CHARS = 16000
 // Kept generous so JSON results stay parseable for the tree view (a cut-off
 // payload fails JSON.parse and falls back to plain text rendering).
 const TOOL_RESULT_DISPLAY_CHARS = 8000
+// Stored reasoning is display-only (the live transcript keeps full blocks),
+// but still bounded so persisted threads stay small.
+const REASONING_DISPLAY_CHARS = 6000
 
 function truncateDisplay(text: string, max: number): string {
 	const clean = text.trim()
@@ -83,6 +86,24 @@ function toolResultDisplay(result: unknown): { text?: string; isError?: boolean 
 	const isError = (r as { isError?: unknown }).isError
 	if (isError === true) out.isError = true
 	return out
+}
+
+/** Thinking-block text of an assistant message (ignored by contentText). */
+function agentReasoning(msg: AgentMessage): string {
+	const content = (msg as { content?: unknown }).content
+	if (!Array.isArray(content)) return ''
+	try {
+		return content
+			.filter(
+				(block): block is { type: 'thinking'; thinking: unknown } =>
+					!!block && typeof block === 'object' && (block as { type?: unknown }).type === 'thinking',
+			)
+			.map((block) => (typeof block.thinking === 'string' ? block.thinking : ''))
+			.filter(Boolean)
+			.join('\n')
+	} catch {
+		return ''
+	}
 }
 
 function msgRole(msg: AgentMessage): string | undefined {
@@ -166,7 +187,9 @@ export function dropOrphanToolResults(msgs: AgentMessage[]): AgentMessage[] {
  * truncator thinks tool turns are free and slices batches apart.
  */
 function messageSize(msg: AgentMessage): number {
-	let size = agentText(msg).length + 1
+	// Thinking blocks carry no `text` but can dominate the context window —
+	// count them too, or truncation under-budgets reasoning models.
+	let size = agentText(msg).length + agentReasoning(msg).length + 1
 	try {
 		const content = (msg as { content?: unknown }).content
 		if (Array.isArray(content)) {
@@ -236,6 +259,7 @@ function toLlmText(text: string): Message[] {
 export interface AgentChatOptions {
 	systemPrompt?: string
 	contextChars?: number
+	thinkingLevel?: ThinkingLevel
 }
 
 export function useAgentChat(
@@ -292,6 +316,9 @@ export function useAgentChat(
 		initialState: {
 			systemPrompt: buildSystemPrompt(),
 			model: resolveModel(model.provider, model.id) ?? undefined,
+			// Reasoning effort the loop forwards as `reasoning` on every
+			// request, including post-tool follow-ups.
+			thinkingLevel: opts.thinkingLevel ?? 'off',
 			tools: agentToolsFor(job, master, mutate),
 			messages: threadToTranscript(convo.value.thread, getDefaultLeaf(convo.value.thread), model),
 		},
@@ -454,7 +481,7 @@ export function useAgentChat(
 				runTurnId = draftId.value
 				return
 			}
-			if (turn.text || turn.toolCalls?.length) {
+			if (turn.text || turn.reasoning || turn.toolCalls?.length) {
 				const nextId = uid()
 				pushMessage(
 					convo.value,
@@ -470,11 +497,12 @@ export function useAgentChat(
 			if (event.type === 'message_end') assistantStreaming.value = false
 			const turn = currentTurn()
 			if (!turn) return
+			// Partials of one turn are cumulative, so REPLACE the turn fields.
+			// Empty updates never wipe: error turns arrive with empty content.
 			const text = agentText(event.message)
-			// Never let an empty update wipe already-streamed text: error
-			// turns arrive with empty content and would blank the bubble.
-			// Partials of one turn are cumulative, so REPLACE the turn text.
 			if (text) turn.text = text
+			const reasoning = agentReasoning(event.message)
+			if (reasoning.trim()) turn.reasoning = truncateDisplay(reasoning, REASONING_DISPLAY_CHARS)
 		} else if (event.type === 'agent_end') {
 			const id = draftId.value
 			// Surface the provider's own error (any backend) instead of
@@ -491,7 +519,13 @@ export function useAgentChat(
 			// a non-empty one), so only the last turn can be dropped.
 			const lastId = runTurnId ?? id
 			const last = lastId ? thread.messages[lastId] : undefined
-			if (last && last.role === 'assistant' && !last.text.trim() && !last.toolCalls?.length) {
+			if (
+				last &&
+				last.role === 'assistant' &&
+				!last.text.trim() &&
+				!last.reasoning?.trim() &&
+				!last.toolCalls?.length
+			) {
 				removeMessage(thread, lastId as string)
 			}
 			touchConversation(convo.value)

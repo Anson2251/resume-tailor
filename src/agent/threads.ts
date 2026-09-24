@@ -16,6 +16,13 @@ export interface ChatMsg {
 	text: string
 	timestamp: number
 	/**
+	 * Streamed reasoning (thinking blocks) for this assistant turn, shown in
+	 * a collapsed Thinking panel (wisp-pro parity). Display-only: the live
+	 * LLM transcript keeps the full blocks (pi-agent re-sends them with
+	 * signatures on post-tool follow-ups); persisted replays stay text-only.
+	 */
+	reasoning?: string
+	/**
 	 * Tool calls made during this assistant turn, in execution order. Each
 	 * turn of a run is its own node (wisp-pro parity: one message per tool
 	 * round), so cards render inside their requesting turn and the panel
@@ -174,7 +181,14 @@ export function normalizeThread(raw: unknown): ChatThread {
 	if (doc.messages && typeof doc.messages === 'object') {
 		for (const [id, msg] of Object.entries(doc.messages as Record<string, unknown>)) {
 			if (!id || !msg || typeof msg !== 'object') continue
-			const m = msg as { id?: unknown; role?: unknown; text?: unknown; timestamp?: unknown; toolCalls?: unknown }
+			const m = msg as {
+				id?: unknown
+				role?: unknown
+				text?: unknown
+				timestamp?: unknown
+				reasoning?: unknown
+				toolCalls?: unknown
+			}
 			const role = m.role === 'user' || m.role === 'assistant' ? m.role : null
 			if (!role) continue
 			messages[id] = {
@@ -182,6 +196,7 @@ export function normalizeThread(raw: unknown): ChatThread {
 				role,
 				text: typeof m.text === 'string' ? m.text : '',
 				timestamp: typeof m.timestamp === 'number' && Number.isFinite(m.timestamp) ? m.timestamp : 0,
+				...(role === 'assistant' && typeof m.reasoning === 'string' && m.reasoning ? { reasoning: m.reasoning } : null),
 				...(role === 'assistant' ? normalizeToolCalls(m.toolCalls) : null),
 			}
 		}

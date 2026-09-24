@@ -90,8 +90,6 @@ it('excises an incomplete batch when the results never arrive', () => {
 	expect(out.map((m) => (m as { role?: string }).role)).toEqual(['user', 'user'])
 })
 
-
-
 function textTurn(text: string): string {
 	return [
 		'event: message_start',
@@ -149,11 +147,7 @@ beforeEach(() => {
 it('truncated follow-up never sends an orphan tool_result (OpenAI 400 regression)', async () => {
 	const requests: { url: string; init: RequestInit }[] = []
 	let n = 0
-	const responses = [
-		toolTurn('toolu_trunc_1', 'read_jd', '{}'),
-		textTurn('Done with JD.'),
-		textTurn('Follow-up done.'),
-	]
+	const responses = [toolTurn('toolu_trunc_1', 'read_jd', '{}'), textTurn('Done with JD.'), textTurn('Follow-up done.')]
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (url: string, init: RequestInit) => {

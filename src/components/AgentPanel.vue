@@ -7,6 +7,7 @@ import 'json-tree-view-vue3/style.css'
 import {
 	Add16Regular,
 	ArrowClockwise16Regular,
+	BrainCircuit20Regular,
 	ChatMultiple16Regular,
 	Checkmark16Regular,
 	ChevronDown16Regular,
@@ -16,7 +17,7 @@ import {
 	Edit16Regular,
 	Toolbox16Regular,
 } from '../data/icons'
-import { findModelChoice, modelLabel } from '../agent/models'
+import { findModelChoice, modelLabel, resolveThinkingLevel } from '../agent/models'
 import { useAgentSettings } from '../agent/agentSettings'
 import { getSiblings, toolArgsJson, toolResultJson, type ChatMsg } from '../agent/threads'
 import {
@@ -62,6 +63,15 @@ const activeModel = computed(() => {
 const activeModelLabel = computed(() =>
 	isConfigured.value ? modelLabel(settings.provider, settings.modelId) : 'Not configured',
 )
+const activeThinkingLevel = computed(() =>
+	resolveThinkingLevel(settings.provider, settings.modelId, settings.thinkingLevel),
+)
+/** Pill label for the footer; hidden when reasoning is off. */
+const thinkingPillLabel = computed(() => {
+	if (!isConfigured.value || activeThinkingLevel.value === 'off') return null
+	const level = activeThinkingLevel.value
+	return `Thinking: ${level.charAt(0).toUpperCase() + level.slice(1)}`
+})
 
 function findMasterItem(id: string): ContentItem | undefined {
 	for (const key of ['experience', 'projects', 'education', 'skills'] as const) {
@@ -104,7 +114,11 @@ const chat = useAgentChat(
 		},
 	},
 	activeModel.value,
-	{ systemPrompt: settings.systemPrompt, contextChars: settings.contextChars },
+	{
+		systemPrompt: settings.systemPrompt,
+		contextChars: settings.contextChars,
+		thinkingLevel: activeThinkingLevel.value,
+	},
 )
 
 const convo = computed(() => activeConversation(props.job.conversations, props.job.activeConversationId))
@@ -163,6 +177,12 @@ function startRename(id: string): void {
 	renameDraft.value = props.job.conversations.find((c) => c.id === id)?.title ?? ''
 }
 
+/** Same IME guard as sending: composition Enter only confirms the candidate. */
+function commitRenameOnEnter(e: KeyboardEvent, id: string): void {
+	if (e.isComposing) return
+	commitRename(id)
+}
+
 function commitRename(id: string): void {
 	// Escape clears renamingId first — a follow-up blur must not save.
 	if (renamingId.value !== id) return
@@ -181,6 +201,13 @@ function relativeTime(ts: number): string {
 	if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m ago`
 	if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)}h ago`
 	return new Date(ts).toLocaleDateString()
+}
+
+/** Enter sends, except while an IME is composing (CJK et al.): that Enter
+ * only confirms the composition candidate and must not submit. */
+function sendOnEnter(e: KeyboardEvent): void {
+	if (e.isComposing) return
+	send()
 }
 
 function send(): void {
@@ -240,7 +267,7 @@ const groups = computed<BubbleGroup[]>(() => {
 })
 
 function hasVisibleAssistantContent(msg: ChatMsg): boolean {
-	return msg.text.trim().length > 0 || (msg.toolCalls?.length ?? 0) > 0
+	return msg.text.trim().length > 0 || (msg.reasoning?.trim() ?? '').length > 0 || (msg.toolCalls?.length ?? 0) > 0
 }
 
 function groupHasContent(group: BubbleGroup): boolean {
@@ -249,9 +276,7 @@ function groupHasContent(group: BubbleGroup): boolean {
 
 // The tree component takes an explicit light/dark theme: follow the app's
 // `dark` class on <html> (toggled by App.vue) so trees match the chrome.
-const isDarkTree = ref(
-	typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
-)
+const isDarkTree = ref(typeof document !== 'undefined' && document.documentElement.classList.contains('dark'))
 let darkObserver: MutationObserver | null = null
 
 onMounted(() => {
@@ -265,7 +290,76 @@ onMounted(() => {
 onUnmounted(() => {
 	darkObserver?.disconnect()
 	darkObserver = null
+	for (const timer of brainFuseTimers.values()) clearTimeout(timer)
+	brainFuseTimers.clear()
+	for (const id of brainSpinState.keys()) stopBrainSpin(id)
 })
+
+// Easter egg: hover the Thinking brain for 3s and it spins up — accelerating
+// from standstill to full speed (period 0.2s) — until the mouse leaves.
+// CSS can't ease animation speed, so the angle is driven per-frame with
+// requestAnimationFrame. Everything is keyed per turn so panels don't clash.
+const brainFuseTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const brainEls = new Map<string, HTMLElement>()
+const brainSpinState = new Map<string, { angle: number; last: number; start: number; raf: number }>()
+
+/** Full speed: one revolution per 0.1s. Reached ~2s after spin-up starts. */
+const BRAIN_FULL_SPEED = (Math.PI * 2) / 0.1
+const BRAIN_RAMP_MS = 2000
+
+function setBrainEl(id: string, el: unknown): void {
+	if (el instanceof HTMLElement) brainEls.set(id, el)
+	else brainEls.delete(id)
+}
+
+function brainHoverStart(id: string): void {
+	if (brainFuseTimers.has(id) || brainSpinState.has(id)) return
+	brainFuseTimers.set(
+		id,
+		setTimeout(() => {
+			brainFuseTimers.delete(id)
+			startBrainSpin(id)
+		}, 3000),
+	)
+}
+
+function brainHoverEnd(id: string): void {
+	const timer = brainFuseTimers.get(id)
+	if (timer !== undefined) {
+		clearTimeout(timer)
+		brainFuseTimers.delete(id)
+	}
+	stopBrainSpin(id)
+}
+
+function startBrainSpin(id: string): void {
+	const el = brainEls.get(id)
+	if (!el || brainSpinState.has(id)) return
+	const now = performance.now()
+	const state = { angle: 0, last: now, start: now, raf: 0 }
+	brainSpinState.set(id, state)
+	const tick = (at: number): void => {
+		const current = brainSpinState.get(id)
+		if (!current) return
+		const dt = Math.min((at - current.last) / 1000, 0.1)
+		current.last = at
+		// Cubic ease-in: velocity accelerates from 0 to full speed.
+		const t = Math.min((at - current.start) / BRAIN_RAMP_MS, 1)
+		current.angle = (current.angle + BRAIN_FULL_SPEED * t * t * t * dt) % (Math.PI * 2)
+		el.style.transform = `rotate(${current.angle}rad)`
+		current.raf = requestAnimationFrame(tick)
+	}
+	state.raf = requestAnimationFrame(tick)
+}
+
+function stopBrainSpin(id: string): void {
+	const state = brainSpinState.get(id)
+	if (state) {
+		cancelAnimationFrame(state.raf)
+		brainSpinState.delete(id)
+	}
+	brainEls.get(id)?.style.removeProperty('transform')
+}
 
 function toolStatus(tool: NonNullable<ChatMsg['toolCalls']>[number]): 'running' | 'ok' | 'error' | 'interrupted' {
 	if (tool.status === 'running') return chat.sending.value ? 'running' : 'interrupted'
@@ -337,7 +431,7 @@ function saveEdit(id: string): void {
 			<AutoScrollWrapper ref="scroller" class="min-h-0 flex-1">
 				<div class="flex flex-col gap-2">
 					<div
-						v-for="group in groups"
+						v-for="(group, gi) in groups"
 						:key="group.key"
 						class="group flex items-end gap-1"
 						:class="group.kind === 'user' ? 'self-end' : 'w-full'"
@@ -348,6 +442,7 @@ function saveEdit(id: string): void {
 							title="Edit and resend"
 							:disabled="chat.sending.value"
 							@click="startEdit(group.msgs[0].id)"
+							square
 						>
 							<Icon size="16"><Edit16Regular /></Icon>
 						</button>
@@ -358,15 +453,20 @@ function saveEdit(id: string): void {
 							<template v-if="editingId === group.msgs[0].id">
 								<textarea
 									v-model="editDraft"
-									class="textarea mb-1 text-slate-900"
+									class="textarea mb-1"
 									rows="3"
 									:disabled="chat.sending.value"
 									@keyup.escape="cancelEdit"
 								/>
 								<div class="no-print flex justify-end gap-1">
-									<button class="btn btn-ghost px-2 py-0.5 text-xs" @click="cancelEdit">Cancel</button>
 									<button
-										class="btn btn-primary px-2 py-0.5 text-xs"
+										class="btn px-2 py-0.5 text-xs text-indigo-100 hover:bg-white/10 hover:text-white"
+										@click="cancelEdit"
+									>
+										Cancel
+									</button>
+									<button
+										class="btn bg-white px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-50"
 										:disabled="!editDraft.trim() || chat.sending.value"
 										@click="saveEdit(group.msgs[0].id)"
 									>
@@ -378,12 +478,31 @@ function saveEdit(id: string): void {
 						</div>
 						<div v-else class="min-w-0 py-1.5 text-sm w-full px-1 text-slate-800 dark:text-slate-100">
 							<div class="flex flex-col gap-1">
-								<div v-for="msg in group.msgs" :key="msg.id" class="flex min-w-0 flex-col gap-1.5">
-									<StreamMarkdown
-										v-if="msg.text.trim()"
-										:text="msg.text"
-										:streaming="chat.sending.value"
-									/>
+								<div v-for="(msg, mi) in group.msgs" :key="msg.id" class="flex min-w-0 flex-col gap-1.5">
+									<details
+										v-if="msg.reasoning?.trim()"
+										class="rounded-md border border-slate-300/60 bg-slate-100 px-2 py-1.5 text-[13px] dark:border-slate-700 dark:bg-slate-800/50"
+										:open="chat.sending.value && gi === groups.length - 1 && mi === group.msgs.length - 1"
+									>
+										<summary class="flex cursor-pointer list-none items-center gap-1.5">
+											<span
+												class="inline-flex"
+												:ref="(el) => setBrainEl(msg.id, el)"
+												@mouseenter="brainHoverStart(msg.id)"
+												@mouseleave="brainHoverEnd(msg.id)"
+											>
+												<Icon size="16" aria-hidden="true"><BrainCircuit20Regular /></Icon>
+											</span>
+											<span class="min-w-0 flex-1 truncate font-medium">Thinking</span>
+											<span
+												v-if="chat.sending.value && gi === groups.length - 1 && mi === group.msgs.length - 1"
+												class="shrink-0 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[11px] text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200"
+												>Thinking…</span
+											>
+										</summary>
+										<StreamMarkdown :text="msg.reasoning!" :streaming="chat.sending.value" class="mt-1.5" />
+									</details>
+									<StreamMarkdown v-if="msg.text.trim()" :text="msg.text" :streaming="chat.sending.value" />
 									<div v-if="msg.toolCalls?.length" class="flex flex-col gap-1.5">
 										<details
 											v-for="tool in msg.toolCalls"
@@ -409,7 +528,15 @@ function saveEdit(id: string): void {
 																	? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
 																	: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200'
 													"
-													>{{ toolStatus(tool) === 'running' ? 'Running…' : toolStatus(tool) === 'ok' ? 'OK' : toolStatus(tool) === 'interrupted' ? 'Interrupted' : 'Error' }}</span
+													>{{
+														toolStatus(tool) === 'running'
+															? 'Running…'
+															: toolStatus(tool) === 'ok'
+																? 'OK'
+																: toolStatus(tool) === 'interrupted'
+																	? 'Interrupted'
+																	: 'Error'
+													}}</span
 												>
 											</summary>
 											<div v-if="tool.args" class="mt-1.5">
@@ -422,9 +549,7 @@ function saveEdit(id: string): void {
 													:colorScheme="isDarkTree ? 'dark' : 'light'"
 													class="mt-1 max-h-48 overflow-y-auto rounded bg-black/5 p-2 text-xs dark:bg-white/5"
 												/>
-												<code v-else class="break-all text-xs text-slate-500 dark:text-slate-400">{{
-													tool.args
-												}}</code>
+												<code v-else class="break-all text-xs text-slate-500 dark:text-slate-400">{{ tool.args }}</code>
 											</div>
 											<JsonTreeView
 												v-if="toolResultJson(tool.result)"
@@ -437,8 +562,7 @@ function saveEdit(id: string): void {
 											<pre
 												v-else-if="tool.result"
 												class="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/5 p-2 text-xs dark:bg-white/5"
-												>{{ tool.result }}</pre
-											>
+												>{{ tool.result }}</pre>
 											<p v-else-if="tool.status === 'running'" class="mt-1.5 text-xs text-slate-400">
 												{{ chat.sending.value ? 'Running…' : 'Interrupted before a result arrived.' }}
 											</p>
@@ -473,25 +597,27 @@ function saveEdit(id: string): void {
 								class="no-print mt-1 flex items-center gap-1 text-[13px] text-slate-400 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"
 							>
 								<template v-if="siblingOf(group.msgs[0].id) && siblingOf(group.msgs[0].id)!.ids.length > 1">
-										<button
-											class="rounded px-1.5 py-0.5 hover:bg-black/10 dark:hover:bg-white/10"
-											title="Previous version"
-											:disabled="chat.sending.value"
-											@click="cycleAt(group.msgs[0].id, -1)"
-										>
-											<Icon size="16"><ChevronLeft16Regular /></Icon>
-										</button>
+									<button
+										class="rounded px-1.5 py-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+										title="Previous version"
+										:disabled="chat.sending.value"
+										@click="cycleAt(group.msgs[0].id, -1)"
+										square
+									>
+										<Icon size="16"><ChevronLeft16Regular /></Icon>
+									</button>
 									<span class="tabular-nums"
 										>{{ siblingOf(group.msgs[0].id)!.index + 1 }}/{{ siblingOf(group.msgs[0].id)!.ids.length }}</span
 									>
-										<button
-											class="rounded px-1.5 py-0.5 hover:bg-black/10 dark:hover:bg-white/10"
-											title="Next version"
-											:disabled="chat.sending.value"
-											@click="cycleAt(group.msgs[0].id, 1)"
-										>
-											<Icon size="16"><ChevronRight16Regular /></Icon>
-										</button>
+									<button
+										class="rounded px-1.5 py-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+										title="Next version"
+										:disabled="chat.sending.value"
+										@click="cycleAt(group.msgs[0].id, 1)"
+										square
+									>
+										<Icon size="16"><ChevronRight16Regular /></Icon>
+									</button>
 									<span class="mx-0.5">·</span>
 								</template>
 								<button
@@ -500,6 +626,7 @@ function saveEdit(id: string): void {
 									title="Regenerate this reply"
 									:disabled="chat.sending.value"
 									@click="void chat.regenerate(group.msgs[0].id)"
+									square
 								>
 									<Icon size="16"><ArrowClockwise16Regular /></Icon>
 								</button>
@@ -517,13 +644,12 @@ function saveEdit(id: string): void {
 				<button class="btn btn-ghost px-2 py-0.5 text-xs" @click="emit('open-settings')">Open settings</button>
 			</div>
 
-			<div class="no-print flex items-center gap-1 text-xs text-slate-400">
+			<div class="no-print flex justify-between items-center gap-1 text-xs text-slate-400">
 				<FwbDropdown close-inside placement="top">
 					<template #trigger>
 						<button class="btn btn-ghost max-w-52 truncate px-2 py-1" :title="`Session: ${currentTitle}`">
 							<span class="inline-flex min-w-0 items-center gap-1 truncate"
-								><Icon size="16"><ChatMultiple16Regular /></Icon
-								><span class="truncate">{{ currentTitle }}</span></span
+								><Icon size="16"><ChatMultiple16Regular /></Icon><span class="truncate">{{ currentTitle }}</span></span
 							>
 							<Icon size="16" class="shrink-0"><ChevronDown16Regular /></Icon>
 						</button>
@@ -558,16 +684,19 @@ function saveEdit(id: string): void {
 									maxlength="120"
 									:placeholder="s.title"
 									autofocus
-									@keyup.enter="commitRename(s.id)"
+									@keyup.enter="commitRenameOnEnter($event, s.id)"
 									@keyup.escape="renamingId = null"
 									@blur="commitRename(s.id)"
 								/>
 							</span>
 							<template v-else>
-								<button type="button" class="min-w-0 flex-1 truncate text-left" @click="selectSession(s.id)">
+								<button
+									type="button"
+									class="min-w-0 flex-1 flex-col items-start! truncate text-left!"
+									@click="selectSession(s.id)"
+								>
 									<span class="inline-flex items-center gap-1"
-										><Icon v-if="s.active" size="16" class="shrink-0"><Checkmark16Regular /></Icon
-										>{{ s.title }}</span
+										><Icon v-if="s.active" size="16" class="shrink-0"><Checkmark16Regular /></Icon>{{ s.title }}</span
 									>
 									<span class="block truncate text-[11px] text-slate-400">
 										{{ s.count }} msgs<span v-if="relativeTime(s.updatedAt)"> · {{ relativeTime(s.updatedAt) }}</span>
@@ -579,6 +708,7 @@ function saveEdit(id: string): void {
 										class="rounded px-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
 										title="Rename session"
 										@click.stop="startRename(s.id)"
+										square
 									>
 										<Icon size="16"><Edit16Regular /></Icon>
 									</button>
@@ -588,6 +718,7 @@ function saveEdit(id: string): void {
 										title="Delete session"
 										:disabled="chat.sending.value"
 										@click.stop="deleteSession(s.id)"
+										square
 									>
 										<Icon size="16"><Dismiss16Regular /></Icon>
 									</button>
@@ -596,8 +727,19 @@ function saveEdit(id: string): void {
 						</div>
 					</div>
 				</FwbDropdown>
-				<span v-if="isConfigured" class="ml-auto">Model: {{ activeModelLabel }}</span>
+				<span v-if="thinkingPillLabel || isConfigured">
+					<span v-if="thinkingPillLabel" :title="`${thinkingPillLabel}`"
+						>{{ thinkingPillLabel.split(' ').pop()?.toLocaleUpperCase() }} ·
+					</span>
+					<span v-if="isConfigured" :class="thinkingPillLabel ? '' : 'ml-auto'">{{ activeModelLabel }}</span>
+				</span>
 				<span v-else class="ml-auto">No model configured — open settings to choose one.</span>
+				<div>
+					<button v-if="chat.sending.value" class="btn btn-secondary shrink-0 self-end" @click="chat.stop()">
+						Stop
+					</button>
+					<button v-else class="btn btn-primary shrink-0 self-end" :disabled="!input.trim()" @click="send">Send</button>
+				</div>
 			</div>
 
 			<div class="no-print flex gap-2">
@@ -607,10 +749,8 @@ function saveEdit(id: string): void {
 					rows="2"
 					placeholder="Ask the agent… (Enter to send)"
 					:disabled="chat.sending.value"
-					@keyup.enter.exact.prevent="send"
+					@keyup.enter.exact.prevent="sendOnEnter"
 				/>
-				<button v-if="chat.sending.value" class="btn btn-secondary shrink-0 self-end" @click="chat.stop()">Stop</button>
-				<button v-else class="btn btn-primary shrink-0 self-end" :disabled="!input.trim()" @click="send">Send</button>
 			</div>
 		</div>
 	</div>

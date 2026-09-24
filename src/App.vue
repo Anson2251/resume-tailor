@@ -676,7 +676,7 @@ onMounted(async () => {
 				/>
 			</div>
 
-			<div class="min-w-0 lg:min-h-0 lg:overflow-y-auto">
+			<div class="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
 				<div class="no-print mb-2 flex items-center gap-2">
 					<FwbDropdown close-inside placement="bottom">
 						<template #trigger>
@@ -698,7 +698,7 @@ onMounted(async () => {
 						</div>
 					</FwbDropdown>
 				</div>
-				<div v-if="paneA === 'form'">
+				<div v-if="paneA === 'form'" class="lg:min-h-0 lg:overflow-y-auto">
 					<ResumeForm
 						v-model="workspace.master"
 						:profile="activeProfile"

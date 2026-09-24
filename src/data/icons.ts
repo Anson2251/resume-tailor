@@ -16,6 +16,7 @@ export { default as ArrowReset20Regular } from '@vicons/fluent/es/ArrowReset20Re
 export { default as ArrowUndo16Regular } from '@vicons/fluent/es/ArrowUndo16Regular'
 export { default as ArrowUp16Regular } from '@vicons/fluent/es/ArrowUp16Regular'
 export { default as ArrowUpload16Regular } from '@vicons/fluent/es/ArrowUpload16Regular'
+export { default as BrainCircuit20Regular } from '@vicons/fluent/es/BrainCircuit20Regular'
 export { default as Broom16Regular } from '@vicons/fluent/es/Broom16Regular'
 export { default as Checkmark16Regular } from '@vicons/fluent/es/Checkmark16Regular'
 export { default as Color16Regular } from '@vicons/fluent/es/Color16Regular'

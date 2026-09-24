@@ -74,11 +74,7 @@ function submitNew(): void {
 				@click="activeId = job.id"
 				@keyup.enter="activeId = job.id"
 			>
-				<span
-					class="h-2 w-2 shrink-0 rounded-full"
-					:class="statusOf(job).dot"
-					:title="statusOf(job).label"
-				/>
+				<span class="h-2 w-2 shrink-0 rounded-full" :class="statusOf(job).dot" :title="statusOf(job).label" />
 				<span class="min-w-0 flex-1 truncate">
 					<span v-if="job.kind === 'master'" class="tracking-wide uppercase">Master</span>
 					<span v-else>{{ job.company || 'Untitled' }} — {{ job.jobTitleTarget || job.name }}</span>
@@ -124,15 +120,11 @@ function submitNew(): void {
 					<FwbInput v-model="role" label="Role" placeholder="Frontend Engineer" />
 					<div>
 						<label class="label" for="new-job-pdf">Job description (PDF)</label>
-						<input
-							id="new-job-pdf"
-							type="file"
-							accept="application/pdf,.pdf"
-							class="input"
-							@change="onFileChange"
-						/>
+						<input id="new-job-pdf" type="file" accept="application/pdf,.pdf" class="input" @change="onFileChange" />
 						<p v-if="fileError" class="mt-1 text-xs text-red-600">{{ fileError }}</p>
-						<p v-else class="mt-1 text-xs text-slate-400">The JD text is read-only — replaced by uploading a new file.</p>
+						<p v-else class="mt-1 text-xs text-slate-400">
+							The JD text is read-only — replaced by uploading a new file.
+						</p>
 					</div>
 				</div>
 			</template>
