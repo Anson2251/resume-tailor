@@ -6,6 +6,7 @@ import { blankJob } from '../data/workspace'
 import type { JobMutations } from './tools'
 import { useAgentChat } from './useAgentChat'
 import { activeConversation } from './conversations'
+import { toolArgsJson, toolResultJson } from './threads'
 import type { Job } from '../data/types'
 
 function textTurn(text: string): string {
@@ -212,6 +213,150 @@ it('runs a full tool round trip through the agent tools', async () => {
 	// …before the final text landed on the thread.
 	const texts = threadTexts(job)
 	expect(texts).toContain('Done.')
+
+	// The call args are stored as JSON so the panel can render them as a tree.
+	const thread = activeConversation(job.conversations, job.activeConversationId).thread
+	const assistant = Object.values(thread.messages).find((m) => m.role === 'assistant')
+	expect(assistant!.toolCalls).toHaveLength(1)
+	expect(toolArgsJson(assistant!.toolCalls![0].args)).toBe(input)
+})
+
+/** One assistant turn whose text arrives as several incremental deltas (the loop accumulates them into cumulative partials). */
+function textTurnChunked(deltas: string[]): string {
+	const blocks = deltas.map(
+		(c) =>
+			'event: content_block_delta\n' +
+			`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":${JSON.stringify(c)}}}\n\n`,
+	)
+	return [
+		'event: message_start',
+		'data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}}',
+		'',
+		'event: content_block_start',
+		'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
+		'',
+		...blocks,
+		'event: content_block_stop',
+		'data: {"type":"content_block_stop","index":0}',
+		'',
+		'event: message_delta',
+		'data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":2}}',
+		'',
+		'event: message_stop',
+		'data: {"type":"message_stop"}',
+		'',
+	].join('\n')
+}
+
+it('keeps each assistant turn in its own node so post-tool output cannot overwrite it', async () => {
+	// First assistant turn streams text AND a tool call; the follow-up turn
+	// streams the final text. Wisp-pro parity: one node per turn, grouped in
+	// the panel — the tool card sits on the requesting turn between the texts.
+	mockFetch([textThenToolTurn('Checking the posting…', 'toolu_9', 'read_jd', '{}'), textTurn('Done.')])
+	await setApiKey('anthropic', 'sk-test-key')
+	const master = blankResume()
+	const job = blankJob('Test job', master)
+	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
+	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
+		systemPrompt: 'Test system prompt.',
+		contextChars: 8000,
+	})
+
+	await chat.send('Tailor me.')
+
+	expect(chat.error.value).toBe(null)
+	const thread = activeConversation(job.conversations, job.activeConversationId).thread
+	const assistants = Object.values(thread.messages)
+		.filter((m) => m.role === 'assistant')
+		.sort((a, b) => a.timestamp - b.timestamp)
+	expect(assistants).toHaveLength(2)
+	// Pre-tool text survived on the first turn; the follow-up lives on its own turn.
+	expect(assistants[0].text).toContain('Checking the posting…')
+	expect(assistants[0].text).not.toContain('Done.')
+	expect(assistants[1].text).toContain('Done.')
+	// The tool call is recorded on the requesting turn with its collapsed result.
+	expect(assistants[0].toolCalls).toHaveLength(1)
+	expect(assistants[0].toolCalls![0].name).toBe('read_jd')
+	expect(assistants[0].toolCalls![0].status).toBe('done')
+	expect(assistants[0].toolCalls![0].result?.trim().length).toBeGreaterThan(0)
+	// read_jd returns a JSON payload, so the panel can render it as a tree.
+	expect(toolResultJson(assistants[0].toolCalls![0].result)).not.toBe(null)
+	expect(assistants[1].toolCalls ?? []).toHaveLength(0)
+})
+
+it('never duplicates follow-up chunks: each chunk replaces its own turn text', async () => {
+	// Regression for "Tools / Tools / Tools are / Tools are working…": the
+	// follow-up turn streams several chunks, each arriving as a cumulative
+	// partial. Replacing the turn text keeps every chunk exactly once.
+	mockFetch([
+		textThenToolTurn('Checking…', 'toolu_9', 'read_jd', '{}'),
+		textTurnChunked(['Tools', ' are', ' working.']),
+	])
+	await setApiKey('anthropic', 'sk-test-key')
+	const master = blankResume()
+	const job = blankJob('Test job', master)
+	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
+	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
+		systemPrompt: 'Test system prompt.',
+		contextChars: 8000,
+	})
+
+	await chat.send('Tailor me.')
+
+	expect(chat.error.value).toBe(null)
+	const thread = activeConversation(job.conversations, job.activeConversationId).thread
+	const assistants = Object.values(thread.messages).filter((m) => m.role === 'assistant')
+	expect(assistants).toHaveLength(2)
+	const followUp = assistants.find((m) => m.text.includes('working.'))
+	expect(followUp).toBeDefined()
+	expect(followUp!.text).toBe('Tools are working.')
+	const allText = assistants.map((m) => m.text).join('\n')
+	expect(allText.split('Tools are').length - 1).toBe(1)
+})
+
+it('signals waiting (not streaming) while the post-tool follow-up is pending', async () => {
+	// The follow-up response is gated: after the tool result comes back the
+	// run sits between turns — sending, but no turn streaming. The panel
+	// shows the typing dots again in exactly this window.
+	let releaseFollowUp!: () => void
+	const followUpGate = new Promise<void>((resolve) => {
+		releaseFollowUp = resolve
+	})
+	requests.length = 0
+	let n = 0
+	const responses = [toolTurn('toolu_wait', 'read_jd', '{}'), textTurn('Done.')]
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async (url: string, init: RequestInit) => {
+			requests.push({ url, init })
+			const idx = Math.min(n++, responses.length - 1)
+			if (idx === 1) await followUpGate
+			return new Response(responses[idx], {
+				status: 200,
+				headers: { 'content-type': 'text/event-stream' },
+			})
+		}),
+	)
+	await setApiKey('anthropic', 'sk-test-key')
+	const master = blankResume()
+	const job = blankJob('Test job', master)
+	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
+	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
+		systemPrompt: 'Test system prompt.',
+		contextChars: 8000,
+	})
+
+	const sending = chat.send('Check the JD.')
+	await vi.waitFor(() => expect(requests.length).toBe(2))
+	expect(chat.sending.value).toBe(true)
+	expect(chat.assistantStreaming.value).toBe(false)
+
+	releaseFollowUp()
+	await sending
+
+	expect(chat.error.value).toBe(null)
+	expect(chat.sending.value).toBe(false)
+	expect(chat.assistantStreaming.value).toBe(false)
 })
 
 it('rehydrates the persisted thread on remount so history survives', async () => {

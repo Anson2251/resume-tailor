@@ -23,6 +23,9 @@ importers:
       flowbite-vue:
         specifier: ^0.4.0
         version: 0.4.0(axios@1.20.0)(magic-string@1.4.2)(postcss@8.5.28)(rolldown@1.2.7)(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))(vue@3.5.42(typescript@5.9.3))
+      json-tree-view-vue3:
+        specifier: ^2.0.0
+        version: 2.0.0(vue@3.5.42(typescript@5.9.3))
       localforage:
         specifier: ^1.10.0
         version: 1.10.0
@@ -1822,6 +1825,12 @@ packages:
 
   json-stringify-safe@5.0.1:
     resolution: {integrity: sha512-ZClg6AaYvamvYEE82d3Iyd3vSSIjQ+odgjaTzRuO3s7toCdFKczob2i0zCh7JE8kWn17yvAWhUVxvqGwUalsRA==}
+
+  json-tree-view-vue3@2.0.0:
+    resolution: {integrity: sha512-Ad314AYTQjOQK6lDivJA/u5MrfGExDn8YiS01FnNbGYrkeiID7LJJpMnkJxrQZsmP0MIs4irts3IPMMX+cs22w==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    peerDependencies:
+      vue: '>=3.2.0'
 
   json5@2.2.3:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
@@ -4911,6 +4920,10 @@ snapshots:
 
   json-stringify-safe@5.0.1:
     optional: true
+
+  json-tree-view-vue3@2.0.0(vue@3.5.42(typescript@5.9.3)):
+    dependencies:
+      vue: 3.5.42(typescript@5.9.3)
 
   json5@2.2.3: {}
 

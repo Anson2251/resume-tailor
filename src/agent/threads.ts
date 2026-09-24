@@ -1,8 +1,27 @@
+/** One tool invocation attached to an assistant turn (wisp-pro parity). */
+export interface ToolActivity {
+	id: string
+	name: string
+	/** Short JSON summary of the call arguments (display only). */
+	args?: string
+	/** Truncated result text (display only; the live LLM transcript is separate). */
+	result?: string
+	isError?: boolean
+	status: 'running' | 'done'
+}
+
 export interface ChatMsg {
 	id: string
 	role: 'user' | 'assistant' | 'tool'
 	text: string
 	timestamp: number
+	/**
+	 * Tool calls made during this assistant turn, in execution order. Each
+	 * turn of a run is its own node (wisp-pro parity: one message per tool
+	 * round), so cards render inside their requesting turn and the panel
+	 * groups consecutive turns into one bubble — no text offsets needed.
+	 */
+	toolCalls?: ToolActivity[]
 }
 
 export interface ChatThread {
@@ -92,6 +111,58 @@ export function removeMessage(t: ChatThread, id: string): void {
 }
 
 /**
+ * A stored JSON string as a tree source, or null when it isn't a valid JSON
+ * object/array (plain text renders as code instead). Truncated payloads fail
+ * the parse and fall back gracefully.
+ */
+function jsonTreeSource(text: string | undefined): string | null {
+	if (!text) return null
+	const clean = text.trim()
+	if (clean[0] !== '{' && clean[0] !== '[') return null
+	try {
+		JSON.parse(clean)
+		return clean
+	} catch {
+		return null
+	}
+}
+
+/** The stored tool result as a JSON-tree source (null → render as `<pre>`). */
+export function toolResultJson(result: string | undefined): string | null {
+	return jsonTreeSource(result)
+}
+
+/** The stored tool args as a JSON-tree source (null → render as `<code>`). */
+export function toolArgsJson(args: string | undefined): string | null {
+	return jsonTreeSource(args)
+}
+
+/**
+ * Keep only well-formed tool activity (display-only; drops corrupt entries).
+ * A `running` entry persisted mid-run never resumes — the panel renders it
+ * as interrupted while `sending` is false.
+ */
+function normalizeToolCalls(raw: unknown): { toolCalls: ToolActivity[] } | null {
+	if (!Array.isArray(raw)) return null
+	const out: ToolActivity[] = []
+	for (const item of raw) {
+		if (!item || typeof item !== 'object') continue
+		const t = item as Record<string, unknown>
+		if (typeof t['id'] !== 'string' || !t['id'] || typeof t['name'] !== 'string' || !t['name']) continue
+		const status = t['status'] === 'running' ? 'running' : 'done'
+		out.push({
+			id: t['id'],
+			name: t['name'],
+			...(typeof t['args'] === 'string' ? { args: t['args'] } : null),
+			...(typeof t['result'] === 'string' ? { result: t['result'] } : null),
+			...(t['isError'] === true ? { isError: true } : null),
+			status,
+		})
+	}
+	return out.length ? { toolCalls: out } : null
+}
+
+/**
  * Validate a persisted chat thread: keep only well-formed messages, drop
  * edges that point nowhere, and repair a dangling entry point. Corrupt
  * input yields a blank thread instead of breaking the agent panel.
@@ -103,7 +174,7 @@ export function normalizeThread(raw: unknown): ChatThread {
 	if (doc.messages && typeof doc.messages === 'object') {
 		for (const [id, msg] of Object.entries(doc.messages as Record<string, unknown>)) {
 			if (!id || !msg || typeof msg !== 'object') continue
-			const m = msg as { id?: unknown; role?: unknown; text?: unknown; timestamp?: unknown }
+			const m = msg as { id?: unknown; role?: unknown; text?: unknown; timestamp?: unknown; toolCalls?: unknown }
 			const role = m.role === 'user' || m.role === 'assistant' ? m.role : null
 			if (!role) continue
 			messages[id] = {
@@ -111,6 +182,7 @@ export function normalizeThread(raw: unknown): ChatThread {
 				role,
 				text: typeof m.text === 'string' ? m.text : '',
 				timestamp: typeof m.timestamp === 'number' && Number.isFinite(m.timestamp) ? m.timestamp : 0,
+				...(role === 'assistant' ? normalizeToolCalls(m.toolCalls) : null),
 			}
 		}
 	}

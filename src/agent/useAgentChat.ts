@@ -25,6 +25,166 @@ function agentText(msg: AgentMessage): string {
 	return ''
 }
 
+/**
+ * First assistant node of the run containing `id`: a run chains one node per
+ * assistant turn (wisp-pro parity — the backend emits a new message per tool
+ * round), so walk back over assistant nodes to the run start. Used to branch
+ * retries/regenerations at the run level instead of mid-chain.
+ */
+export function runStartId(thread: ChatThread, id: string): string {
+	let cur = id
+	for (;;) {
+		const parent = getParent(thread, cur)
+		if (typeof parent !== 'string') break
+		const pm = thread.messages[parent]
+		if (!pm || pm.role !== 'assistant') break
+		cur = parent
+	}
+	return cur
+}
+
+const TOOL_ARGS_DISPLAY_CHARS = 16000
+// Kept generous so JSON results stay parseable for the tree view (a cut-off
+// payload fails JSON.parse and falls back to plain text rendering).
+const TOOL_RESULT_DISPLAY_CHARS = 8000
+
+function truncateDisplay(text: string, max: number): string {
+	const clean = text.trim()
+	if (clean.length <= max) return clean
+	return `${clean.slice(0, max).trimEnd()}…`
+}
+
+function summarizeToolArgs(args: unknown): string | undefined {
+	if (args === undefined || args === null) return undefined
+	try {
+		const raw = typeof args === 'string' ? args : JSON.stringify(args)
+		if (!raw || raw === '{}') return undefined
+		return truncateDisplay(raw, TOOL_ARGS_DISPLAY_CHARS)
+	} catch {
+		return undefined
+	}
+}
+
+function toolResultDisplay(result: unknown): { text?: string; isError?: boolean } {
+	const r = result as { content?: unknown; isError?: unknown } | null | undefined
+	if (!r || typeof r !== 'object') return {}
+	let text: string | undefined
+	try {
+		const content = (r as { content?: unknown }).content
+		if (typeof content === 'string') text = content
+		else if (Array.isArray(content)) {
+			text = contentText(content as Parameters<typeof contentText>[0])
+		}
+	} catch {
+		text = undefined
+	}
+	const out: { text?: string; isError?: boolean } = {}
+	if (text?.trim()) out.text = truncateDisplay(text, TOOL_RESULT_DISPLAY_CHARS)
+	const isError = (r as { isError?: unknown }).isError
+	if (isError === true) out.isError = true
+	return out
+}
+
+function msgRole(msg: AgentMessage): string | undefined {
+	return (msg as { role?: unknown }).role as string | undefined
+}
+
+function isToolResultMessage(msg: AgentMessage): boolean {
+	return msgRole(msg) === 'toolResult'
+}
+
+function isFailedAssistant(msg: AgentMessage): boolean {
+	if (msgRole(msg) !== 'assistant') return false
+	const stop = (msg as { stopReason?: unknown }).stopReason
+	return stop === 'error' || stop === 'aborted'
+}
+
+function toolCallIds(msg: AgentMessage): string[] {
+	const content = (msg as { content?: unknown }).content
+	if (!Array.isArray(content)) return []
+	const ids: string[] = []
+	for (const block of content) {
+		if (block && typeof block === 'object' && (block as { type?: unknown }).type === 'toolCall') {
+			const id = (block as { id?: unknown }).id
+			if (typeof id === 'string' && id) ids.push(id)
+		}
+	}
+	return ids
+}
+
+/**
+ * Drop `toolResult` messages that have no matching pending assistant
+ * `toolCall` — sending them alone is a 400 on OpenAI-compatible APIs.
+ * Also drops an incomplete trailing batch: if a non-tool message arrives
+ * while some tool calls are still unanswered, the preceding assistant turn
+ * (and its partial results) is removed so the request stays valid.
+ */
+export function dropOrphanToolResults(msgs: AgentMessage[]): AgentMessage[] {
+	const out: AgentMessage[] = []
+	let pending = new Set<string>()
+	let batchStart = -1
+	for (const m of msgs) {
+		if (isToolResultMessage(m)) {
+			const id = (m as { toolCallId?: unknown }).toolCallId
+			if (typeof id === 'string' && pending.has(id)) {
+				pending.delete(id)
+				out.push(m)
+			}
+			// else: orphan result from a truncated batch — drop it.
+			continue
+		}
+		if (msgRole(m) === 'assistant') {
+			// A new assistant turn while the previous batch is incomplete
+			// means results went missing — excise that whole batch first.
+			if (pending.size > 0 && batchStart >= 0) {
+				out.splice(batchStart)
+			}
+			batchStart = out.length
+			pending = new Set(toolCallIds(m))
+			out.push(m)
+			continue
+		}
+		if (pending.size > 0) {
+			// A user (or other) message with unanswered tool calls: the
+			// batch can never complete — excise it, keep the boundary msg.
+			if (batchStart >= 0) {
+				out.splice(batchStart)
+				batchStart = -1
+			}
+			pending = new Set()
+		}
+		batchStart = -1
+		out.push(m)
+	}
+	return out
+}
+
+/**
+ * Truncation budget for one transcript message. Text alone undercounts
+ * tool calls (their content blocks hold no `text`), so include the
+ * serialized tool-call arguments and tool-result ids — otherwise the
+ * truncator thinks tool turns are free and slices batches apart.
+ */
+function messageSize(msg: AgentMessage): number {
+	let size = agentText(msg).length + 1
+	try {
+		const content = (msg as { content?: unknown }).content
+		if (Array.isArray(content)) {
+			for (const block of content) {
+				if (block && typeof block === 'object' && (block as { type?: unknown }).type === 'toolCall') {
+					const b = block as { name?: unknown; arguments?: unknown }
+					size += String(b.name ?? '').length + JSON.stringify(b.arguments ?? {}).length
+				}
+			}
+		}
+		const tr = msg as { toolCallId?: unknown; toolName?: unknown }
+		if (typeof tr.toolCallId === 'string') size += tr.toolCallId.length + String(tr.toolName ?? '').length
+	} catch {
+		/* size estimate only — ignore */
+	}
+	return size
+}
+
 function toAgentMessage(msg: ChatMsg, model: ModelChoice): AgentMessage | null {
 	if (!msg.text?.trim()) return null
 	if (msg.role === 'user') {
@@ -88,6 +248,13 @@ export function useAgentChat(
 	const sending = ref(false)
 	const draftId = ref<string | null>(null)
 	const error = ref<string | null>(null)
+	/**
+	 * True while an assistant turn is actively streaming (between its
+	 * message_start and message_end). The panel shows the typing dots when
+	 * `sending` but not streaming — before the first token and in the gap
+	 * after tool results come back, while the follow-up turn is pending.
+	 */
+	const assistantStreaming = ref(false)
 
 	const basePrompt = computed(
 		() => opts.systemPrompt?.trim() || loadAgentSettings().systemPrompt || DEFAULT_SYSTEM_PROMPT,
@@ -115,6 +282,12 @@ export function useAgentChat(
 
 	const buildSystemPrompt = (): string => composeSystemPrompt(basePrompt.value, job, master)
 
+	// The assistant node of the current turn being streamed. A run produces
+	// one node per assistant turn (wisp-pro parity: a new message per tool
+	// round); chunks of a turn arrive as cumulative partials and REPLACE
+	// that turn's text, so no cross-turn merging is ever needed.
+	let runTurnId: string | null = null
+
 	const agent = new Agent({
 		initialState: {
 			systemPrompt: buildSystemPrompt(),
@@ -127,6 +300,10 @@ export function useAgentChat(
 		convertToLlm: (msgs: AgentMessage[]) =>
 			msgs.flatMap((m) => {
 				const role = (m as { role?: string }).role
+				// Failed turns must never reach the provider: an `error`/`aborted`
+				// assistant has no valid wire form and re-sending it poisons the
+				// next request after a failure.
+				if (role === 'assistant' && isFailedAssistant(m)) return []
 				// System carries the prompt plus tool declarations — dropping
 				// it sends requests with no tools attached.
 				if (role === 'user' || role === 'assistant' || role === 'toolResult' || role === 'system') {
@@ -138,24 +315,49 @@ export function useAgentChat(
 			// Bound the context window but keep the leading system message(s)
 			// intact: they carry the prompt and the tool declarations.
 			// Truncate at message boundaries (newest retained) instead of
-			// slicing one blob of text mid-message.
+			// slicing one blob of text mid-message. Truncation is tool-pair
+			// safe: a `toolResult` without its preceding assistant `toolCall`
+			// is a 400 on OpenAI-compatible APIs ("Messages with role 'tool'
+			// must be a response to a preceding message with 'tool_calls'").
 			const isSystem = (m: AgentMessage): boolean => (m as { role?: string }).role === 'system'
 			const head = msgs.filter(isSystem)
-			const rest = msgs.filter((m) => !isSystem(m))
-			const sizes = rest.map((m) => agentText(m).length + 1)
+			// Strip failed assistant turns first so a previous error is never
+			// re-sent and can never strand a tool batch mid-sequence.
+			const clean = msgs.filter((m) => !isSystem(m) && !isFailedAssistant(m))
+			const sizes = clean.map((m) => messageSize(m))
 			const total = sizes.reduce((a, b) => a + b, 0)
-			if (total <= contextChars) return msgs
-			let kept: AgentMessage[] = []
+			if (total <= contextChars) {
+				// Even without truncation the transcript can hold an orphan
+				// (e.g. a persisted error stripped above left a dangling
+				// toolResult) — sweep it before returning.
+				return [...head, ...dropOrphanToolResults(clean)]
+			}
+			let start = clean.length
 			let used = 0
-			for (let i = rest.length - 1; i >= 0; i--) {
+			for (let i = clean.length - 1; i >= 0; i--) {
 				const size = sizes[i]
-				if (kept.length > 0 && used + size > contextChars) break
-				kept.unshift(rest[i])
+				if (start < clean.length && used + size > contextChars) break
+				start = i
 				used += size
 				if (used >= contextChars) break
 			}
 			// Always keep at least the newest message so a request is never empty.
-			if (!kept.length && rest.length) kept = [rest[rest.length - 1]]
+			if (start >= clean.length && clean.length) start = clean.length - 1
+			// Expand backwards past a leading toolResult so the batch's
+			// assistant toolCall stays attached (validity beats budget).
+			while (start > 0 && isToolResultMessage(clean[start])) start--
+			let kept = clean.slice(start)
+			// A transcript that starts with toolResults is corrupt — drop the
+			// orphans rather than sending an invalid request.
+			while (kept.length && isToolResultMessage(kept[0])) kept = kept.slice(1)
+			kept = dropOrphanToolResults(kept)
+			// Last resort: never send a head-only (or empty) request.
+			if (!kept.length && clean.length) {
+				const fallback = [...clean].reverse().find((m) => msgRole(m) === 'user')
+				kept = fallback ? [fallback] : [clean[clean.length - 1]]
+				kept = dropOrphanToolResults(kept)
+				if (!kept.length && clean.length) kept = [clean[clean.length - 1]]
+			}
 			return [...head, ...kept]
 		},
 	})
@@ -187,26 +389,92 @@ export function useAgentChat(
 	})
 
 	agent.subscribe((event) => {
-		// Only assistant turns belong in the draft bubble: the loop also
+		// Only assistant turns belong in the draft nodes: the loop also
 		// emits message_start/message_end for the echoed user message (and
-		// tool results), which must neither overwrite the draft nor release
-		// it — the draft is released once the whole run ends.
+		// tool results), which must neither create turns nor release the
+		// run — the run is released once the whole run ends.
 		const thread = convo.value.thread
+		/** The turn node chunks and tool activity belong to. */
+		const currentTurn = (): ChatMsg | undefined => {
+			const id = runTurnId ?? draftId.value
+			const node = id ? thread.messages[id] : undefined
+			return node && node.role === 'assistant' ? node : undefined
+		}
+		// Tool activity is recorded on the requesting turn (wisp-pro parity:
+		// tool calls ride on the assistant message): the bubble shows each
+		// call collapsed with its result, followed by the next turn's text.
+		if (event.type === 'tool_execution_start') {
+			const turn = currentTurn()
+			if (turn) {
+				const calls = turn.toolCalls ?? (turn.toolCalls = [])
+				if (!calls.some((c) => c.id === event.toolCallId)) {
+					const summary = summarizeToolArgs(event.args)
+					calls.push({
+						id: event.toolCallId,
+						name: event.toolName,
+						...(summary !== undefined ? { args: summary } : null),
+						status: 'running',
+					})
+				}
+			}
+			return
+		}
+		if (event.type === 'tool_execution_end') {
+			const turn = currentTurn()
+			if (turn) {
+				const calls = turn.toolCalls ?? (turn.toolCalls = [])
+				const display = toolResultDisplay(event.result)
+				const found = calls.find((c) => c.id === event.toolCallId)
+				if (found) {
+					found.status = 'done'
+					if (display.text !== undefined) found.result = display.text
+					if (display.isError === true || event.isError === true) found.isError = true
+				} else {
+					calls.push({
+						id: event.toolCallId,
+						name: event.toolName,
+						status: 'done',
+						...(display.text !== undefined ? { result: display.text } : null),
+						...(display.isError === true || event.isError === true ? { isError: true } : null),
+					})
+				}
+			}
+			return
+		}
 		const role = (event as { message?: { role?: string } }).message?.role
-		if (event.type === 'message_update') {
-			const id = draftId.value
-			if (role === 'assistant' && id && thread.messages[id]) {
-				const text = agentText(event.message)
-				// Never let an empty update wipe already-streamed text: error
-				// turns arrive with empty content and would blank the bubble.
-				if (text) thread.messages[id].text = text
+		if (event.type === 'message_start') {
+			// Every assistant turn starts here (exactly one start per turn).
+			// Chain a fresh node past a turn that already has content; reuse
+			// the eagerly created first draft while it is still empty.
+			// (Also fires for the echoed user message / tool results.)
+			if (role !== 'assistant' || !draftId.value) return
+			assistantStreaming.value = true
+			const turn = currentTurn()
+			if (!turn) {
+				runTurnId = draftId.value
+				return
 			}
-		} else if (event.type === 'message_end') {
-			const id = draftId.value
-			if (role === 'assistant' && id && thread.messages[id]) {
-				const text = agentText(event.message)
-				if (text) thread.messages[id].text = text
+			if (turn.text || turn.toolCalls?.length) {
+				const nextId = uid()
+				pushMessage(
+					convo.value,
+					{ id: nextId, role: 'assistant', text: '', timestamp: Date.now() },
+					getDefaultLeaf(thread),
+				)
+				runTurnId = nextId
 			}
+		} else if (event.type === 'message_update' || event.type === 'message_end') {
+			// The loop also emits these for the echoed user message and for
+			// tool results — only assistant turns belong in the draft nodes.
+			if (role !== 'assistant') return
+			if (event.type === 'message_end') assistantStreaming.value = false
+			const turn = currentTurn()
+			if (!turn) return
+			const text = agentText(event.message)
+			// Never let an empty update wipe already-streamed text: error
+			// turns arrive with empty content and would blank the bubble.
+			// Partials of one turn are cumulative, so REPLACE the turn text.
+			if (text) turn.text = text
 		} else if (event.type === 'agent_end') {
 			const id = draftId.value
 			// Surface the provider's own error (any backend) instead of
@@ -216,14 +484,21 @@ export function useAgentChat(
 			if (failed && typeof failed.errorMessage === 'string' && failed.errorMessage) {
 				error.value = failed.errorMessage
 			}
-			// Don't persist empty failed drafts: they pollute the thread and
-			// its replays. Partial streamed text (or a written error) stays.
-			if (id && thread.messages[id] && !thread.messages[id].text.trim()) {
-				removeMessage(thread, id)
+			// Don't persist an empty trailing turn: it pollutes the thread and
+			// its replays. Partial streamed text (or a written error) stays,
+			// as does a turn that ran tools — its cards stay visible.
+			// Earlier turns always have content (a new node only chains past
+			// a non-empty one), so only the last turn can be dropped.
+			const lastId = runTurnId ?? id
+			const last = lastId ? thread.messages[lastId] : undefined
+			if (last && last.role === 'assistant' && !last.text.trim() && !last.toolCalls?.length) {
+				removeMessage(thread, lastId as string)
 			}
 			touchConversation(convo.value)
 			draftId.value = null
+			runTurnId = null
 			sending.value = false
+			assistantStreaming.value = false
 		}
 	})
 
@@ -250,12 +525,14 @@ export function useAgentChat(
 		}
 		refreshSystemPrompt()
 		sending.value = true
+		assistantStreaming.value = false
 		const now = Date.now()
 		const thread = convo.value.thread
 		pushMessage(convo.value, { id: uid(), role: 'user', text, timestamp: now }, getDefaultLeaf(thread))
 		const assistantId = uid()
 		pushMessage(convo.value, { id: assistantId, role: 'assistant', text: '', timestamp: now }, getDefaultLeaf(thread))
 		draftId.value = assistantId
+		runTurnId = assistantId
 		try {
 			await agent.prompt(toLlmText(text) as unknown as AgentMessage)
 		} catch (e) {
@@ -266,7 +543,9 @@ export function useAgentChat(
 			if (draft && !draft.text.trim()) draft.text = message
 			else error.value = message
 			draftId.value = null
+			runTurnId = null
 			sending.value = false
+			assistantStreaming.value = false
 		}
 	}
 
@@ -276,7 +555,10 @@ export function useAgentChat(
 		if (!leaf || sending.value) return
 		const lastUser = [...getPathTo(thread, leaf)].reverse().find((m) => m.role === 'user')
 		if (!lastUser) return
-		const parent = getParent(thread, leaf)
+		// Branch at the run start so a multi-turn run (chained assistant
+		// nodes) is superseded whole instead of mid-chain. Single-turn runs
+		// are unchanged: the run start IS the leaf.
+		const parent = getParent(thread, runStartId(thread, leaf))
 		await runTurn(parent ?? null, lastUser.text)
 	}
 
@@ -291,7 +573,9 @@ export function useAgentChat(
 		const target = thread.messages[assistantId]
 		if (!target || sending.value) return
 		if (target.role !== 'assistant') return
-		const parent = getParent(thread, assistantId)
+		// Any turn of a run regenerates the whole run (sibling of its first
+		// turn); the id may come from a grouped bubble's later turn.
+		const parent = getParent(thread, runStartId(thread, assistantId))
 		const path = [...getPathTo(thread, assistantId)].reverse()
 		const userText = path.find((m) => m.role === 'user')?.text
 		if (!userText) return
@@ -326,6 +610,7 @@ export function useAgentChat(
 		// superseded assistant/tool transcript.
 		syncTranscript(thread, parent)
 		sending.value = true
+		assistantStreaming.value = false
 		const draftParent = newUser ? newUser.id : parent
 		if (newUser) {
 			pushMessage(convo.value, { id: newUser.id, role: 'user', text: newUser.text, timestamp: Date.now() }, parent)
@@ -333,6 +618,7 @@ export function useAgentChat(
 		const assistantId = uid()
 		pushMessage(convo.value, { id: assistantId, role: 'assistant', text: '', timestamp: Date.now() }, draftParent)
 		draftId.value = assistantId
+		runTurnId = assistantId
 		try {
 			await agent.prompt(toLlmText(userText) as unknown as AgentMessage)
 		} catch (e) {
@@ -341,7 +627,9 @@ export function useAgentChat(
 			if (draft && !draft.text.trim()) draft.text = message
 			else error.value = message
 			draftId.value = null
+			runTurnId = null
 			sending.value = false
+			assistantStreaming.value = false
 		}
 	}
 
@@ -350,5 +638,17 @@ export function useAgentChat(
 		sending.value = false
 	}
 
-	return { messages, sending, error, draftId, siblingInfo, send, stop, retry, regenerate, resendEdited }
+	return {
+		messages,
+		sending,
+		assistantStreaming,
+		error,
+		draftId,
+		siblingInfo,
+		send,
+		stop,
+		retry,
+		regenerate,
+		resendEdited,
+	}
 }

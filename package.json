@@ -58,6 +58,7 @@
 		"fflate": "^0.8.3",
 		"flowbite": "^4.0.2",
 		"flowbite-vue": "^0.4.0",
+		"json-tree-view-vue3": "^2.0.0",
 		"localforage": "^1.10.0",
 		"remark-gfm": "^4.0.1",
 		"remark-parse": "^11.0.0",

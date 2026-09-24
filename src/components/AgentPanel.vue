@@ -1,9 +1,24 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { FwbDropdown } from 'flowbite-vue'
+import { Icon } from '@vicons/utils'
+import { JsonTreeView } from 'json-tree-view-vue3'
+import 'json-tree-view-vue3/style.css'
+import {
+	Add16Regular,
+	ArrowClockwise16Regular,
+	ChatMultiple16Regular,
+	Checkmark16Regular,
+	ChevronDown16Regular,
+	ChevronLeft16Regular,
+	ChevronRight16Regular,
+	Dismiss16Regular,
+	Edit16Regular,
+	Toolbox16Regular,
+} from '../data/icons'
 import { findModelChoice, modelLabel } from '../agent/models'
 import { useAgentSettings } from '../agent/agentSettings'
-import { getSiblings } from '../agent/threads'
+import { getSiblings, toolArgsJson, toolResultJson, type ChatMsg } from '../agent/threads'
 import {
 	activeConversation,
 	blankConversation,
@@ -188,6 +203,75 @@ function siblingOf(id: string): { ids: string[]; index: number } | null {
 	return getSiblings(convo.value.thread, id)
 }
 
+/** Human labels for the agent tool loadout (wisp-pro displayName parity). */
+const TOOL_LABELS: Record<string, string> = {
+	read_resume: 'Read resume',
+	read_jd: 'Read job description',
+	propose_bullet_rewrite: 'Rewrite field',
+	update_title: 'Update title',
+	update_summary: 'Update summary',
+	update_cover_letter: 'Update cover letter',
+	set_visibility: 'Set visibility',
+}
+
+function toolLabel(name: string): string {
+	return TOOL_LABELS[name] ?? name
+}
+
+/**
+ * Visual bubbles (wisp-pro parity): one user message is its own bubble, and
+ * consecutive assistant turns (a run's pre-tool text, its tool cards, and the
+ * post-tool follow-ups) group into one bubble that reads in order.
+ */
+interface BubbleGroup {
+	key: string
+	kind: 'user' | 'assistant'
+	msgs: ChatMsg[]
+}
+
+const groups = computed<BubbleGroup[]>(() => {
+	const out: BubbleGroup[] = []
+	for (const msg of chat.messages.value) {
+		const last = out[out.length - 1]
+		if (msg.role === 'assistant' && last && last.kind === 'assistant') last.msgs.push(msg)
+		else out.push({ key: msg.id, kind: msg.role === 'user' ? 'user' : 'assistant', msgs: [msg] })
+	}
+	return out
+})
+
+function hasVisibleAssistantContent(msg: ChatMsg): boolean {
+	return msg.text.trim().length > 0 || (msg.toolCalls?.length ?? 0) > 0
+}
+
+function groupHasContent(group: BubbleGroup): boolean {
+	return group.msgs.some((m) => hasVisibleAssistantContent(m))
+}
+
+// The tree component takes an explicit light/dark theme: follow the app's
+// `dark` class on <html> (toggled by App.vue) so trees match the chrome.
+const isDarkTree = ref(
+	typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
+)
+let darkObserver: MutationObserver | null = null
+
+onMounted(() => {
+	if (typeof document === 'undefined') return
+	darkObserver = new MutationObserver(() => {
+		isDarkTree.value = document.documentElement.classList.contains('dark')
+	})
+	darkObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+})
+
+onUnmounted(() => {
+	darkObserver?.disconnect()
+	darkObserver = null
+})
+
+function toolStatus(tool: NonNullable<ChatMsg['toolCalls']>[number]): 'running' | 'ok' | 'error' | 'interrupted' {
+	if (tool.status === 'running') return chat.sending.value ? 'running' : 'interrupted'
+	return tool.isError ? 'error' : 'ok'
+}
+
 const editingId = ref<string | null>(null)
 const editDraft = ref('')
 
@@ -253,33 +337,28 @@ function saveEdit(id: string): void {
 			<AutoScrollWrapper ref="scroller" class="min-h-0 flex-1">
 				<div class="flex flex-col gap-2">
 					<div
-						v-for="msg in chat.messages.value"
-						:key="msg.id"
+						v-for="group in groups"
+						:key="group.key"
 						class="group flex items-end gap-1"
-						:class="msg.role === 'user' ? 'self-end' : 'w-full'"
+						:class="group.kind === 'user' ? 'self-end' : 'w-full'"
 					>
 						<button
-							v-if="msg.role === 'user' && editingId !== msg.id"
+							v-if="group.kind === 'user' && editingId !== group.msgs[0].id"
 							class="no-print mb-1 shrink-0 rounded px-1.5 py-0.5 text-[13px] text-slate-400 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700"
 							title="Edit and resend"
 							:disabled="chat.sending.value"
-							@click="startEdit(msg.id)"
+							@click="startEdit(group.msgs[0].id)"
 						>
-							✎
+							<Icon size="16"><Edit16Regular /></Icon>
 						</button>
 						<div
-							class="min-w-0 py-1.5 text-sm"
-							:class="
-								msg.role === 'user'
-									? 'rounded-lg bg-indigo-600 px-3 py-2 text-white'
-									: 'w-full px-1 text-slate-800 dark:text-slate-100'
-							"
+							v-if="group.kind === 'user'"
+							class="min-w-0 py-1.5 text-sm rounded-lg bg-indigo-600 px-3 py-2 text-white"
 						>
-							<template v-if="editingId === msg.id">
+							<template v-if="editingId === group.msgs[0].id">
 								<textarea
 									v-model="editDraft"
-									class="textarea mb-1"
-									:class="msg.role === 'user' ? 'text-slate-900' : ''"
+									class="textarea mb-1 text-slate-900"
 									rows="3"
 									:disabled="chat.sending.value"
 									@keyup.escape="cancelEdit"
@@ -289,53 +368,142 @@ function saveEdit(id: string): void {
 									<button
 										class="btn btn-primary px-2 py-0.5 text-xs"
 										:disabled="!editDraft.trim() || chat.sending.value"
-										@click="saveEdit(msg.id)"
+										@click="saveEdit(group.msgs[0].id)"
 									>
 										Save & resend
 									</button>
 								</div>
 							</template>
-							<template v-else>
-								<pre v-if="msg.role === 'user'" class="whitespace-pre-wrap">{{ msg.text || '…' }}</pre>
-								<StreamMarkdown v-else :text="msg.text" :streaming="chat.sending.value" />
-								<div
-									v-if="msg.role === 'assistant' || (siblingOf(msg.id) && siblingOf(msg.id)!.ids.length > 1)"
-									class="no-print mt-1 flex items-center gap-1 text-[13px] opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"
-									:class="msg.role === 'user' ? 'justify-end text-indigo-100' : 'text-slate-400'"
+							<pre v-else class="whitespace-pre-wrap">{{ group.msgs[0].text || '…' }}</pre>
+						</div>
+						<div v-else class="min-w-0 py-1.5 text-sm w-full px-1 text-slate-800 dark:text-slate-100">
+							<div class="flex flex-col gap-1">
+								<div v-for="msg in group.msgs" :key="msg.id" class="flex min-w-0 flex-col gap-1.5">
+									<StreamMarkdown
+										v-if="msg.text.trim()"
+										:text="msg.text"
+										:streaming="chat.sending.value"
+									/>
+									<div v-if="msg.toolCalls?.length" class="flex flex-col gap-1.5">
+										<details
+											v-for="tool in msg.toolCalls"
+											:key="tool.id"
+											class="rounded-md border px-2 py-1.5 text-[13px]"
+											:class="
+												tool.isError
+													? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40'
+													: 'border-emerald-300/60 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'
+											"
+										>
+											<summary class="flex cursor-pointer list-none items-center gap-1.5">
+												<Icon size="16" aria-hidden="true"><Toolbox16Regular /></Icon>
+												<span class="min-w-0 flex-1 truncate font-medium">{{ toolLabel(tool.name) }}</span>
+												<span
+													class="shrink-0 rounded-full px-1.5 py-0.5 text-[11px]"
+													:class="
+														toolStatus(tool) === 'running'
+															? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200'
+															: toolStatus(tool) === 'ok'
+																? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200'
+																: toolStatus(tool) === 'interrupted'
+																	? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+																	: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200'
+													"
+													>{{ toolStatus(tool) === 'running' ? 'Running…' : toolStatus(tool) === 'ok' ? 'OK' : toolStatus(tool) === 'interrupted' ? 'Interrupted' : 'Error' }}</span
+												>
+											</summary>
+											<div v-if="tool.args" class="mt-1.5">
+												<span class="text-xs font-medium text-slate-500 dark:text-slate-400">Args:</span>
+												<JsonTreeView
+													v-if="toolArgsJson(tool.args)"
+													:json="toolArgsJson(tool.args)!"
+													rootKey="args"
+													:maxDepth="2"
+													:colorScheme="isDarkTree ? 'dark' : 'light'"
+													class="mt-1 max-h-48 overflow-y-auto rounded bg-black/5 p-2 text-xs dark:bg-white/5"
+												/>
+												<code v-else class="break-all text-xs text-slate-500 dark:text-slate-400">{{
+													tool.args
+												}}</code>
+											</div>
+											<JsonTreeView
+												v-if="toolResultJson(tool.result)"
+												:json="toolResultJson(tool.result)!"
+												:rootKey="tool.name"
+												:maxDepth="2"
+												:colorScheme="isDarkTree ? 'dark' : 'light'"
+												class="mt-1.5 max-h-48 overflow-y-auto rounded bg-black/5 p-2 text-xs dark:bg-white/5"
+											/>
+											<pre
+												v-else-if="tool.result"
+												class="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/5 p-2 text-xs dark:bg-white/5"
+												>{{ tool.result }}</pre
+											>
+											<p v-else-if="tool.status === 'running'" class="mt-1.5 text-xs text-slate-400">
+												{{ chat.sending.value ? 'Running…' : 'Interrupted before a result arrived.' }}
+											</p>
+										</details>
+									</div>
+								</div>
+							</div>
+							<span v-if="!groupHasContent(group)">
+								<span
+									v-if="chat.sending.value"
+									class="typing-indicator text-slate-400"
+									role="status"
+									aria-label="Waiting for reply"
 								>
-									<template v-if="siblingOf(msg.id) && siblingOf(msg.id)!.ids.length > 1">
+									<span class="typing-dot"></span>
+									<span class="typing-dot"></span>
+									<span class="typing-dot"></span>
+								</span>
+								<span v-else class="text-slate-400">…</span>
+							</span>
+							<span
+								v-else-if="chat.sending.value && !chat.assistantStreaming.value"
+								class="typing-indicator text-slate-400"
+								role="status"
+								aria-label="Waiting for reply"
+							>
+								<span class="typing-dot"></span>
+								<span class="typing-dot"></span>
+								<span class="typing-dot"></span>
+							</span>
+							<div
+								class="no-print mt-1 flex items-center gap-1 text-[13px] text-slate-400 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"
+							>
+								<template v-if="siblingOf(group.msgs[0].id) && siblingOf(group.msgs[0].id)!.ids.length > 1">
 										<button
 											class="rounded px-1.5 py-0.5 hover:bg-black/10 dark:hover:bg-white/10"
 											title="Previous version"
 											:disabled="chat.sending.value"
-											@click="cycleAt(msg.id, -1)"
+											@click="cycleAt(group.msgs[0].id, -1)"
 										>
-											‹
+											<Icon size="16"><ChevronLeft16Regular /></Icon>
 										</button>
-										<span class="tabular-nums"
-											>{{ siblingOf(msg.id)!.index + 1 }}/{{ siblingOf(msg.id)!.ids.length }}</span
-										>
+									<span class="tabular-nums"
+										>{{ siblingOf(group.msgs[0].id)!.index + 1 }}/{{ siblingOf(group.msgs[0].id)!.ids.length }}</span
+									>
 										<button
 											class="rounded px-1.5 py-0.5 hover:bg-black/10 dark:hover:bg-white/10"
 											title="Next version"
 											:disabled="chat.sending.value"
-											@click="cycleAt(msg.id, 1)"
+											@click="cycleAt(group.msgs[0].id, 1)"
 										>
-											›
+											<Icon size="16"><ChevronRight16Regular /></Icon>
 										</button>
-										<span class="mx-0.5">·</span>
-									</template>
-									<button
-										v-if="msg.role === 'assistant' && msg.text.trim()"
-										class="rounded px-1.5 py-0.5 hover:bg-slate-200 dark:hover:bg-slate-700"
-										title="Regenerate this reply"
-										:disabled="chat.sending.value"
-										@click="void chat.regenerate(msg.id)"
-									>
-										⟳
-									</button>
-								</div>
-							</template>
+									<span class="mx-0.5">·</span>
+								</template>
+								<button
+									v-if="groupHasContent(group)"
+									class="rounded px-1.5 py-0.5 hover:bg-slate-200 dark:hover:bg-slate-700"
+									title="Regenerate this reply"
+									:disabled="chat.sending.value"
+									@click="void chat.regenerate(group.msgs[0].id)"
+								>
+									<Icon size="16"><ArrowClockwise16Regular /></Icon>
+								</button>
+							</div>
 						</div>
 					</div>
 					<p v-if="!chat.messages.value.length" class="text-sm text-slate-400">
@@ -353,8 +521,11 @@ function saveEdit(id: string): void {
 				<FwbDropdown close-inside placement="top">
 					<template #trigger>
 						<button class="btn btn-ghost max-w-52 truncate px-2 py-1" :title="`Session: ${currentTitle}`">
-							<span class="truncate">💬 {{ currentTitle }}</span>
-							<span class="shrink-0">▾</span>
+							<span class="inline-flex min-w-0 items-center gap-1 truncate"
+								><Icon size="16"><ChatMultiple16Regular /></Icon
+								><span class="truncate">{{ currentTitle }}</span></span
+							>
+							<Icon size="16" class="shrink-0"><ChevronDown16Regular /></Icon>
 						</button>
 					</template>
 					<div class="flex max-h-64 min-w-64 flex-col gap-1 overflow-y-auto p-1">
@@ -364,7 +535,9 @@ function saveEdit(id: string): void {
 							:disabled="chat.sending.value"
 							@click="newSession"
 						>
-							<span class="min-w-0 flex-1 truncate">＋ New session</span>
+							<span class="inline-flex min-w-0 flex-1 items-center gap-1 truncate"
+								><Icon size="16"><Add16Regular /></Icon>New session</span
+							>
 						</button>
 						<div
 							v-for="s in sessions"
@@ -392,7 +565,10 @@ function saveEdit(id: string): void {
 							</span>
 							<template v-else>
 								<button type="button" class="min-w-0 flex-1 truncate text-left" @click="selectSession(s.id)">
-									<span v-if="s.active" class="shrink-0">✓ </span>{{ s.title }}
+									<span class="inline-flex items-center gap-1"
+										><Icon v-if="s.active" size="16" class="shrink-0"><Checkmark16Regular /></Icon
+										>{{ s.title }}</span
+									>
 									<span class="block truncate text-[11px] text-slate-400">
 										{{ s.count }} msgs<span v-if="relativeTime(s.updatedAt)"> · {{ relativeTime(s.updatedAt) }}</span>
 									</span>
@@ -404,7 +580,7 @@ function saveEdit(id: string): void {
 										title="Rename session"
 										@click.stop="startRename(s.id)"
 									>
-										✎
+										<Icon size="16"><Edit16Regular /></Icon>
 									</button>
 									<button
 										type="button"
@@ -413,14 +589,14 @@ function saveEdit(id: string): void {
 										:disabled="chat.sending.value"
 										@click.stop="deleteSession(s.id)"
 									>
-										×
+										<Icon size="16"><Dismiss16Regular /></Icon>
 									</button>
 								</span>
 							</template>
 						</div>
 					</div>
 				</FwbDropdown>
-				<span v-if="isConfigured" class="ml-auto">Sends this job's context to {{ activeModelLabel }}.</span>
+				<span v-if="isConfigured" class="ml-auto">Model: {{ activeModelLabel }}</span>
 				<span v-else class="ml-auto">No model configured — open settings to choose one.</span>
 			</div>
 
@@ -439,3 +615,45 @@ function saveEdit(id: string): void {
 		</div>
 	</div>
 </template>
+
+<style scoped>
+.typing-indicator {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 2px 0;
+}
+
+.typing-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background-color: currentColor;
+	animation: typing-bounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dot:nth-child(1) {
+	animation-delay: -0.32s;
+}
+
+.typing-dot:nth-child(2) {
+	animation-delay: -0.16s;
+}
+
+.typing-dot:nth-child(3) {
+	animation-delay: 0s;
+}
+
+@keyframes typing-bounce {
+	0%,
+	80%,
+	100% {
+		transform: scale(0.6);
+		opacity: 0.4;
+	}
+	40% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+</style>

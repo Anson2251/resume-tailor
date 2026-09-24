@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { addMessage, blankThread, getDefaultLeaf, getPathTo, getSiblings, removeMessage } from './threads'
+import {
+	addMessage,
+	blankThread,
+	getDefaultLeaf,
+	getPathTo,
+	getSiblings,
+	normalizeThread,
+	removeMessage,
+	toolArgsJson,
+	toolResultJson,
+} from './threads'
 
 describe('runner', () => {
 	it('runs', () => {
@@ -45,6 +55,71 @@ it('reports siblings for per-bubble navigation', () => {
 	expect(getSiblings(t, 'a2')).toEqual({ ids: ['a1', 'a2'], index: 1 })
 	expect(getSiblings(t, 'u1')).toEqual({ ids: ['u1'], index: 0 })
 	expect(getSiblings(t, 'missing')).toBe(null)
+})
+
+describe('tool activity persistence', () => {
+	it('preserves toolCalls on assistant turns', () => {
+		const raw = {
+			entryId: 'u1',
+			edges: { u1: null, a1: 'u1' },
+			messages: {
+				u1: { id: 'u1', role: 'user', text: 'hi', timestamp: 1 },
+				a1: {
+					id: 'a1',
+					role: 'assistant',
+					text: 'Checking…',
+					timestamp: 2,
+					toolCalls: [{ id: 't1', name: 'read_jd', args: '{}', result: 'ok', status: 'done' }],
+				},
+			},
+			decisions: null,
+		}
+		const t = normalizeThread(raw)
+		expect(t.messages['a1'].toolCalls).toEqual([
+			{ id: 't1', name: 'read_jd', args: '{}', result: 'ok', status: 'done' },
+		])
+	})
+
+	it('drops corrupt tool entries but keeps the message', () => {
+		const raw = {
+			entryId: 'u1',
+			edges: { u1: null, a1: 'u1' },
+			messages: {
+				u1: { id: 'u1', role: 'user', text: 'hi', timestamp: 1 },
+				a1: {
+					id: 'a1',
+					role: 'assistant',
+					text: 'Done.',
+					timestamp: 2,
+					toolCalls: [{ id: '', name: '' }, null, { id: 't2', name: 'read_resume', status: 'bogus' }],
+				},
+			},
+			decisions: null,
+		}
+		const t = normalizeThread(raw)
+		expect(t.messages['a1'].toolCalls).toEqual([{ id: 't2', name: 'read_resume', status: 'done' }])
+	})
+})
+
+describe('toolResultJson', () => {
+	it('returns the source for JSON objects and arrays', () => {
+		expect(toolResultJson('{"attached":false}')).toBe('{"attached":false}')
+		expect(toolResultJson('  [1, 2]\n')).toBe('[1, 2]')
+	})
+
+	it('returns null for plain text, primitives, and cut-off payloads', () => {
+		expect(toolResultJson(undefined)).toBe(null)
+		expect(toolResultJson('')).toBe(null)
+		expect(toolResultJson('Override applied: e1.bullets (12 → 34 chars).')).toBe(null)
+		expect(toolResultJson('123')).toBe(null)
+		expect(toolResultJson('{"attached":false')).toBe(null)
+	})
+
+	it('applies the same JSON detection to stored args', () => {
+		expect(toolArgsJson('{"itemId":"e1","field":"bullets"}')).toBe('{"itemId":"e1","field":"bullets"}')
+		expect(toolArgsJson(undefined)).toBe(null)
+		expect(toolArgsJson('{"itemId":"e1"')).toBe(null)
+	})
 })
 
 it('follows the newest root after deriving from a root message', () => {
