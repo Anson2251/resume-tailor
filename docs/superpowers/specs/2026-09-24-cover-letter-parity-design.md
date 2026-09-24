@@ -84,18 +84,20 @@ Rules:
 - Letters are single-column always: no `letterColumns`, no letter sections/layout.
 - `coverLetter: string` is removed; migration maps it to `letter.body` (section 7).
 
-## 4. Panes + editing UX (approved)
+## 4. Panes + editing UX (approved, revised per review)
 
-- `PaneView` gains `'letter'` (`form | preview | agent | jdpdf | letter`); `resolvePaneViews`
-  treats it like preview/agent (allowed in both panes simultaneously, unlike `form`).
+- `PaneView` gains `'letter'` and renames for parity: `'resume' | 'resumePreview' |
+  'letter' | 'agent' | 'jdpdf'` (old `'form'` → `'resume'`, old `'preview'` →
+  `'resumePreview'`). Labels: Resume / Resume preview / Cover letter / Agent / JD PDF.
+  The resume-form-only-in-one-pane guard moves from `'form'` to `'resume'`.
 - The `letter` pane is self-contained: `CoverLetterForm.vue` (structured fields:
   Recipient, Subject/Re line, Body, Sign-off/Date) stacked above `LetterPreview.vue`
-  (A4 page). This satisfies the approved "new pane type" choice: resume preview left +
-  letter right is a first-class layout.
-- `FormNav` unchanged in v1 (resume anchors only).
-- `AgentPanel` keeps its `Chat | Cover letter` tabs; the letter tab rebinds from
-  `job.coverLetter` to `job.letter.body` (same textarea UX, same placeholder). The
-  structured fields live only in the letter pane — the agent tab is a quick body editor.
+  (A4 page). Resume preview left + Cover letter right is a first-class layout.
+- `FormNav` follows the Resume pane (unchanged scope, relabeled anchor source).
+- `AgentPanel` drops its `Chat | Cover letter` tabs and becomes pure chat: no letter
+  textarea. All letter editing lives in the Cover letter pane (`CoverLetterForm` body
+  field). Agent tool cards for letter writes gain a "Review in Cover letter pane"
+  affordance that switches a pane to `'letter'`.
 - `CoverLetterForm` inputs are plain per-job fields (no master/override split: letters
   are per-job by nature, unlike resume items).
 
@@ -113,13 +115,19 @@ Rules:
 - Empty blocks collapse: no recipient block when both fields empty; no Re line when
   `showReLine` is false or `jobTitle` empty; `(Posting n)` segment only when set.
 
-## 6. Export, status, agent (approved)
+## 6. Export, status, agent (approved, revised per review)
 
-- Export PDF exports the focused document: the print stylesheet + Electron
-  `printToPDF` switch from "always the resume page" to "whichever doc pane
-  (resume preview or letter preview) was last focused". Implementation: a focused-doc
-  tracker (focusin on pane containers) + `document.title` from the right doc name.
-  No separate buttons and no combined PDF in v1 (per "export active doc" answer).
+- Export PDF is decided by which documents are on screen. Visible set: resume counts
+  when any pane is `'resumePreview'`, letter counts when any pane is `'letter'`.
+  - Both visible → Export opens a chooser dialog (`FwbModal`: "Export which
+    document?" with `[Resume]` / `[Cover letter]`). No "Both" in v1 (combined PDF
+    stays a non-goal).
+  - Exactly one visible → export it directly (it is the reviewed doc, no dialog).
+  - None visible → no print; show a message telling the user to switch a pane to
+    the document they want to export and review it before exporting.
+- The print stylesheet + Electron `printToPDF` render only the chosen document's
+  page. Filenames: resume keeps the current `<name>.pdf`; letter uses
+  `<name>-cover-letter.pdf`; `document.title` follows the chosen doc.
 - `JobList.statusOf` keeps its current logic, reading `job.letter.body` instead of
   `job.coverLetter` (`Tailored + cover letter` / `Draft in progress` / `Not tailored yet`).
 - Agent tools: `update_cover_letter` writes `letter.body` (unchanged UX, new target);
@@ -155,4 +163,6 @@ separate letter undo history, no envelope/window formatting.
 - `blankJob`/`cloneJob`: credential default from education; clone independence.
 - Re-line composer: title only, title + posting, hidden flag.
 - Manual: resume preview + letter pane side-by-side; style each independently;
-  export each; agent draft lands in body; import/export round-trip.
+  export chooser with both visible, direct export with one visible, guided message
+  with none visible; agent draft lands in body with review affordance;
+  import/export round-trip.
