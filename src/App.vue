@@ -11,20 +11,24 @@ import {
 	WeatherSunny16Regular,
 } from './data/icons'
 import ResumeForm from './components/ResumeForm.vue'
+import CoverLetterForm from './components/CoverLetterForm.vue'
+import LetterPreview from './components/LetterPreview.vue'
 import FormNav from './components/FormNav.vue'
 import ResumePreview from './components/ResumePreview.vue'
 import JobList from './components/JobList.vue'
 import AgentPanel from './components/AgentPanel.vue'
 import JDViewer from './components/JDViewer.vue'
-import { FwbDropdown } from 'flowbite-vue'
+import { FwbDropdown, FwbModal } from 'flowbite-vue'
 import AppSplash from './components/AppSplash.vue'
+import DialogHost from './components/DialogHost.vue'
 import SettingsPage from './components/SettingsPage.vue'
+import { confirmDialog, notifyDialog, promptDialog } from './data/dialogs'
 import { hydrateAgentSettings, useAgentSettings, useAgentSettingsMutable } from './agent/agentSettings'
 import { hydrateProviderSettings, loadProviderSettings } from './agent/providerSettings'
 import { ACCENTS, templateFont } from './data/options'
 import { SECTION_FACTORY, appendMasterItem, blankCustomItem, isSectionKey, uid } from './data/resume'
 import { blankJob, blankWorkspace, buildPreview, cloneJob, migrate, sampleWorkspace } from './data/workspace'
-import { resolvePaneViews, type PaneView } from './agent/panes'
+import { resolvePaneViews, syncPreviewTabs, type PaneView, type PreviewTab } from './agent/panes'
 import { attachJdPdf, copyJdPdf, loadJdPdf, pruneJdPdfs, referencedJdPdfs } from './agent/jd'
 import { isElectron, exportPdfFile, notifyRendererReady, revealInFolder } from './data/persistence'
 import { getStore } from './data/store'
@@ -85,16 +89,56 @@ const activeJob = computed(() => workspace.jobs.find((j) => j.id === workspace.a
 // Alias: form/preview components consume the Job as a Profile (Job extends Profile).
 const activeProfile = computed(() => activeJob.value)
 
-// Dual panes: each hosts Form | Preview | Agent | JD PDF (Form in one pane only).
+// Dual panes: each hosts Resume | Preview | Cover letter | Agent | JD PDF (Resume form in one pane only).
 const paneA = ref<PaneView>('form')
 const paneB = ref<PaneView>('preview')
 
-const PANE_LABELS: Record<PaneView, string> = { form: 'Form', preview: 'Preview', agent: 'Agent', jdpdf: 'JD PDF' }
+// The preview pane hosts a Resume | Cover letter tab; each pane remembers its own tab.
+// When both panes preview, they stay on alternative views (see syncPreviewTabs).
+const previewTabA = ref<PreviewTab>('resume')
+const previewTabB = ref<PreviewTab>('resume')
+
+function setPreviewTab(which: 'a' | 'b', tab: PreviewTab): void {
+	const [nextA, nextB] = syncPreviewTabs(
+		paneA.value,
+		paneB.value,
+		which === 'a' ? tab : previewTabA.value,
+		which === 'b' ? tab : previewTabB.value,
+		which,
+	)
+	previewTabA.value = nextA
+	previewTabB.value = nextB
+}
+
+/** Jump to the letter for review: prefer the preview tab, else open the letter form. */
+function revealLetter(which: 'a' | 'b'): void {
+	if (paneA.value === 'preview') {
+		setPreviewTab('a', 'letter')
+		return
+	}
+	if (paneB.value === 'preview') {
+		setPreviewTab('b', 'letter')
+		return
+	}
+	setPane(which, 'letter')
+}
+
+const PANE_LABELS: Record<PaneView, string> = {
+	form: 'Resume',
+	preview: 'Preview',
+	letter: 'Cover letter',
+	agent: 'Agent',
+	jdpdf: 'JD PDF',
+}
 
 function setPane(which: 'a' | 'b', view: PaneView): void {
 	const [a, b] = resolvePaneViews(which === 'a' ? view : paneA.value, which === 'b' ? view : paneB.value)
 	paneA.value = a
 	paneB.value = b
+	// Keep the untouched pane's tab so the existing preview doesn't jump.
+	const [tabA, tabB] = syncPreviewTabs(a, b, previewTabA.value, previewTabB.value, which === 'a' ? 'b' : 'a')
+	previewTabA.value = tabA
+	previewTabB.value = tabB
 }
 
 // The preview is derived: master content sliced and ordered by the active profile.
@@ -228,9 +272,16 @@ function loadSample(): void {
 }
 
 function clearAll(): void {
-	if (!confirm('Clear all resume content and jobs?')) return
-	Object.assign(workspace, blankWorkspace())
-	void pruneJdPdfs(new Set())
+	void confirmDialog({
+		title: 'Clear everything?',
+		body: 'This removes all resume content and jobs.',
+		confirmLabel: 'Clear',
+		danger: true,
+	}).then((ok) => {
+		if (!ok) return
+		Object.assign(workspace, blankWorkspace())
+		void pruneJdPdfs(new Set())
+	})
 }
 
 // --- Jobs ---
@@ -257,8 +308,8 @@ function createJob(payload: { company: string; role: string; file: File | null }
 	workspace.activeProfileId = job.id
 	if (payload.file) {
 		void attachJdPdf(job, payload.file).then((res) => {
-			if (res.error) alert(res.error)
-			else if (res.warning) alert(res.warning)
+			if (res.error) void notifyDialog({ title: 'Could not attach JD', body: res.error })
+			else if (res.warning) void notifyDialog({ title: 'JD attached with a warning', body: res.warning })
 		})
 	}
 }
@@ -286,11 +337,18 @@ function duplicateJob(id: string) {
 	}
 }
 
-function renameJob(id: string) {
+function renameJob(id: string): void {
 	const job = workspace.jobs.find((j) => j.id === id)
 	if (!job) return
-	const name = prompt(job.kind === 'master' ? 'Rename' : 'Rename job', job.name)
-	if (name) job.name = name
+	void promptDialog({
+		title: job.kind === 'master' ? 'Rename' : 'Rename job',
+		label: '',
+		initial: job.name,
+		maxLength: 120,
+		confirmLabel: 'Rename',
+	}).then((name) => {
+		if (name) job.name = name
+	})
 }
 
 interface UndoSnapshot {
@@ -300,11 +358,22 @@ interface UndoSnapshot {
 const undoSnapshot = ref<UndoSnapshot | null>(null)
 let undoTimer: ReturnType<typeof setTimeout> | null = null
 
-function removeJob(id: string) {
+function removeJob(id: string): void {
 	const index = workspace.jobs.findIndex((j) => j.id === id)
 	const job = workspace.jobs[index]
 	if (!job || job.kind === 'master') return
-	if (!confirm(`Delete job “${job.name}”? Its tailored view, cover letter and sessions go too.`)) return
+	void confirmDialog({
+		title: `Delete job “${job.name}”?`,
+		body: 'Its tailored view, cover letter and sessions go too. You can undo for 5 seconds.',
+		confirmLabel: 'Delete',
+		danger: true,
+	}).then((ok) => {
+		if (!ok) return
+		removeJobNow(index, id)
+	})
+}
+
+function removeJobNow(index: number, id: string): void {
 	undoSnapshot.value = {
 		jobs: JSON.parse(JSON.stringify(workspace.jobs)),
 		activeJobId: workspace.activeJobId,
@@ -386,17 +455,23 @@ function removeItem({ key, id }: { key: string; id: string }): void {
 // --- User-created sections ---
 
 function createSection(): void {
-	const name = prompt('Name the new section (e.g. “Certifications”)', 'Certifications')
-	const title = name?.trim()
-	if (!title) return
-	const section = { id: uid(), title, items: [blankCustomItem()] }
-	workspace.master.customSections.push(section)
-	// Every job gets the new section (shown, at the end) under its name.
-	for (const profile of workspace.jobs) {
-		profile.sections.push({ id: section.id, title, visible: true, direction: 'col' as const })
-		const custom = (profile.view.custom ??= {})
-		custom[section.id] = section.items.map((item) => item.id)
-	}
+	void promptDialog({
+		title: 'New section',
+		label: 'Name the new section (e.g. “Certifications”)',
+		initial: 'Certifications',
+		maxLength: 60,
+		confirmLabel: 'Create',
+	}).then((title) => {
+		if (!title) return
+		const section = { id: uid(), title, items: [blankCustomItem()] }
+		workspace.master.customSections.push(section)
+		// Every job gets the new section (shown, at the end) under its name.
+		for (const profile of workspace.jobs) {
+			profile.sections.push({ id: section.id, title, visible: true, direction: 'col' as const })
+			const custom = (profile.view.custom ??= {})
+			custom[section.id] = section.items.map((item) => item.id)
+		}
+	})
 }
 
 function removeSection(id: string): void {
@@ -404,10 +479,18 @@ function removeSection(id: string): void {
 	if (index === -1) return
 	const section = workspace.master.customSections[index]
 	const itemIds = new Set((section.items || []).map((item) => item.id))
-	if (
-		!confirm(`Delete section “${section.title || 'Untitled section'}”? This removes it from the master and every job.`)
-	)
-		return
+	void confirmDialog({
+		title: `Delete section “${section.title || 'Untitled section'}”?`,
+		body: 'This removes it from the master and every job.',
+		confirmLabel: 'Delete',
+		danger: true,
+	}).then((ok) => {
+		if (!ok) return
+		removeSectionNow(index, id, itemIds)
+	})
+}
+
+function removeSectionNow(index: number, id: string, itemIds: Set<string>): void {
 	workspace.master.customSections.splice(index, 1)
 	// Remove references from every job so no dangling ids are saved.
 	for (const profile of workspace.jobs) {
@@ -421,8 +504,15 @@ const overrideCount = computed(() => (isMaster.value ? 0 : Object.keys(activePro
 
 function clearOverrides(): void {
 	if (!overrideCount.value) return
-	if (!confirm(`Reset all customized fields on “${activeProfile.value.name}” back to master?`)) return
-	activeProfile.value.overrides = {}
+	void confirmDialog({
+		title: `Reset customizations on “${activeProfile.value.name}”?`,
+		body: 'All customized fields go back to master wording.',
+		confirmLabel: 'Reset',
+		danger: true,
+	}).then((ok) => {
+		if (!ok) return
+		activeProfile.value.overrides = {}
+	})
 }
 
 // --- Import / export (self-contained .zip: workspace + settings + JD PDFs) ---
@@ -456,7 +546,7 @@ async function exportZip(): Promise<void> {
 		URL.revokeObjectURL(url)
 	} catch (error) {
 		console.error('[export] zip failed:', error)
-		alert('Could not build the export file. Please try again.')
+		void notifyDialog({ title: 'Export failed', body: 'Could not build the export file. Please try again.' })
 	} finally {
 		exportingZip.value = false
 	}
@@ -475,22 +565,27 @@ async function handleImportFile(event: Event): Promise<void> {
 	try {
 		parsed = await parseImportBytes(new Uint8Array(await file.arrayBuffer()))
 	} catch {
-		alert('Could not read that file.')
+		void notifyDialog({ title: 'Import failed', body: 'Could not read that file.' })
 		return
 	}
 	if (parsed.kind === 'unrecognized') {
-		alert('That file does not look like a Resume Tailor export.')
+		void notifyDialog({ title: 'Import failed', body: 'That file does not look like a Resume Tailor export.' })
 		return
 	}
 	// Accepts v2 workspaces, legacy { resume, template, accent } exports, and bare resumes.
 	const incoming = migrate(parsed.kind === 'zip' ? parsed.bundle.workspaceRaw : parsed.workspaceRaw)
 	if (!incoming) {
-		alert('That file does not look like a Resume Tailor export.')
+		void notifyDialog({ title: 'Import failed', body: 'That file does not look like a Resume Tailor export.' })
 		return
 	}
 	const jobCount = parsed.kind === 'zip' ? '' : ' (JD PDFs are not part of JSON exports)'
-	if (!confirm(`Import workspace from "${file.name}"? Your current content and jobs will be replaced.${jobCount}`))
-		return
+	const ok = await confirmDialog({
+		title: `Import workspace from “${file.name}”?`,
+		body: `Your current content and jobs will be replaced.${jobCount}`,
+		confirmLabel: 'Import',
+		danger: true,
+	})
+	if (!ok) return
 	if (parsed.kind === 'zip') {
 		// Restore embedded PDFs under their referenced ids, then drop any
 		// stored blobs the incoming workspace no longer references.
@@ -516,15 +611,55 @@ async function handleImportFile(event: Event): Promise<void> {
 }
 
 function exportPdf(): void {
-	const name = (workspace.master.contact.fullName || 'resume').trim().replace(/\s+/g, '-').toLowerCase()
+	const docs = visibleDocs()
+	if (docs.length === 0) {
+		void notifyDialog({
+			title: 'Nothing to export',
+			body: 'Switch a pane to Preview — Resume or Cover letter tab — and review the document before exporting.',
+		})
+		return
+	}
+	if (docs.length === 2) {
+		exportChoiceOpen.value = true
+		return
+	}
+	doExport(docs[0])
+}
+
+type ExportDoc = 'resume' | 'letter'
+
+/** Which documents have a preview on screen right now. */
+function visibleDocs(): ExportDoc[] {
+	const shows = (pane: PaneView, tab: PreviewTab): ExportDoc | null => (pane === 'preview' ? tab : null)
+	const tabs = [shows(paneA.value, previewTabA.value), shows(paneB.value, previewTabB.value)]
+	const docs: ExportDoc[] = []
+	if (tabs.includes('resume')) docs.push('resume')
+	if (tabs.includes('letter')) docs.push('letter')
+	return docs
+}
+
+const exportChoiceOpen = ref(false)
+
+function slugName(): string {
+	return (workspace.master.contact.fullName || 'resume').trim().replace(/\s+/g, '-').toLowerCase() || 'resume'
+}
+
+/** Print only the chosen document (print CSS filters on body[data-print-doc]). */
+function doExport(doc: ExportDoc): void {
+	exportChoiceOpen.value = false
+	const name = slugName()
+	document.body.dataset.printDoc = doc
 	if (isElectron()) {
-		void exportPdfNative(`${name || 'resume'}.pdf`)
+		void exportPdfNative(doc === 'letter' ? `${name}-cover-letter.pdf` : `${name}.pdf`).finally(() => {
+			delete document.body.dataset.printDoc
+		})
 		return
 	}
 	const prevTitle = document.title
-	document.title = name || 'resume'
+	document.title = doc === 'letter' ? `${name}-cover-letter` : name
 	window.print()
 	document.title = prevTitle
+	// afterprint (registered on mount) clears the dataset for the web flow.
 }
 
 const exportingPdf = ref(false)
@@ -539,9 +674,14 @@ async function exportPdfNative(filename: string): Promise<void> {
 		if (result.canceled) return
 		if (result.ok && result.path) {
 			// Offer a quick way to the file; the save dialog already confirmed it.
-			if (confirm(`Saved to ${result.path}\n\nShow in folder?`)) revealInFolder(result.path)
+			const show = await confirmDialog({
+				title: `Saved to ${result.path}`,
+				body: 'Show the file in its folder?',
+				confirmLabel: 'Show in folder',
+			})
+			if (show) revealInFolder(result.path)
 		} else {
-			alert('Could not export the PDF. Please try again.')
+			void notifyDialog({ title: 'Export failed', body: 'Could not export the PDF. Please try again.' })
 		}
 	} finally {
 		exportingPdf.value = false
@@ -565,6 +705,9 @@ watch(
 )
 
 onMounted(async () => {
+	window.addEventListener('afterprint', () => {
+		delete document.body.dataset.printDoc
+	})
 	try {
 		await restore()
 	} finally {
@@ -657,6 +800,25 @@ onMounted(async () => {
 
 		<SettingsPage v-model="settingsOpen" />
 
+		<DialogHost />
+
+		<FwbModal v-if="exportChoiceOpen" size="md" @close="exportChoiceOpen = false">
+			<template #header>
+				<h3 class="text-base font-semibold">Export which document?</h3>
+			</template>
+			<template #body>
+				<p class="text-sm text-slate-500 dark:text-slate-400">
+					Both the resume and the cover letter are on screen. Pick the one to export as PDF.
+				</p>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2">
+					<button class="btn btn-secondary" @click="doExport('resume')">Resume</button>
+					<button class="btn btn-primary" @click="doExport('letter')">Cover letter</button>
+				</div>
+			</template>
+		</FwbModal>
+
 		<!-- Anchor rail for the form (fixed to the window) -->
 		<FormNav :profile="activeProfile" :master="workspace.master" :accent="accent" />
 
@@ -668,6 +830,7 @@ onMounted(async () => {
 				<JobList
 					v-model="workspace.activeJobId"
 					:jobs="workspace.jobs"
+					:master="workspace.master"
 					@create="createJob"
 					@duplicate="duplicateJob"
 					@rename="renameJob"
@@ -686,7 +849,7 @@ onMounted(async () => {
 						</template>
 						<div class="flex min-w-32 flex-col gap-1 p-1">
 							<button
-								v-for="view in ['form', 'preview', 'agent', 'jdpdf'] as PaneView[]"
+								v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf'] as PaneView[]"
 								:key="view"
 								type="button"
 								class="btn btn-ghost justify-start text-[13px] dark:text-slate-200"
@@ -714,25 +877,49 @@ onMounted(async () => {
 						Auto-saves in this browser — Import / Export moves it. PDF: print → “Save as PDF”, margins None.
 					</p>
 				</div>
-				<ResumePreview
-					v-else-if="paneA === 'preview'"
-					:resume="previewResume"
-					v-model:template="template"
-					v-model:accent="accent"
-					v-model:font="font"
-					v-model:columns="columns"
-					v-model:density="density"
-					v-model:sections="sections"
-					@add-section="createSection"
-					@delete-section="removeSection"
-				/>
+				<div v-else-if="paneA === 'preview'" class="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+					<div class="no-print mb-2 flex gap-1">
+						<button
+							class="btn px-3 py-1.5 text-[13px]"
+							:class="previewTabA === 'resume' ? 'btn-primary' : 'btn-ghost'"
+							@click="setPreviewTab('a', 'resume')"
+						>
+							Resume
+						</button>
+						<button
+							class="btn px-3 py-1.5 text-[13px]"
+							:class="previewTabA === 'letter' ? 'btn-primary' : 'btn-ghost'"
+							@click="setPreviewTab('a', 'letter')"
+						>
+							Cover letter
+						</button>
+					</div>
+					<ResumePreview
+						v-if="previewTabA === 'resume'"
+						:resume="previewResume"
+						v-model:template="template"
+						v-model:accent="accent"
+						v-model:font="font"
+						v-model:columns="columns"
+						v-model:density="density"
+						v-model:sections="sections"
+						@add-section="createSection"
+						@delete-section="removeSection"
+					/>
+					<LetterPreview v-else :job="activeJob" :contact="workspace.master.contact" />
+				</div>
 				<AgentPanel
 					v-else-if="paneA === 'agent'"
 					:key="`${activeJob.id}-${agentKey}`"
 					:job="activeJob"
 					:master="workspace.master"
 					@open-settings="settingsOpen = true"
+					@open-jd="setPane('a', 'jdpdf')"
+					@open-letter="revealLetter('a')"
 				/>
+				<div v-else-if="paneA === 'letter'" class="lg:min-h-0 lg:overflow-y-auto">
+					<CoverLetterForm :job="activeJob" :master="workspace.master" />
+				</div>
 				<JDViewer v-else :key="activeJob.id" :job="activeJob" />
 			</div>
 
@@ -746,7 +933,7 @@ onMounted(async () => {
 						</template>
 						<div class="flex min-w-32 flex-col gap-1 p-1">
 							<button
-								v-for="view in ['form', 'preview', 'agent', 'jdpdf'] as PaneView[]"
+								v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf'] as PaneView[]"
 								:key="view"
 								type="button"
 								class="btn btn-ghost justify-start text-[13px] dark:text-slate-200"
@@ -767,25 +954,49 @@ onMounted(async () => {
 						@remove="removeItem"
 					/>
 				</div>
-				<ResumePreview
-					v-else-if="paneB === 'preview'"
-					:resume="previewResume"
-					v-model:template="template"
-					v-model:accent="accent"
-					v-model:font="font"
-					v-model:columns="columns"
-					v-model:density="density"
-					v-model:sections="sections"
-					@add-section="createSection"
-					@delete-section="removeSection"
-				/>
+				<div v-else-if="paneB === 'preview'" class="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+					<div class="no-print mb-2 flex gap-1">
+						<button
+							class="btn px-3 py-1.5 text-[13px]"
+							:class="previewTabB === 'resume' ? 'btn-primary' : 'btn-ghost'"
+							@click="setPreviewTab('b', 'resume')"
+						>
+							Resume
+						</button>
+						<button
+							class="btn px-3 py-1.5 text-[13px]"
+							:class="previewTabB === 'letter' ? 'btn-primary' : 'btn-ghost'"
+							@click="setPreviewTab('b', 'letter')"
+						>
+							Cover letter
+						</button>
+					</div>
+					<ResumePreview
+						v-if="previewTabB === 'resume'"
+						:resume="previewResume"
+						v-model:template="template"
+						v-model:accent="accent"
+						v-model:font="font"
+						v-model:columns="columns"
+						v-model:density="density"
+						v-model:sections="sections"
+						@add-section="createSection"
+						@delete-section="removeSection"
+					/>
+					<LetterPreview v-else :job="activeJob" :contact="workspace.master.contact" />
+				</div>
 				<AgentPanel
 					v-else-if="paneB === 'agent'"
 					:key="`${activeJob.id}-${agentKey}`"
 					:job="activeJob"
 					:master="workspace.master"
 					@open-settings="settingsOpen = true"
+					@open-jd="setPane('b', 'jdpdf')"
+					@open-letter="revealLetter('b')"
 				/>
+				<div v-else-if="paneB === 'letter'" class="lg:min-h-0 lg:overflow-y-auto">
+					<CoverLetterForm :job="activeJob" :master="workspace.master" />
+				</div>
 				<JDViewer v-else :key="activeJob.id" :job="activeJob" />
 			</div>
 		</main>

@@ -2,13 +2,17 @@ import { describe, expect, it } from 'vitest'
 import {
 	addMessage,
 	blankThread,
+	draftingPartials,
 	getDefaultLeaf,
 	getPathTo,
 	getSiblings,
+	markToolRunning,
 	normalizeThread,
 	removeMessage,
+	syncDraftingCalls,
 	toolArgsJson,
 	toolResultJson,
+	type ToolActivity,
 } from './threads'
 
 describe('runner', () => {
@@ -115,6 +119,68 @@ describe('tool activity persistence', () => {
 		}
 		const t = normalizeThread(raw)
 		expect(t.messages['a1'].toolCalls).toEqual([{ id: 't2', name: 'read_resume', status: 'done' }])
+	})
+
+	it('settles stale drafting entries as running (interrupted when idle)', () => {
+		const raw = {
+			entryId: 'u1',
+			edges: { u1: null, a1: 'u1' },
+			messages: {
+				u1: { id: 'u1', role: 'user', text: 'hi', timestamp: 1 },
+				a1: {
+					id: 'a1',
+					role: 'assistant',
+					text: '',
+					timestamp: 2,
+					toolCalls: [{ id: 't9', name: 'read_jd', status: 'drafting' }],
+				},
+			},
+			decisions: null,
+		}
+		const t = normalizeThread(raw)
+		expect(t.messages['a1'].toolCalls).toEqual([{ id: 't9', name: 'read_jd', status: 'running' }])
+	})
+})
+
+describe('drafting tool cards', () => {
+	it('extracts tool-call partials from streamed messages', () => {
+		expect(draftingPartials(null)).toEqual([])
+		expect(draftingPartials({ content: 'nope' })).toEqual([])
+		expect(
+			draftingPartials({
+				content: [
+					{ type: 'text', text: 'Checking…' },
+					{ type: 'toolCall', id: 'c1', name: 'read_jd', arguments: {} },
+					{ type: 'toolCall', id: '', name: 'x' },
+				],
+			}),
+		).toEqual([{ id: 'c1', name: 'read_jd' }])
+	})
+
+	it('upserts drafting cards by stable id without touching settled ones', () => {
+		const calls: ToolActivity[] = [{ id: 'done1', name: 'read_resume', status: 'done', result: 'ok' }]
+		expect(syncDraftingCalls(calls, [{ id: 'c1', name: 'read_jd' }])).toBe(true)
+		expect(calls).toEqual([
+			{ id: 'done1', name: 'read_resume', status: 'done', result: 'ok' },
+			{ id: 'c1', name: 'read_jd', status: 'drafting' },
+		])
+		// Repeat deltas are idempotent; a resolving name updates the placeholder.
+		expect(syncDraftingCalls(calls, [{ id: 'c1', name: '' }])).toBe(false)
+		const nameless: ToolActivity[] = [{ id: 'c2', name: '…', status: 'drafting' }]
+		expect(syncDraftingCalls(nameless, [{ id: 'c2', name: 'read_jd' }])).toBe(true)
+		expect(nameless[0].name).toBe('read_jd')
+	})
+
+	it('flips drafting cards to running on execution start', () => {
+		const calls: ToolActivity[] = [{ id: 'c1', name: 'read_jd', status: 'drafting' }]
+		markToolRunning(calls, 'c1', 'read_jd', '{"section":"x"}')
+		expect(calls).toEqual([{ id: 'c1', name: 'read_jd', status: 'running', args: '{"section":"x"}' }])
+		// Unknown ids push fresh running cards (execution without streamed deltas).
+		markToolRunning(calls, 'c2', 'read_resume', undefined)
+		expect(calls[1]).toEqual({ id: 'c2', name: 'read_resume', status: 'running' })
+		// Settled cards are never clobbered.
+		markToolRunning(calls, 'c2', 'other', '{}')
+		expect(calls[1]).toEqual({ id: 'c2', name: 'read_resume', status: 'running' })
 	})
 })
 

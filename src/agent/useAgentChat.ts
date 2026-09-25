@@ -6,8 +6,18 @@ import type { ChatThread } from './threads'
 import { uid } from '../data/resume'
 import { getApiKey } from './keyring'
 import { DEFAULT_MODEL, resolveModel, streamFn, type ModelChoice } from './models'
-import { DEFAULT_SYSTEM_PROMPT, loadAgentSettings } from './agentSettings'
-import { getChildren, getDefaultLeaf, getParent, getPathTo, removeMessage, type ChatMsg } from './threads'
+import { resolveSystemPrompt, loadAgentSettings } from './agentSettings'
+import {
+	draftingPartials,
+	getChildren,
+	getDefaultLeaf,
+	getParent,
+	getPathTo,
+	markToolRunning,
+	removeMessage,
+	syncDraftingCalls,
+	type ChatMsg,
+} from './threads'
 import { activeConversation, pushMessage, touchConversation, type Conversation } from './conversations'
 import { agentToolsFor, type JobMutations } from './tools'
 import { composeSystemPrompt } from './context'
@@ -280,9 +290,7 @@ export function useAgentChat(
 	 */
 	const assistantStreaming = ref(false)
 
-	const basePrompt = computed(
-		() => opts.systemPrompt?.trim() || loadAgentSettings().systemPrompt || DEFAULT_SYSTEM_PROMPT,
-	)
+	const basePrompt = computed(() => resolveSystemPrompt(opts.systemPrompt?.trim() || loadAgentSettings().systemPrompt))
 	const contextChars =
 		typeof opts.contextChars === 'number' && Number.isFinite(opts.contextChars)
 			? Math.min(50000, Math.max(1000, Math.round(opts.contextChars)))
@@ -434,15 +442,7 @@ export function useAgentChat(
 			const turn = currentTurn()
 			if (turn) {
 				const calls = turn.toolCalls ?? (turn.toolCalls = [])
-				if (!calls.some((c) => c.id === event.toolCallId)) {
-					const summary = summarizeToolArgs(event.args)
-					calls.push({
-						id: event.toolCallId,
-						name: event.toolName,
-						...(summary !== undefined ? { args: summary } : null),
-						status: 'running',
-					})
-				}
+				markToolRunning(calls, event.toolCallId, event.toolName, summarizeToolArgs(event.args))
 			}
 			return
 		}
@@ -503,6 +503,9 @@ export function useAgentChat(
 			if (text) turn.text = text
 			const reasoning = agentReasoning(event.message)
 			if (reasoning.trim()) turn.reasoning = truncateDisplay(reasoning, REASONING_DISPLAY_CHARS)
+			// Tool calls draft before they execute: surface a Preparing card
+			// from the streamed partials so argument drafting never looks stalled.
+			syncDraftingCalls(turn.toolCalls ?? (turn.toolCalls = []), draftingPartials(event.message))
 		} else if (event.type === 'agent_end') {
 			const id = draftId.value
 			// Surface the provider's own error (any backend) instead of

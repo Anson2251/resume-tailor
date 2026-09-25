@@ -30,6 +30,7 @@ import {
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import { normalizeBaseUrl, validateModelId, validateProviderId } from '../agent/providerSettings'
 import { DEFAULT_AGENT_SETTINGS, DEFAULT_SYSTEM_PROMPT, useAgentSettingsMutable } from '../agent/agentSettings'
+import { confirmDialog } from '../data/dialogs'
 import { isElectron } from '../data/persistence'
 import { Bot24Regular, ChatMultiple16Regular, Dismiss16Regular, Settings16Regular } from '../data/icons'
 
@@ -57,7 +58,7 @@ const sections = [
 	{
 		id: 'conversation' as const,
 		title: 'Conversation',
-		description: 'System prompt and context',
+		description: 'Extra instructions and context',
 		icon: Settings16Regular,
 	},
 ]
@@ -248,8 +249,15 @@ function handleAddModel(): void {
 }
 
 function handleRemoveModel(provider: string, id: string): void {
-	if (!confirm(`Delete custom model “${id}”?`)) return
-	removeCustomModel(provider, id)
+	void confirmDialog({
+		title: `Delete custom model “${id}”?`,
+		body: 'Sessions using it will fall back to another model.',
+		confirmLabel: 'Delete',
+		danger: true,
+	}).then((ok) => {
+		if (!ok) return
+		removeCustomModel(provider, id)
+	})
 }
 
 function handleToggleModel(provider: string, id: string, enabled: boolean): void {
@@ -307,9 +315,16 @@ function handleAddProvider(): void {
 function handleRemoveProvider(): void {
 	const provider = detailProvider.value
 	if (!provider.custom) return
-	if (!confirm(`Delete custom provider “${provider.name}” and its models?`)) return
-	removeCustomProvider(provider.value)
-	selectedProviderId.value = providerList.value[0]?.value ?? ''
+	void confirmDialog({
+		title: `Delete custom provider “${provider.name}”?`,
+		body: 'Its models go too. Sessions using them will fall back to another model.',
+		confirmLabel: 'Delete',
+		danger: true,
+	}).then((ok) => {
+		if (!ok) return
+		removeCustomProvider(provider.value)
+		selectedProviderId.value = providerList.value[0]?.value ?? ''
+	})
 }
 
 // --- Dedicated Model page: pick the default agent model ---
@@ -420,7 +435,7 @@ function syncConversationDraft(): void {
 }
 
 function resetConversation(): void {
-	settings.systemPrompt = DEFAULT_SYSTEM_PROMPT
+	settings.systemPrompt = ''
 	settings.contextChars = DEFAULT_AGENT_SETTINGS.contextChars
 	syncConversationDraft()
 }
@@ -876,11 +891,17 @@ function onKeydown(event: KeyboardEvent): void {
 						<FwbCard class="p-5">
 							<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Assistant behavior</h3>
 							<div class="mt-4">
+								<p class="text-xs font-medium text-slate-700 dark:text-slate-300">Core prompt (locked)</p>
+								<pre
+									class="mt-1 max-h-48 overflow-y-auto rounded-lg bg-slate-50 p-3 text-xs whitespace-pre-wrap text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+									>{{ DEFAULT_SYSTEM_PROMPT }}</pre>
+							</div>
+							<div class="mt-4">
 								<FwbTextarea
 									v-model="settings.systemPrompt"
-									label="System prompt"
-									:rows="6"
-									placeholder="How the agent should behave…"
+									label="Additional instructions (appended to the core prompt)"
+									:rows="4"
+									placeholder="E.g. Prefer British English, keep bullets under 2 lines…"
 								/>
 							</div>
 							<div class="mt-4 max-w-xs">
@@ -894,7 +915,9 @@ function onKeydown(event: KeyboardEvent): void {
 							<div
 								class="mt-4 flex items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-slate-800"
 							>
-								<FwbButton size="sm" color="alternative" @click="resetConversation"> Reset to default </FwbButton>
+								<FwbButton size="sm" color="alternative" @click="resetConversation">
+									Clear extra instructions
+								</FwbButton>
 							</div>
 						</FwbCard>
 					</div>

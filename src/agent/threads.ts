@@ -7,7 +7,65 @@ export interface ToolActivity {
 	/** Truncated result text (display only; the live LLM transcript is separate). */
 	result?: string
 	isError?: boolean
-	status: 'running' | 'done'
+	/**
+	 * `drafting` while the model streams the call arguments (card renders
+	 * immediately so the stall is visible), `running` once executing.
+	 */
+	status: 'running' | 'done' | 'drafting'
+}
+
+/** Tool-call partials from a streamed assistant message (toolcall deltas). */
+export function draftingPartials(message: unknown): { id: string; name: string }[] {
+	const content = (message as { content?: unknown } | null | undefined)?.content
+	if (!Array.isArray(content)) return []
+	const out: { id: string; name: string }[] = []
+	for (const block of content) {
+		const b = block as { type?: unknown; id?: unknown; name?: unknown } | null | undefined
+		if (b && b.type === 'toolCall' && typeof b.id === 'string' && b.id) {
+			out.push({ id: b.id, name: typeof b.name === 'string' ? b.name : '' })
+		}
+	}
+	return out
+}
+
+/** Drafting cards visible on a turn (for the Preparing… pill). */
+export function draftingCalls(turn: Pick<ChatMsg, 'toolCalls'>): ToolActivity[] {
+	return (turn.toolCalls || []).filter((c) => c.status === 'drafting')
+}
+
+/**
+ * Upsert drafting cards from streamed tool-call partials (stable ids across
+ * deltas). Never touches `running`/`done` entries. Returns true when a card
+ * was added or a placeholder name resolved.
+ */
+export function syncDraftingCalls(calls: ToolActivity[], partials: { id: string; name: string }[]): boolean {
+	let changed = false
+	for (const p of partials) {
+		if (!p.id) continue
+		const found = calls.find((c) => c.id === p.id)
+		if (!found) {
+			calls.push({ id: p.id, name: p.name || '…', status: 'drafting' })
+			changed = true
+		} else if (found.status === 'drafting' && p.name && found.name !== p.name) {
+			found.name = p.name
+			changed = true
+		}
+	}
+	return changed
+}
+
+/** Flip a drafting card to running when execution starts (matched by id). */
+export function markToolRunning(calls: ToolActivity[], id: string, name: string, args?: string): void {
+	const found = calls.find((c) => c.id === id)
+	if (found && found.status === 'drafting') {
+		found.status = 'running'
+		if (name) found.name = name
+		if (args !== undefined) found.args = args
+		return
+	}
+	if (!found) {
+		calls.push({ id, name, ...(args !== undefined ? { args } : null), status: 'running' })
+	}
 }
 
 export interface ChatMsg {
@@ -146,8 +204,8 @@ export function toolArgsJson(args: string | undefined): string | null {
 
 /**
  * Keep only well-formed tool activity (display-only; drops corrupt entries).
- * A `running` entry persisted mid-run never resumes — the panel renders it
- * as interrupted while `sending` is false.
+ * A `running` or `drafting` entry persisted mid-run never resumes — the panel
+ * renders it as interrupted while `sending` is false.
  */
 function normalizeToolCalls(raw: unknown): { toolCalls: ToolActivity[] } | null {
 	if (!Array.isArray(raw)) return null
@@ -156,7 +214,7 @@ function normalizeToolCalls(raw: unknown): { toolCalls: ToolActivity[] } | null 
 		if (!item || typeof item !== 'object') continue
 		const t = item as Record<string, unknown>
 		if (typeof t['id'] !== 'string' || !t['id'] || typeof t['name'] !== 'string' || !t['name']) continue
-		const status = t['status'] === 'running' ? 'running' : 'done'
+		const status = t['status'] === 'running' || t['status'] === 'drafting' ? 'running' : 'done'
 		out.push({
 			id: t['id'],
 			name: t['name'],

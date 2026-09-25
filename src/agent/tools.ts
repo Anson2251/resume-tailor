@@ -8,6 +8,7 @@ import { JD_CONTEXT_CHARS, truncate } from './context'
 export interface JobMutations {
 	applyOverride: (itemId: string, patch: Record<string, string | boolean>) => void
 	setCoverLetter: (text: string) => void
+	setLetterField: (field: string, value: string | boolean) => void
 	setVisibility: (section: string, ids: string[]) => void
 	setTitle: (title: string) => void
 	setSummary: (summary: string) => void
@@ -22,6 +23,18 @@ const err = (text: string, details: Record<string, unknown> = {}) => ({
 	content: [{ type: 'text' as const, text: `Error: ${text}` }],
 	details: { error: true, ...details },
 })
+
+/**
+ * Master holds the shared canonical content — job tailoring (title, summary,
+ * visibility, letter) refuses on it with guidance. Field rewrites stay allowed:
+ * on Master they refine the shared wording. Reads and chat coaching stay available.
+ */
+function masterGuard(job: Job): ReturnType<typeof err> | null {
+	if (job.kind !== 'master') return null
+	return err(
+		'This is the Master profile (shared canonical content). Title, summary, visibility, and cover letter live on job profiles — switch to a job to tailor those. Field rewrites are allowed here and refine the shared wording.',
+	)
+}
 
 function allMasterItems(master: MasterResume): Map<string, { item: ContentItem; section: string }> {
 	const byId = new Map<string, { item: ContentItem; section: string }>()
@@ -82,6 +95,12 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 					title: job.title,
 					summary: truncate(job.summary || '', 2000),
 					overrides: Object.keys(job.overrides || {}).length,
+					letter: {
+						recipientTitle: job.letter?.recipientTitle || null,
+						jobTitle: job.letter?.jobTitle || null,
+						bodyChars: (job.letter?.body || '').length,
+						body: truncate(job.letter?.body || '', 4000),
+					},
 				}
 				if (p.section) {
 					if (!(p.section in sections)) return err(`Unknown section "${p.section}".`)
@@ -112,6 +131,15 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 		execute: async () => {
 			const text = (job.jobDescription || '').trim()
 			if (!text) {
+				if (job.kind === 'master') {
+					return ok(
+						JSON.stringify({
+							attached: false,
+							hint: 'Master holds no JD by design. Ask the user to switch to a job profile (or create one) and attach the posting there.',
+						}),
+						{ attached: false },
+					)
+				}
 				return ok(
 					JSON.stringify({
 						attached: false,
@@ -139,7 +167,7 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 		name: 'propose_bullet_rewrite',
 		label: 'Rewrite field',
 		description:
-			'Rewrite one resume field as a per-job override (e.g. experience bullets, project highlights, summary-adjacent fields). Get valid item ids from read_resume first.',
+			'Rewrite one resume field (e.g. experience bullets, project highlights). On a job this saves a per-job override; on Master it refines the shared wording for every job. Get valid item ids from read_resume first.',
 		parameters: Type.Object({ itemId: Type.String(), field: Type.String(), value: Type.String() }),
 		execute: async (_id, params) => {
 			const p = params as { itemId: string; field: string; value: string }
@@ -172,6 +200,8 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 		parameters: Type.Object({ title: Type.String() }),
 		execute: async (_id, params) => {
 			const p = params as { title: string }
+			const blocked = masterGuard(job)
+			if (blocked) return blocked
 			if (typeof p.title !== 'string') return err('title is required.')
 			if (p.title.length > 160) return err('Title is too long (max 160 chars).')
 			const before = job.title || ''
@@ -187,6 +217,8 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 		parameters: Type.Object({ summary: Type.String() }),
 		execute: async (_id, params) => {
 			const p = params as { summary: string }
+			const blocked = masterGuard(job)
+			if (blocked) return blocked
 			if (typeof p.summary !== 'string') return err('summary is required.')
 			if (p.summary.length > 4000) return err('Summary is too long (max 4000 chars).')
 			const before = (job.summary || '').length
@@ -198,15 +230,56 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 	const updateCoverLetter: AgentTool = {
 		name: 'update_cover_letter',
 		label: 'Update cover letter',
-		description: 'Replace the job cover letter draft (markdown). Only use facts from the resume and JD.',
+		description:
+			'Replace the cover letter body (markdown). Only use facts from the resume and JD. Header, recipient and signature render automatically.',
 		parameters: Type.Object({ text: Type.String() }),
 		execute: async (_id, params) => {
 			const text = (params as { text: string }).text
+			const blocked = masterGuard(job)
+			if (blocked) return blocked
 			if (typeof text !== 'string') return err('text is required.')
 			if (text.length > 12000) return err('Cover letter is too long (max 12000 chars).')
-			const before = (job.coverLetter || '').length
+			const before = (job.letter?.body || '').length
 			mutate.setCoverLetter(text)
 			return ok(`Cover letter updated (${before} → ${text.length} chars).`, { beforeChars: before })
+		},
+	}
+
+	const LETTER_FIELDS = [
+		'recipientTitle',
+		'recipientAddress',
+		'jobTitle',
+		'postingNumber',
+		'showReLine',
+		'signoff',
+		'dateMode',
+		'dateCustom',
+		'credentialLine',
+	] as const
+
+	const updateLetterField: AgentTool = {
+		name: 'update_letter_field',
+		label: 'Update letter field',
+		description:
+			'Update one structured cover-letter field (recipient, Re line, sign-off, date). Use update_cover_letter for the body text.',
+		parameters: Type.Object({ field: Type.String(), value: Type.Union([Type.String(), Type.Boolean()]) }),
+		execute: async (_id, params) => {
+			const p = params as { field: string; value: string | boolean }
+			const blocked = masterGuard(job)
+			if (blocked) return blocked
+			if (!(LETTER_FIELDS as readonly string[]).includes(p.field)) {
+				return err(`Unknown letter field "${p.field}". Allowed: ${LETTER_FIELDS.join(', ')}.`)
+			}
+			if (p.field === 'showReLine') {
+				if (typeof p.value !== 'boolean') return err('showReLine needs a boolean value.')
+			} else if (p.field === 'dateMode') {
+				if (p.value !== 'auto' && p.value !== 'custom') return err('dateMode must be "auto" or "custom".')
+			} else {
+				if (typeof p.value !== 'string') return err(`${p.field} needs a string value.`)
+				if (p.value.length > 2000) return err(`${p.field} is too long (max 2000 chars).`)
+			}
+			mutate.setLetterField(p.field, p.value)
+			return ok(`Letter field ${p.field} updated.`, { field: p.field, after: p.value })
 		},
 	}
 
@@ -218,6 +291,8 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 		parameters: Type.Object({ section: Type.String(), ids: Type.Array(Type.String()) }),
 		execute: async (_id, params) => {
 			const p = params as { section: string; ids: string[] }
+			const blocked = masterGuard(job)
+			if (blocked) return blocked
 			const view = job.view as unknown as Record<string, string[]>
 			const shown = view[p.section]
 			if (!Array.isArray(shown)) {
@@ -252,5 +327,14 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 		},
 	}
 
-	return [readResume, readJd, rewriteField, updateTitle, updateSummary, updateCoverLetter, setVisibility]
+	return [
+		readResume,
+		readJd,
+		rewriteField,
+		updateTitle,
+		updateSummary,
+		updateCoverLetter,
+		updateLetterField,
+		setVisibility,
+	]
 }

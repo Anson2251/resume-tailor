@@ -1,6 +1,32 @@
 import { getChildren, getDefaultLeaf, getParent, type ChatThread } from './threads'
 
-export type PaneView = 'form' | 'preview' | 'agent' | 'jdpdf'
+export type PaneView = 'form' | 'preview' | 'letter' | 'agent' | 'jdpdf'
+
+export type PreviewTab = 'resume' | 'letter'
+
+export function oppositePreviewTab(tab: PreviewTab): PreviewTab {
+	return tab === 'resume' ? 'letter' : 'resume'
+}
+
+/**
+ * Keep two preview panes on alternative views: when both panes show the preview
+ * and their tabs agree, the `keep` pane holds its tab and the other takes the
+ * opposite. Tab switches keep the clicked pane; pane switches keep the existing
+ * preview so it doesn't jump under the user.
+ */
+export function syncPreviewTabs(
+	a: PaneView,
+	b: PaneView,
+	tabA: PreviewTab,
+	tabB: PreviewTab,
+	keep: 'a' | 'b',
+): [PreviewTab, PreviewTab] {
+	if (a === 'preview' && b === 'preview' && tabA === tabB) {
+		if (keep === 'a') return [tabA, oppositePreviewTab(tabA)]
+		return [oppositePreviewTab(tabB), tabB]
+	}
+	return [tabA, tabB]
+}
 
 /** Form may only be open in one pane — the other falls back to Preview. */
 export function resolvePaneViews(a: PaneView, b: PaneView): [PaneView, PaneView] {

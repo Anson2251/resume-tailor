@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
+import { FwbFileInput } from 'flowbite-vue'
 import { attachJdPdf, loadJdPdf, jdBlobUrl } from '../agent/jd'
 import type { Job } from '../data/types'
 
@@ -12,6 +13,7 @@ const loading = ref(false)
 const busy = ref(false)
 const notice = ref('')
 const missing = ref(false)
+const picked = ref<File | File[] | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 function revoke(): void {
@@ -41,10 +43,8 @@ async function load(): Promise<void> {
 watch(() => [props.job.id, props.job.jdSource?.pdfRefId, props.job.jdSource?.extractedAt], load, { immediate: true })
 onBeforeUnmount(revoke)
 
-async function onPick(event: Event): Promise<void> {
-	const input = event.target as HTMLInputElement | null
-	const f = input?.files?.[0]
-	if (input) input.value = ''
+async function onPick(file: File | File[] | null): Promise<void> {
+	const f = Array.isArray(file) ? file[0] : file
 	if (!f || busy.value) return
 	notice.value = ''
 	busy.value = true
@@ -59,27 +59,60 @@ async function onPick(event: Event): Promise<void> {
 		notice.value = 'Could not read that PDF.'
 	} finally {
 		busy.value = false
+		picked.value = null
 	}
+}
+
+watch(picked, (file) => {
+	if (file) void onPick(file)
+})
+
+function onNativePick(event: Event): void {
+	const input = event.target as HTMLInputElement | null
+	const f = input?.files?.[0]
+	if (input) input.value = ''
+	if (f) void onPick(f)
 }
 </script>
 
 <template>
 	<div class="flex min-h-0 flex-col gap-3">
-		<div class="no-print flex flex-wrap items-center gap-2">
-			<span class="text-xs font-semibold tracking-wide text-slate-400 uppercase">Job description</span>
-			<span v-if="job.jdSource" class="text-xs text-slate-500">
-				{{ job.jdSource.filename }} · {{ job.jdSource.pageCount }} pages
+		<div
+			v-if="job.kind === 'master'"
+			class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+		>
+			Master holds the shared content — it has no JD. Select a job to attach its posting.
+		</div>
+		<div class="no-print flex flex-nowrap items-center gap-2">
+			<span v-if="job.jdSource" class="text-xs text-slate-500 flex flex-nowrap flex-1 text-nowrap">
+				<span class="truncate">{{ job.jdSource.filename }}</span> · {{ job.jdSource.pageCount }} pages
 			</span>
-			<button class="btn btn-ghost px-2 py-1 text-xs" :disabled="busy" @click="fileInput?.click()">
+			<button
+				v-if="job.jdSource"
+				class="btn btn-ghost px-2 py-1 text-xs text-nowrap"
+				:disabled="busy"
+				@click="fileInput?.click()"
+			>
 				{{ busy ? 'Reading…' : 'Replace JD' }}
 			</button>
-			<input ref="fileInput" type="file" accept="application/pdf,.pdf" class="hidden" @change="onPick" />
+			<input ref="fileInput" type="file" accept="application/pdf,.pdf" class="hidden" @change="onNativePick" />
 		</div>
+		<fwb-file-input
+			v-if="!job.jdSource && job.kind !== 'master'"
+			v-model="picked"
+			dropzone
+			accept="application/pdf,.pdf"
+			:disabled="busy || loading"
+		>
+			<template #dropzonePlaceholder>
+				<span class="font-semibold">{{ busy ? 'Reading…' : 'Click to upload' }}</span>
+				{{ busy ? '' : 'the JD PDF or drag and drop' }}
+			</template>
+		</fwb-file-input>
 		<p v-if="notice" class="text-xs text-amber-600">{{ notice }}</p>
 		<div v-if="loading" class="text-sm text-slate-400">Loading PDF…</div>
 		<div v-else-if="missing" class="rounded-lg border border-dashed p-4 text-sm text-slate-500">
-			JD PDF missing — it isn't part of workspace exports.
-			<button class="btn btn-ghost px-2 py-1 text-xs" @click="fileInput?.click()">Re-attach</button>
+			JD PDF missing — it isn't part of workspace exports. Re-attach it with the dropzone above.
 		</div>
 		<iframe
 			v-else-if="blobUrl"
@@ -87,9 +120,6 @@ async function onPick(event: Event): Promise<void> {
 			title="Job description PDF"
 			class="min-h-[50vh] w-full flex-1 rounded-lg border border-slate-200 bg-white"
 		/>
-		<div v-else class="rounded-lg border border-dashed p-4 text-sm text-slate-500">
-			No JD attached yet. Use Replace JD to attach the posting PDF.
-		</div>
 		<div v-if="job.jobDescription" class="min-h-0 overflow-y-auto">
 			<p class="label">Extracted text (read-only)</p>
 			<pre

@@ -147,13 +147,32 @@ export interface Workspace {
 
 import type { Conversation } from '../agent/conversations'
 
+/** Structured cover letter: sender identity stays live from master.contact. */
+export interface CoverLetter {
+	recipientTitle: string
+	recipientAddress: string
+	jobTitle: string
+	postingNumber: string
+	showReLine: boolean
+	body: string
+	signoff: string
+	dateMode: 'auto' | 'custom'
+	dateCustom: string
+	credentialLine: string
+}
+
 export interface Job extends Profile {
 	kind: 'master' | 'job'
 	company: string
 	jobTitleTarget: string
 	jobDescription: string
 	jobUrl: string
-	coverLetter: string
+	letter: CoverLetter
+	/** Independent letter styling (option B): null font = template default. */
+	letterTemplate: string
+	letterAccent: string
+	letterFont: string | null
+	letterDensity: number
 	jdSource: { filename: string; pageCount: number; extractedAt: string; pdfRefId: string } | null
 	conversations: Conversation[]
 	activeConversationId: string | null

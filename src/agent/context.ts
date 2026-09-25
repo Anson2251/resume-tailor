@@ -69,15 +69,28 @@ export function jdBlock(job: Job): string {
 }
 
 export function coverLetterBlock(job: Job): string {
-	const text = (job.coverLetter || '').trim()
-	if (!text) return 'Cover letter: empty draft.'
-	return `Cover letter draft (${text.length} chars):\n${truncate(text, COVER_LETTER_CONTEXT_CHARS)}`
+	const letter = job.letter
+	const text = (letter?.body || '').trim()
+	const header = [
+		letter?.recipientTitle?.trim(),
+		letter?.jobTitle?.trim(),
+		letter?.postingNumber?.trim() ? `Posting ${letter.postingNumber.trim()}` : '',
+	]
+		.filter(Boolean)
+		.join(' | ')
+	if (!text) return `Cover letter: empty draft.${header ? ` (${header})` : ''}`
+	return `Cover letter draft (${text.length} chars)${header ? ` — ${header}` : ''}:\n${truncate(text, COVER_LETTER_CONTEXT_CHARS)}`
 }
 
 /** Grounded per-job context appended to the base system prompt on every request. */
 export function buildJobContext(job: Job, master: MasterResume): string {
+	const scope =
+		job.kind === 'master'
+			? '## Scope: MASTER profile (shared canonical content). Coach freely and refine wording with propose_bullet_rewrite — title/summary/visibility/letter tools refuse on Master. Ask the user to switch to (or create) a job profile for tailoring.'
+			: null
 	return [
 		`## Active job: ${job.name || '(untitled)'}`,
+		...(scope ? [scope, ''] : []),
 		jdBlock(job),
 		'',
 		'## Tailored resume snapshot',

@@ -83,6 +83,7 @@ export async function attachJdPdf(
 	file: { name: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> },
 	store: Store = getStore(),
 ): Promise<AttachResult> {
+	if (job.kind === 'master') return { error: 'Master holds the shared content — attach the JD to a job instead.' }
 	if (file.size > JD_MAX_BYTES) return { error: 'That PDF is larger than 10MB.' }
 	let buf: ArrayBuffer
 	try {

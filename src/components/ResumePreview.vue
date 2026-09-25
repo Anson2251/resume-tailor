@@ -598,7 +598,7 @@ function onViewportWheel(event: WheelEvent): void {
 		<div
 			id="print-area"
 			ref="printArea"
-			class="block overflow-auto rounded-lg border border-slate-300 bg-slate-200/70 p-6 select-none lg:min-h-0 lg:flex-1 dark:border-slate-800 dark:bg-slate-950"
+			class="print-area block overflow-auto rounded-lg border border-slate-300 bg-slate-200/70 p-6 select-none lg:min-h-0 lg:flex-1 dark:border-slate-800 dark:bg-slate-950"
 			:class="dragging ? 'cursor-grabbing' : 'cursor-grab'"
 			@mousedown="onViewportMouseDown"
 			@dragstart.prevent

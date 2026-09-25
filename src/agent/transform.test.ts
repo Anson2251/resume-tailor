@@ -165,6 +165,7 @@ it('truncated follow-up never sends an orphan tool_result (OpenAI 400 regression
 	const mutate: JobMutations = {
 		applyOverride: () => {},
 		setCoverLetter: () => {},
+		setLetterField: () => {},
 		setVisibility: () => {},
 		setTitle: () => {},
 		setSummary: () => {},

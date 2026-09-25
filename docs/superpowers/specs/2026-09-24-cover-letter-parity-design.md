@@ -32,19 +32,19 @@ Sincerely,
 
 Field mapping:
 
-| Slot | Source |
-|---|---|
-| name / email / website / tele / region | live from `master.contact` (fullName, email, website, phone, location). Never duplicated per job |
-| date | `letter.dateMode: 'auto'` (today, locale date) or `'custom'` + `letter.dateCustom` |
-| hiring division | `letter.recipientTitle` |
-| address | `letter.recipientAddress` (multiline plain text) |
-| job title | `letter.jobTitle`, defaults from `job.jobTitleTarget` at job creation, editable per letter |
-| post number | `letter.postingNumber` (empty = omitted, parens dropped) |
-| Re line | auto-composed `Re: <jobTitle> (Posting <n>)`; `letter.showReLine` toggles it |
-| letter body | `letter.body` (markdown, rendered with the same `MarkdownText` pipeline as resume) |
-| Sincerely, | `letter.signoff`, default `"Sincerely,"` |
-| signature name | live from `master.contact.fullName` |
-| credential line | `letter.credentialLine`, default auto-built from latest `master.education` entry (`degree + school`, e.g. `B.S. Candidate | State University`), editable per job |
+| Slot                                   | Source                                                                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| name / email / website / tele / region | live from `master.contact` (fullName, email, website, phone, location). Never duplicated per job                          |
+| date                                   | `letter.dateMode: 'auto'` (today, locale date) or `'custom'` + `letter.dateCustom`                                        |
+| hiring division                        | `letter.recipientTitle`                                                                                                   |
+| address                                | `letter.recipientAddress` (multiline plain text)                                                                          |
+| job title                              | `letter.jobTitle`, defaults from `job.jobTitleTarget` at job creation, editable per letter                                |
+| post number                            | `letter.postingNumber` (empty = omitted, parens dropped)                                                                  |
+| Re line                                | auto-composed `Re: <jobTitle> (Posting <n>)`; `letter.showReLine` toggles it                                              |
+| letter body                            | `letter.body` (markdown, rendered with the same `MarkdownText` pipeline as resume)                                        |
+| Sincerely,                             | `letter.signoff`, default `"Sincerely,"`                                                                                  |
+| signature name                         | live from `master.contact.fullName`                                                                                       |
+| credential line                        | `letter.credentialLine`, default auto-built from latest `master.education` entry (`degree + school`, e.g. `B.S. Candidate | State University`), editable per job |
 
 No greeting/salutation field in v1 — the approved template has none; body starts directly.
 
@@ -52,25 +52,25 @@ No greeting/salutation field in v1 — the approved template has none; body star
 
 ```ts
 export interface CoverLetter {
-  recipientTitle: string
-  recipientAddress: string
-  jobTitle: string
-  postingNumber: string
-  showReLine: boolean
-  body: string
-  signoff: string
-  dateMode: 'auto' | 'custom'
-  dateCustom: string
-  credentialLine: string
+	recipientTitle: string
+	recipientAddress: string
+	jobTitle: string
+	postingNumber: string
+	showReLine: boolean
+	body: string
+	signoff: string
+	dateMode: 'auto' | 'custom'
+	dateCustom: string
+	credentialLine: string
 }
 
 export interface Job extends Profile {
-  // ...existing fields...
-  letter: CoverLetter            // NEW (replaces coverLetter)
-  letterTemplate: string         // NEW — TEMPLATES id, default mirrors resume template at creation
-  letterAccent: string           // NEW — default mirrors resume accent at creation
-  letterFont: string | null      // NEW — null = template default (same convention as resume font)
-  letterDensity: number          // NEW — same normalizeDensity() range as resume
+	// ...existing fields...
+	letter: CoverLetter // NEW (replaces coverLetter)
+	letterTemplate: string // NEW — TEMPLATES id, default mirrors resume template at creation
+	letterAccent: string // NEW — default mirrors resume accent at creation
+	letterFont: string | null // NEW — null = template default (same convention as resume font)
+	letterDensity: number // NEW — same normalizeDensity() range as resume
 }
 ```
 
@@ -86,18 +86,24 @@ Rules:
 
 ## 4. Panes + editing UX (approved, revised per review)
 
-- `PaneView` gains `'letter'` and renames for parity: `'resume' | 'resumePreview' |
-  'letter' | 'agent' | 'jdpdf'` (old `'form'` → `'resume'`, old `'preview'` →
-  `'resumePreview'`). Labels: Resume / Resume preview / Cover letter / Agent / JD PDF.
-  The resume-form-only-in-one-pane guard moves from `'form'` to `'resume'`.
-- The `letter` pane is self-contained: `CoverLetterForm.vue` (structured fields:
-  Recipient, Subject/Re line, Body, Sign-off/Date) stacked above `LetterPreview.vue`
-  (A4 page). Resume preview left + Cover letter right is a first-class layout.
+- `PaneView` gains `'letter'` and labels are renamed for parity: Resume / Resume preview /
+  Cover letter / Agent / JD PDF. The `form` / `preview` view values are kept (only labels
+  change) to avoid churning `panes.ts` and its tests. The resume-form-only-in-one-pane
+  guard is unchanged.
+- The `letter` pane hosts the letter form only: `CoverLetterForm.vue` (structured fields:
+  Recipient, Subject/Re line, Body, Sign-off/Date). The letter preview does NOT sit
+  under the form — it lives as a tab in the preview pane (revised per review).
+- The `preview` pane gains a `Resume | Cover letter` tab (per-pane state, defaults to
+  Resume): `ResumePreview` or `LetterPreview` below it. When both panes show the preview
+  they stay on alternative views (`syncPreviewTabs` in `agent/panes.ts`) — switching one
+  tab mirrors the other, and switching a second pane to Preview takes the alternative of
+  the first.
 - `FormNav` follows the Resume pane (unchanged scope, relabeled anchor source).
 - `AgentPanel` drops its `Chat | Cover letter` tabs and becomes pure chat: no letter
   textarea. All letter editing lives in the Cover letter pane (`CoverLetterForm` body
   field). Agent tool cards for letter writes gain a "Review in Cover letter pane"
-  affordance that switches a pane to `'letter'`.
+  affordance that jumps to the letter: it flips a visible preview pane to the Cover
+  letter tab, else opens the Cover letter form pane.
 - `CoverLetterForm` inputs are plain per-job fields (no master/override split: letters
   are per-job by nature, unlike resume items).
 
@@ -110,15 +116,16 @@ Rules:
   `ModernLetterTemplate.vue`, `ClassicLetterTemplate.vue`, `MinimalLetterTemplate.vue`
   — same props `({ letter, contact, credentialDefault?, accent, font, density })`,
   same `fontStack()` + `.md` markdown styling as resume templates.
-- Contact line joins present values with ` | ` (email | website | phone | location),
+- Contact line joins present values with `|` (email | website | phone | location),
   matching the approved template's pipe separators.
 - Empty blocks collapse: no recipient block when both fields empty; no Re line when
   `showReLine` is false or `jobTitle` empty; `(Posting n)` segment only when set.
 
 ## 6. Export, status, agent (approved, revised per review)
 
-- Export PDF is decided by which documents are on screen. Visible set: resume counts
-  when any pane is `'resumePreview'`, letter counts when any pane is `'letter'`.
+- Export PDF is decided by which documents are on screen. Visible set: a pane on the
+  `preview` view counts its active tab (Resume or Cover letter). The form-only Cover
+  letter pane does not count — only a reviewed preview does.
   - Both visible → Export opens a chooser dialog (`FwbModal`: "Export which
     document?" with `[Resume]` / `[Cover letter]`). No "Both" in v1 (combined PDF
     stays a non-goal).
@@ -155,6 +162,20 @@ Rules:
 No letter columns/sections engine, no greeting field, no combined resume+letter PDF,
 no per-recipient letter variants inside one job (duplicate the job instead), no
 separate letter undo history, no envelope/window formatting.
+
+## 10. Master is canonical (revised per review)
+
+Master holds the shared content only: no JD (`jobDescription`/`jdSource` blocked in
+`attachJdPdf` and stripped in `toJob`, JDViewer shows a notice), no tailored headline
+or summary (`title`/`summary` stripped in `toJob`, Tailoring card shows a note).
+The agent tailors Master FOR jobs, never ON it, with one exception: `propose_bullet_rewrite`
+is allowed on Master and refines the shared wording. The other five tailoring writes
+(`update_title`, `update_summary`, `update_cover_letter`,
+`update_letter_field`, `set_visibility`) refuse on Master with guidance; reads and
+coaching stay available, `buildJobContext` carries a Master scope line, and AgentPanel
+shows a Master banner. The locked system prompt teaches the Master-vs-job model
+(views, copy-on-write overrides, structured letter) and the per-tool behavior. The sample workspace demonstrates the split: a bare
+Master plus one sample job carrying the tailored title/summary, active on load.
 
 ## 9. Testing
 

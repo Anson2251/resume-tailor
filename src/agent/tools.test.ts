@@ -26,6 +26,7 @@ function mutate() {
 	return {
 		applyOverride: vi.fn(),
 		setCoverLetter: vi.fn(),
+		setLetterField: vi.fn(),
 		setVisibility: vi.fn(),
 		setTitle: vi.fn(),
 		setSummary: vi.fn(),
@@ -97,5 +98,63 @@ describe('hybrid guard', () => {
 		await tools.find((t) => t.name === 'update_summary')!.execute('c7', { summary: 'Builds things.' })
 		expect(m.setTitle).toHaveBeenCalledWith('Frontend Engineer')
 		expect(m.setSummary).toHaveBeenCalledWith('Builds things.')
+	})
+
+	it('writes the letter body and structured fields through letter tools', async () => {
+		const m = mutate()
+		const tools = agentToolsFor(
+			{ id: 'j1', view: { experience: [] }, overrides: {}, letter: { body: 'old' } } as never,
+			masterWith([]),
+			m,
+		)
+		await tools.find((t) => t.name === 'update_cover_letter')!.execute('c8', { text: 'New body.' })
+		expect(m.setCoverLetter).toHaveBeenCalledWith('New body.')
+		const field = tools.find((t) => t.name === 'update_letter_field')!
+		await field.execute('c9', { field: 'recipientTitle', value: 'Hiring Team' })
+		expect(m.setLetterField).toHaveBeenCalledWith('recipientTitle', 'Hiring Team')
+		const bad = await field.execute('c10', { field: 'nope', value: 'x' })
+		expect(m.setLetterField).toHaveBeenCalledTimes(1)
+		expect(bad.details).toMatchObject({ error: true })
+	})
+
+	it('refuses job tailoring on master but allows field rewrites', async () => {
+		const m = mutate()
+		const tools = agentToolsFor(
+			{
+				id: 'm1',
+				kind: 'master',
+				view: { experience: ['e1'] },
+				overrides: {},
+				title: '',
+				summary: '',
+				letter: { body: '' },
+			} as never,
+			masterWith(['e1']),
+			m,
+		)
+		// Refined writing is allowed on Master (shared wording).
+		await tools
+			.find((t) => t.name === 'propose_bullet_rewrite')!
+			.execute('master-rewrite', { itemId: 'e1', field: 'bullets', value: '- tailored' })
+		expect(m.applyOverride).toHaveBeenCalledWith('e1', { bullets: '- tailored' })
+		// Job tailoring refuses on Master.
+		const calls: [string, Record<string, unknown>][] = [
+			['update_title', { title: 'Role' }],
+			['update_summary', { summary: 'Summary.' }],
+			['update_cover_letter', { text: 'Body.' }],
+			['update_letter_field', { field: 'recipientTitle', value: 'Team' }],
+			['set_visibility', { section: 'experience', ids: ['e1'] }],
+		]
+		for (const [name, args] of calls) {
+			const res = await tools.find((t) => t.name === name)!.execute(`master-${name}`, args)
+			expect(res.details).toMatchObject({ error: true })
+		}
+		expect(m.setTitle).not.toHaveBeenCalled()
+		expect(m.setSummary).not.toHaveBeenCalled()
+		expect(m.setCoverLetter).not.toHaveBeenCalled()
+		expect(m.setLetterField).not.toHaveBeenCalled()
+		expect(m.setVisibility).not.toHaveBeenCalled()
+		const jd = await tools.find((t) => t.name === 'read_jd')!.execute('master-jd', {})
+		expect(JSON.parse((jd.content[0] as { text: string }).text)).toMatchObject({ attached: false })
 	})
 })

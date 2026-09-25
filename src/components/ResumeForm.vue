@@ -169,24 +169,32 @@ function resetOverrides(id: string): void {
 					</span>
 				</div>
 				<div class="mt-4 space-y-3">
-					<div>
-						<label class="label" for="f-title"
-							>Job title <span class="font-normal normal-case">(this profile)</span></label
-						>
-						<input id="f-title" v-model="profile.title" class="input" placeholder="Frontend Engineer" />
-					</div>
-					<div>
-						<label class="label" for="f-summary">
-							Professional summary <span class="font-normal normal-case">(this profile · markdown)</span>
-						</label>
-						<textarea
-							id="f-summary"
-							v-model="profile.summary"
-							class="textarea"
-							rows="5"
-							placeholder="**Frontend engineer** with 5 years…&#10;&#10;- Shipped a design system used by 4 teams&#10;- Cut page load by **45%**"
-						/>
-					</div>
+					<template v-if="editMaster">
+						<p class="text-[13px] text-slate-500 dark:text-slate-400">
+							Master holds the shared content — it has no tailored headline or summary. Those live on each job profile,
+							where the agent tailors them from this content.
+						</p>
+					</template>
+					<template v-else>
+						<div>
+							<label class="label" for="f-title"
+								>Job title <span class="font-normal normal-case">(this profile)</span></label
+							>
+							<input id="f-title" v-model="profile.title" class="input" placeholder="Frontend Engineer" />
+						</div>
+						<div>
+							<label class="label" for="f-summary">
+								Professional summary <span class="font-normal normal-case">(this profile · markdown)</span>
+							</label>
+							<textarea
+								id="f-summary"
+								v-model="profile.summary"
+								class="textarea"
+								rows="5"
+								placeholder="**Frontend engineer** with 5 years…&#10;&#10;- Shipped a design system used by 4 teams&#10;- Cut page load by **45%**"
+							/>
+						</div>
+					</template>
 					<p class="text-xs text-slate-400 dark:text-slate-500">
 						Long-form fields (summary, achievements, highlights, details) render as
 						<strong class="font-semibold">markdown</strong> — use

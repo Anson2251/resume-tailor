@@ -30,6 +30,7 @@ import {
 } from '../agent/conversations'
 import { selectSibling } from '../agent/panes'
 import { useAgentChat } from '../agent/useAgentChat'
+import { confirmDialog } from '../data/dialogs'
 import AutoScrollWrapper from './AutoScrollWrapper.vue'
 import StreamMarkdown from './StreamMarkdown.vue'
 import { writeField } from '../data/resume'
@@ -41,9 +42,10 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
 	(e: 'open-settings'): void
+	(e: 'open-jd'): void
+	(e: 'open-letter'): void
 }>()
 
-const tab = ref<'chat' | 'letter'>('chat')
 const input = ref('')
 const scroller = ref<InstanceType<typeof AutoScrollWrapper> | null>(null)
 
@@ -99,7 +101,11 @@ const chat = useAgentChat(
 			props.job.overrides[itemId] = { ...(props.job.overrides[itemId] || {}), ...patch }
 		},
 		setCoverLetter: (text) => {
-			props.job.coverLetter = text
+			props.job.letter.body = text
+		},
+		setLetterField: (field, value) => {
+			const letter = props.job.letter as unknown as Record<string, unknown>
+			if (field in letter) letter[field] = value
 		},
 		setVisibility: (section, ids) => {
 			const view = props.job.view as unknown as Record<string, unknown>
@@ -164,9 +170,16 @@ function deleteSession(id: string): void {
 	if (chat.sending.value) return
 	const target = props.job.conversations.find((c) => c.id === id)
 	const label = target ? conversationTitle(target) : 'this conversation'
-	if (!confirm(`Delete “${label}”? Its messages go too. The JD and cover letter are kept.`)) return
-	props.job.activeConversationId = deleteConversation(props.job.conversations, id)
-	scroller.value?.scrollToBottom(true)
+	void confirmDialog({
+		title: `Delete “${label}”?`,
+		body: 'Its messages go too. The JD and cover letter are kept.',
+		confirmLabel: 'Delete',
+		danger: true,
+	}).then((ok) => {
+		if (!ok) return
+		props.job.activeConversationId = deleteConversation(props.job.conversations, id)
+		scroller.value?.scrollToBottom(true)
+	})
 }
 
 const renamingId = ref<string | null>(null)
@@ -238,6 +251,7 @@ const TOOL_LABELS: Record<string, string> = {
 	update_title: 'Update title',
 	update_summary: 'Update summary',
 	update_cover_letter: 'Update cover letter',
+	update_letter_field: 'Update letter field',
 	set_visibility: 'Set visibility',
 }
 
@@ -361,7 +375,10 @@ function stopBrainSpin(id: string): void {
 	brainEls.get(id)?.style.removeProperty('transform')
 }
 
-function toolStatus(tool: NonNullable<ChatMsg['toolCalls']>[number]): 'running' | 'ok' | 'error' | 'interrupted' {
+function toolStatus(
+	tool: NonNullable<ChatMsg['toolCalls']>[number],
+): 'running' | 'drafting' | 'ok' | 'error' | 'interrupted' {
+	if (tool.status === 'drafting') return chat.sending.value ? 'drafting' : 'interrupted'
 	if (tool.status === 'running') return chat.sending.value ? 'running' : 'interrupted'
 	return tool.isError ? 'error' : 'ok'
 }
@@ -394,40 +411,29 @@ function saveEdit(id: string): void {
 <template>
 	<div class="flex min-h-0 flex-1 flex-col gap-3">
 		<div
+			v-if="job.jdSource"
 			class="no-print rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900"
 		>
 			<span class="font-semibold">JD:</span>
-			<span v-if="job.jdSource">{{ job.jdSource.filename }} · {{ job.jdSource.pageCount }} pages</span>
-			<span v-else>No JD attached — open the JD PDF pane to attach one.</span>
-			<span class="ml-2 rounded bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800">{{ activeModelLabel }}</span>
+			<span>{{ job.jdSource.filename }}</span>
+		</div>
+		<button
+			v-else
+			type="button"
+			class="no-print rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-left text-xs text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900"
+			@click="emit('open-jd')"
+		>
+			<span class="font-semibold">No JD attached</span> — click to open the JD pane and add one.
+		</button>
+		<div
+			v-if="job.kind === 'master'"
+			class="no-print rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+		>
+			<span class="font-semibold">Master:</span> rewrites here refine the shared content for every job. Title, summary,
+			letter and visibility live on jobs.
 		</div>
 
-		<div class="no-print flex gap-1">
-			<button
-				class="btn px-3 py-1.5 text-[13px]"
-				:class="tab === 'chat' ? 'btn-primary' : 'btn-ghost'"
-				@click="tab = 'chat'"
-			>
-				Chat
-			</button>
-			<button
-				class="btn px-3 py-1.5 text-[13px]"
-				:class="tab === 'letter' ? 'btn-primary' : 'btn-ghost'"
-				@click="tab = 'letter'"
-			>
-				Cover letter
-			</button>
-		</div>
-
-		<div v-if="tab === 'letter'" class="flex min-h-0 flex-1 flex-col gap-2">
-			<textarea
-				v-model="job.coverLetter"
-				class="textarea min-h-[40vh] flex-1 font-mono"
-				placeholder="The agent drafts here — or write it yourself (markdown)."
-			/>
-		</div>
-
-		<div v-else class="flex min-h-0 flex-1 flex-col gap-2">
+		<div class="flex min-h-0 flex-1 flex-col gap-2">
 			<AutoScrollWrapper ref="scroller" class="min-h-0 flex-1">
 				<div class="flex flex-col gap-2">
 					<div
@@ -518,9 +524,9 @@ function saveEdit(id: string): void {
 												<Icon size="16" aria-hidden="true"><Toolbox16Regular /></Icon>
 												<span class="min-w-0 flex-1 truncate font-medium">{{ toolLabel(tool.name) }}</span>
 												<span
-													class="shrink-0 rounded-full px-1.5 py-0.5 text-[11px]"
+													class="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px]"
 													:class="
-														toolStatus(tool) === 'running'
+														toolStatus(tool) === 'running' || toolStatus(tool) === 'drafting'
 															? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200'
 															: toolStatus(tool) === 'ok'
 																? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200'
@@ -528,14 +534,21 @@ function saveEdit(id: string): void {
 																	? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
 																	: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200'
 													"
+													><span
+														v-if="toolStatus(tool) === 'running' || toolStatus(tool) === 'drafting'"
+														class="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-current border-t-transparent"
+														aria-hidden="true"
+													></span
 													>{{
 														toolStatus(tool) === 'running'
 															? 'Running…'
-															: toolStatus(tool) === 'ok'
-																? 'OK'
-																: toolStatus(tool) === 'interrupted'
-																	? 'Interrupted'
-																	: 'Error'
+															: toolStatus(tool) === 'drafting'
+																? 'Preparing…'
+																: toolStatus(tool) === 'ok'
+																	? 'OK'
+																	: toolStatus(tool) === 'interrupted'
+																		? 'Interrupted'
+																		: 'Error'
 													}}</span
 												>
 											</summary>
@@ -566,6 +579,19 @@ function saveEdit(id: string): void {
 											<p v-else-if="tool.status === 'running'" class="mt-1.5 text-xs text-slate-400">
 												{{ chat.sending.value ? 'Running…' : 'Interrupted before a result arrived.' }}
 											</p>
+											<p v-else-if="tool.status === 'drafting'" class="mt-1.5 text-xs text-slate-400">
+												{{
+													chat.sending.value ? 'Composing the call arguments…' : 'Interrupted before the call was sent.'
+												}}
+											</p>
+											<button
+												v-if="tool.name === 'update_cover_letter' || tool.name === 'update_letter_field'"
+												type="button"
+												class="no-print mt-1.5 rounded px-1.5 py-0.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950"
+												@click="emit('open-letter')"
+											>
+												Review in Cover letter pane →
+											</button>
 										</details>
 									</div>
 								</div>

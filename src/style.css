@@ -154,7 +154,8 @@ body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar h
 		max-height: none !important;
 	}
 
-	#print-area {
+	#print-area,
+	.print-area {
 		display: block !important;
 		position: static !important;
 		padding: 0 !important;
@@ -165,6 +166,15 @@ body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar h
 		border-radius: 0 !important;
 		background: #fff !important;
 		overflow: visible !important;
+	}
+
+	/* Export chooser: only the chosen document lands on the sheet. */
+	body[data-print-doc='resume'] .letter-page {
+		display: none !important;
+	}
+
+	body[data-print-doc='letter'] .resume-page:not(.letter-page) {
+		display: none !important;
 	}
 
 	.resume-page {
@@ -328,16 +338,14 @@ body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar h
 	line-height: calc(1.625 * (0.9 + 0.1 * var(--sp, 1)));
 }
 
-
-
-button > span[class=""] {
-    display: flex;
-    align-items: center;
+button > span[class=''] {
+	display: flex;
+	align-items: center;
 }
 
 button {
-    display: flex;
-    align-items: center;
+	display: flex;
+	align-items: center;
 }
 
 /* ---------- Markdown content ----------

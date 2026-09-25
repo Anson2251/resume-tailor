@@ -127,6 +127,7 @@ function testMutate(seen: { overrides: [string, Record<string, string | boolean>
 			seen.overrides.push([itemId, patch])
 		},
 		setCoverLetter: () => {},
+		setLetterField: () => {},
 		setVisibility: () => {},
 		setTitle: () => {},
 		setSummary: () => {},
@@ -182,6 +183,62 @@ it('streams a real pi-ai request with the keyring key', async () => {
 	const texts = threadTexts(job)
 	expect(texts).toContain('Tailor my bullets.')
 	expect(texts).toContain('Tailored.')
+})
+
+it('shows a preparing card while the model drafts the tool call', async () => {
+	// The tool_use block arrives in chunks: the card must render from the
+	// streamed partial (Preparing) long before execution starts (Running).
+	const input = JSON.stringify({ title: 'Engineer' })
+	const events = toolTurn('toolu_d', 'update_title', input)
+		.split('\n\n')
+		.filter(Boolean)
+		.map((e) => new TextEncoder().encode(e + '\n\n'))
+	let controller!: ReadableStreamDefaultController<Uint8Array>
+	const stream = new ReadableStream<Uint8Array>({ start: (c) => (controller = c) })
+	requests.length = 0
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async (url: string, init: RequestInit) => {
+			requests.push({ url, init })
+			if (requests.length === 1) {
+				return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+			}
+			return new Response(textTurn('Done.'), {
+				status: 200,
+				headers: { 'content-type': 'text/event-stream' },
+			})
+		}),
+	)
+	await setApiKey('anthropic', 'sk-test-key')
+	const master = blankResume()
+	const job = blankJob('Test job', master)
+	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
+	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
+		systemPrompt: 'Test system prompt.',
+		contextChars: 8000,
+	})
+	const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
+	const cards = (): { id: string; name: string; status: string }[] =>
+		Object.values(activeConversation(job.conversations, job.activeConversationId).thread.messages).flatMap((m) =>
+			m.role === 'assistant' ? (m.toolCalls ?? []) : [],
+		)
+	const sending = chat.send('Retitle me.')
+	// Feed stream head: message_start + tool_use start + first args delta.
+	controller.enqueue(events[0])
+	controller.enqueue(events[1])
+	controller.enqueue(events[2])
+	let drafting = cards()
+	for (let i = 0; i < 200 && !drafting.some((c) => c.status === 'drafting'); i++) {
+		await tick()
+		drafting = cards()
+	}
+	expect(drafting).toContainEqual({ id: 'toolu_d', name: 'update_title', status: 'drafting' })
+	// Finish the stream: execution flips the same card to running, then done.
+	for (const chunk of events.slice(3)) controller.enqueue(chunk)
+	controller.close()
+	await sending
+	expect(chat.error.value).toBe(null)
+	expect(cards()).toContainEqual(expect.objectContaining({ id: 'toolu_d', name: 'update_title', status: 'done' }))
 })
 
 it('runs a full tool round trip through the agent tools', async () => {

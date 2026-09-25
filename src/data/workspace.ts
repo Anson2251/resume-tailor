@@ -1,4 +1,5 @@
 import { ACCENTS, FONT_IDS, TEMPLATES, normalizeDensity } from './options'
+import { blankLetter, defaultCredentialLine, normalizeLetter } from './letter'
 import {
 	blankConversation,
 	blankConversations,
@@ -117,7 +118,12 @@ export function blankJob(name: string, master: MasterResume, opts: BlankJobOptio
 		jobTitleTarget,
 		jobDescription: '',
 		jobUrl: '',
-		coverLetter: '',
+		letter: blankLetter(jobTitleTarget, defaultCredentialLine(master)),
+		// Letter styling starts mirrored from the resume style, then diverges.
+		letterTemplate: profile.template,
+		letterAccent: profile.accent,
+		letterFont: profile.font,
+		letterDensity: profile.density,
 		jdSource: null,
 		conversations: [first],
 		activeConversationId: first.id,
@@ -140,22 +146,27 @@ export function blankWorkspace(): Workspace & WorkspaceV3 {
 
 export function sampleWorkspace(): Workspace & WorkspaceV3 {
 	const master = sampleResume()
-	const profile = blankProfile('Frontend Engineer', master, {
+	// Master is canonical content only: no headline, no summary, no JD.
+	const masterProfile = blankProfile('Master', master, { isMaster: true })
+	const masterJob = toJob(masterProfile, { kind: 'master' })
+	// Tailoring lives on the job: headline + summary tailored from the master.
+	const job = blankJob('Frontend Engineer', master, {
 		template: 'modern',
 		accent: ACCENTS[0],
 		title: 'Frontend Engineer',
 		summary:
 			'**Frontend engineer** with **5 years** of experience building responsive web apps with **Vue** and **React**.\nPassionate about design systems, performance, and turning ambiguous product ideas into polished user experiences.',
-		isMaster: true,
+		company: 'Acme Corp',
+		jobTitleTarget: 'Frontend Engineer',
 	})
-	const jobs = [toJob(profile, { kind: 'master' })]
+	const jobs = [masterJob, job]
 	return {
 		version: WORKSPACE_VERSION,
 		master,
-		profiles: [profile],
-		activeProfileId: profile.id,
+		profiles: [masterProfile, job],
+		activeProfileId: job.id,
 		jobs,
-		activeJobId: profile.id,
+		activeJobId: job.id,
 	}
 }
 
@@ -348,23 +359,39 @@ function normalizeCustomSections(raw: any): CustomSection[] {
 /** Lift a normalized profile into a Job, preserving v3 fields when present. */
 function toJob(profile: Profile, raw: any): Job {
 	const conversations = normalizeConversations(raw)
+	// Legacy saves kept the draft as a top-level coverLetter string.
+	const legacyBody = typeof raw?.coverLetter === 'string' ? raw.coverLetter : ''
+	const letterRaw = raw?.letter && typeof raw.letter === 'object' ? { ...raw.letter } : {}
+	if (legacyBody && !letterRaw.body) letterRaw.body = legacyBody
+	// Master is the canonical content store: no JD, no tailored headline/summary.
+	const kind = raw?.kind === 'job' || raw?.kind === 'master' ? raw.kind : profile.master ? 'master' : 'job'
+	const isMaster = kind === 'master'
 	return {
 		...profile,
-		kind: raw?.kind === 'job' || raw?.kind === 'master' ? raw.kind : profile.master ? 'master' : 'job',
+		kind,
 		company: typeof raw?.company === 'string' ? raw.company : '',
 		jobTitleTarget: typeof raw?.jobTitleTarget === 'string' ? raw.jobTitleTarget : '',
-		jobDescription: typeof raw?.jobDescription === 'string' ? raw.jobDescription : '',
+		jobDescription: isMaster ? '' : typeof raw?.jobDescription === 'string' ? raw.jobDescription : '',
 		jobUrl: typeof raw?.jobUrl === 'string' ? raw.jobUrl : '',
-		coverLetter: typeof raw?.coverLetter === 'string' ? raw.coverLetter : '',
+		title: isMaster ? '' : profile.title,
+		summary: isMaster ? '' : profile.summary,
+		letter: normalizeLetter(letterRaw, typeof raw?.jobTitleTarget === 'string' ? raw.jobTitleTarget : ''),
+		letterTemplate:
+			typeof raw?.letterTemplate === 'string' && TEMPLATE_IDS.includes(raw.letterTemplate)
+				? raw.letterTemplate
+				: profile.template,
+		letterAccent: typeof raw?.letterAccent === 'string' && raw.letterAccent ? raw.letterAccent : profile.accent,
+		letterFont: typeof raw?.letterFont === 'string' && FONT_IDS.includes(raw.letterFont) ? raw.letterFont : null,
+		letterDensity: normalizeDensity(raw?.letterDensity ?? profile.density),
 		jdSource:
-			raw?.jdSource && typeof raw.jdSource === 'object' && typeof raw.jdSource.pdfRefId === 'string'
-				? {
+			isMaster || !(raw?.jdSource && typeof raw.jdSource === 'object' && typeof raw.jdSource.pdfRefId === 'string')
+				? null
+				: {
 						filename: typeof raw.jdSource.filename === 'string' ? raw.jdSource.filename : '',
 						pageCount: typeof raw.jdSource.pageCount === 'number' ? raw.jdSource.pageCount : 0,
 						extractedAt: typeof raw.jdSource.extractedAt === 'string' ? raw.jdSource.extractedAt : '',
 						pdfRefId: raw.jdSource.pdfRefId,
-					}
-				: null,
+					},
 		conversations,
 		activeConversationId:
 			typeof raw?.activeConversationId === 'string' && conversations.some((c) => c.id === raw.activeConversationId)
