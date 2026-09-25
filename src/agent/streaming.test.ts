@@ -146,7 +146,6 @@ it('streams a real pi-ai request with the keyring key', async () => {
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 
 	await chat.send('Tailor my bullets.')
@@ -215,7 +214,6 @@ it('shows a preparing card while the model drafts the tool call', async () => {
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 	const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
 	const cards = (): { id: string; name: string; status: string }[] =>
@@ -251,7 +249,6 @@ it('runs a full tool round trip through the agent tools', async () => {
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 
 	await chat.send('Rewrite it.')
@@ -316,7 +313,6 @@ it('keeps each assistant turn in its own node so post-tool output cannot overwri
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 
 	await chat.send('Tailor me.')
@@ -355,7 +351,6 @@ it('never duplicates follow-up chunks: each chunk replaces its own turn text', a
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 
 	await chat.send('Tailor me.')
@@ -400,7 +395,6 @@ it('signals waiting (not streaming) while the post-tool follow-up is pending', a
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 
 	const sending = chat.send('Check the JD.')
@@ -482,7 +476,6 @@ it('captures thinking per turn and carries it into the post-tool follow-up', asy
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 
 	await chat.send('Tailor me.')
@@ -511,14 +504,12 @@ it('rehydrates the persisted thread on remount so history survives', async () =>
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const first = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 	await first.send('Hello')
 
 	// Simulate a remount (pane/job switch): a fresh composable on the same job.
 	const second = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 	await second.send('Follow up')
 
@@ -539,7 +530,6 @@ it('grounds the system prompt with the attached JD', async () => {
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 	await chat.send('Tailor me.')
 
@@ -561,7 +551,6 @@ it('keeps streamed text when a later provider request fails', async () => {
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 
 	await chat.send('Tailor me.')
@@ -584,7 +573,6 @@ it('regenerates one assistant bubble as a new sibling', async () => {
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 
 	await chat.send('Question?')
@@ -616,7 +604,6 @@ it('resends edited user text as a derived sibling branch', async () => {
 	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
 	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
 		systemPrompt: 'Test system prompt.',
-		contextChars: 8000,
 	})
 
 	await chat.send('Original wording')

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { FwbDropdown } from 'flowbite-vue'
+import { FwbButton, FwbDropdown, FwbInput, FwbTextarea } from 'flowbite-vue'
 import { Icon } from '@vicons/utils'
 import { JsonTreeView } from 'json-tree-view-vue3'
 import 'json-tree-view-vue3/style.css'
@@ -122,7 +122,6 @@ const chat = useAgentChat(
 	activeModel.value,
 	{
 		systemPrompt: settings.systemPrompt,
-		contextChars: settings.contextChars,
 		thinkingLevel: activeThinkingLevel.value,
 	},
 )
@@ -412,7 +411,7 @@ function saveEdit(id: string): void {
 	<div class="flex min-h-0 flex-1 flex-col gap-3">
 		<div
 			v-if="job.jdSource"
-			class="no-print rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900"
+			class="no-print rounded-lg border border-default bg-neutral-primary-medium px-3 py-2 text-xs text-body-subtle"
 		>
 			<span class="font-semibold">JD:</span>
 			<span>{{ job.jdSource.filename }}</span>
@@ -427,7 +426,7 @@ function saveEdit(id: string): void {
 		</button>
 		<div
 			v-if="job.kind === 'master'"
-			class="no-print rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+			class="no-print rounded-lg border border-default bg-neutral-primary-medium px-3 py-2 text-xs text-body-subtle"
 		>
 			<span class="font-semibold">Master:</span> rewrites here refine the shared content for every job. Title, summary,
 			letter and visibility live on jobs.
@@ -444,7 +443,7 @@ function saveEdit(id: string): void {
 					>
 						<button
 							v-if="group.kind === 'user' && editingId !== group.msgs[0].id"
-							class="no-print mb-1 shrink-0 rounded px-1.5 py-0.5 text-[13px] text-slate-400 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700"
+							class="no-print mb-1 shrink-0 rounded px-1.5 py-0.5 text-[13px] text-body-subtle opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-neutral-tertiary"
 							title="Edit and resend"
 							:disabled="chat.sending.value"
 							@click="startEdit(group.msgs[0].id)"
@@ -452,27 +451,24 @@ function saveEdit(id: string): void {
 						>
 							<Icon size="16"><Edit16Regular /></Icon>
 						</button>
-						<div
-							v-if="group.kind === 'user'"
-							class="min-w-0 py-1.5 text-sm rounded-lg bg-indigo-600 px-3 py-2 text-white"
-						>
+						<div v-if="group.kind === 'user'" class="min-w-0 rounded-lg bg-brand px-3 py-2 text-sm text-white">
 							<template v-if="editingId === group.msgs[0].id">
-								<textarea
+								<FwbTextarea
 									v-model="editDraft"
-									class="textarea mb-1"
-									rows="3"
+									class="mb-1"
+									:rows="3"
 									:disabled="chat.sending.value"
 									@keyup.escape="cancelEdit"
 								/>
 								<div class="no-print flex justify-end gap-1">
 									<button
-										class="btn px-2 py-0.5 text-xs text-indigo-100 hover:bg-white/10 hover:text-white"
+										class="inline-flex items-center justify-center rounded-lg px-2 py-0.5 text-xs font-medium text-white transition hover:bg-white/10"
 										@click="cancelEdit"
 									>
 										Cancel
 									</button>
 									<button
-										class="btn bg-white px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-50"
+										class="inline-flex items-center justify-center rounded-lg bg-white px-2 py-0.5 text-xs font-medium text-fg-brand transition hover:bg-brand-softer disabled:opacity-60"
 										:disabled="!editDraft.trim() || chat.sending.value"
 										@click="saveEdit(group.msgs[0].id)"
 									>
@@ -482,12 +478,12 @@ function saveEdit(id: string): void {
 							</template>
 							<pre v-else class="whitespace-pre-wrap">{{ group.msgs[0].text || '…' }}</pre>
 						</div>
-						<div v-else class="min-w-0 py-1.5 text-sm w-full px-1 text-slate-800 dark:text-slate-100">
+						<div v-else class="w-full min-w-0 px-1 py-1.5 text-sm text-heading">
 							<div class="flex flex-col gap-1">
 								<div v-for="(msg, mi) in group.msgs" :key="msg.id" class="flex min-w-0 flex-col gap-1.5">
 									<details
 										v-if="msg.reasoning?.trim()"
-										class="rounded-md border border-slate-300/60 bg-slate-100 px-2 py-1.5 text-[13px] dark:border-slate-700 dark:bg-slate-800/50"
+										class="rounded-md border border-default bg-neutral-secondary px-2 py-1.5 text-[13px]"
 										:open="chat.sending.value && gi === groups.length - 1 && mi === group.msgs.length - 1"
 									>
 										<summary class="flex cursor-pointer list-none items-center gap-1.5">
@@ -502,7 +498,7 @@ function saveEdit(id: string): void {
 											<span class="min-w-0 flex-1 truncate font-medium">Thinking</span>
 											<span
 												v-if="chat.sending.value && gi === groups.length - 1 && mi === group.msgs.length - 1"
-												class="shrink-0 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[11px] text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200"
+												class="shrink-0 rounded-full bg-brand-soft px-1.5 py-0.5 text-[11px] text-fg-brand"
 												>Thinking…</span
 											>
 										</summary>
@@ -527,11 +523,11 @@ function saveEdit(id: string): void {
 													class="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px]"
 													:class="
 														toolStatus(tool) === 'running' || toolStatus(tool) === 'drafting'
-															? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200'
+															? 'bg-brand-soft text-fg-brand'
 															: toolStatus(tool) === 'ok'
 																? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200'
 																: toolStatus(tool) === 'interrupted'
-																	? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+																	? 'bg-neutral-quaternary text-body'
 																	: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200'
 													"
 													><span
@@ -553,7 +549,7 @@ function saveEdit(id: string): void {
 												>
 											</summary>
 											<div v-if="tool.args" class="mt-1.5">
-												<span class="text-xs font-medium text-slate-500 dark:text-slate-400">Args:</span>
+												<span class="text-xs font-medium text-body-subtle">Args:</span>
 												<JsonTreeView
 													v-if="toolArgsJson(tool.args)"
 													:json="toolArgsJson(tool.args)!"
@@ -562,7 +558,7 @@ function saveEdit(id: string): void {
 													:colorScheme="isDarkTree ? 'dark' : 'light'"
 													class="mt-1 max-h-48 overflow-y-auto rounded bg-black/5 p-2 text-xs dark:bg-white/5"
 												/>
-												<code v-else class="break-all text-xs text-slate-500 dark:text-slate-400">{{ tool.args }}</code>
+												<code v-else class="break-all text-xs text-body-subtle">{{ tool.args }}</code>
 											</div>
 											<JsonTreeView
 												v-if="toolResultJson(tool.result)"
@@ -576,10 +572,10 @@ function saveEdit(id: string): void {
 												v-else-if="tool.result"
 												class="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/5 p-2 text-xs dark:bg-white/5"
 												>{{ tool.result }}</pre>
-											<p v-else-if="tool.status === 'running'" class="mt-1.5 text-xs text-slate-400">
+											<p v-else-if="tool.status === 'running'" class="mt-1.5 text-xs text-body-subtle">
 												{{ chat.sending.value ? 'Running…' : 'Interrupted before a result arrived.' }}
 											</p>
-											<p v-else-if="tool.status === 'drafting'" class="mt-1.5 text-xs text-slate-400">
+											<p v-else-if="tool.status === 'drafting'" class="mt-1.5 text-xs text-body-subtle">
 												{{
 													chat.sending.value ? 'Composing the call arguments…' : 'Interrupted before the call was sent.'
 												}}
@@ -587,7 +583,7 @@ function saveEdit(id: string): void {
 											<button
 												v-if="tool.name === 'update_cover_letter' || tool.name === 'update_letter_field'"
 												type="button"
-												class="no-print mt-1.5 rounded px-1.5 py-0.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950"
+												class="no-print mt-1.5 rounded px-1.5 py-0.5 text-xs font-medium text-fg-brand hover:bg-brand-softer"
 												@click="emit('open-letter')"
 											>
 												Review in Cover letter pane →
@@ -599,7 +595,7 @@ function saveEdit(id: string): void {
 							<span v-if="!groupHasContent(group)">
 								<span
 									v-if="chat.sending.value"
-									class="typing-indicator text-slate-400"
+									class="typing-indicator text-body-subtle"
 									role="status"
 									aria-label="Waiting for reply"
 								>
@@ -607,11 +603,11 @@ function saveEdit(id: string): void {
 									<span class="typing-dot"></span>
 									<span class="typing-dot"></span>
 								</span>
-								<span v-else class="text-slate-400">…</span>
+								<span v-else class="text-body-subtle">…</span>
 							</span>
 							<span
 								v-else-if="chat.sending.value && !chat.assistantStreaming.value"
-								class="typing-indicator text-slate-400"
+								class="typing-indicator text-body-subtle"
 								role="status"
 								aria-label="Waiting for reply"
 							>
@@ -620,7 +616,7 @@ function saveEdit(id: string): void {
 								<span class="typing-dot"></span>
 							</span>
 							<div
-								class="no-print mt-1 flex items-center gap-1 text-[13px] text-slate-400 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"
+								class="no-print mt-1 flex items-center gap-1 text-[13px] text-body-subtle opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"
 							>
 								<template v-if="siblingOf(group.msgs[0].id) && siblingOf(group.msgs[0].id)!.ids.length > 1">
 									<button
@@ -648,7 +644,7 @@ function saveEdit(id: string): void {
 								</template>
 								<button
 									v-if="groupHasContent(group)"
-									class="rounded px-1.5 py-0.5 hover:bg-slate-200 dark:hover:bg-slate-700"
+									class="rounded px-1.5 py-0.5 hover:bg-neutral-tertiary"
 									title="Regenerate this reply"
 									:disabled="chat.sending.value"
 									@click="void chat.regenerate(group.msgs[0].id)"
@@ -659,7 +655,7 @@ function saveEdit(id: string): void {
 							</div>
 						</div>
 					</div>
-					<p v-if="!chat.messages.value.length" class="text-sm text-slate-400">
+					<p v-if="!chat.messages.value.length" class="text-sm text-body-subtle">
 						Ask to tailor a bullet, draft the cover letter, or critique the resume against the JD.
 					</p>
 				</div>
@@ -667,13 +663,21 @@ function saveEdit(id: string): void {
 
 			<div v-if="chat.error.value" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs">
 				{{ chat.error.value }}
-				<button class="btn btn-ghost px-2 py-0.5 text-xs" @click="emit('open-settings')">Open settings</button>
+				<button
+					class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading"
+					@click="emit('open-settings')"
+				>
+					Open settings
+				</button>
 			</div>
 
-			<div class="no-print flex justify-between items-center gap-1 text-xs text-slate-400">
+			<div class="no-print flex items-center justify-between gap-1 text-xs text-body-subtle">
 				<FwbDropdown close-inside placement="top">
 					<template #trigger>
-						<button class="btn btn-ghost max-w-52 truncate px-2 py-1" :title="`Session: ${currentTitle}`">
+						<button
+							class="inline-flex max-w-52 items-center gap-1 truncate rounded-lg px-2 py-1 text-xs font-medium text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading"
+							:title="`Session: ${currentTitle}`"
+						>
 							<span class="inline-flex min-w-0 items-center gap-1 truncate"
 								><Icon size="16"><ChatMultiple16Regular /></Icon><span class="truncate">{{ currentTitle }}</span></span
 							>
@@ -683,7 +687,7 @@ function saveEdit(id: string): void {
 					<div class="flex max-h-64 min-w-64 flex-col gap-1 overflow-y-auto p-1">
 						<button
 							type="button"
-							class="btn btn-ghost w-full justify-start px-2 py-1.5 text-left text-[13px] dark:text-slate-200"
+							class="inline-flex w-full items-center justify-start gap-1 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading"
 							:disabled="chat.sending.value"
 							@click="newSession"
 						>
@@ -694,8 +698,8 @@ function saveEdit(id: string): void {
 						<div
 							v-for="s in sessions"
 							:key="s.id"
-							class="btn btn-ghost w-full items-center px-2 py-1.5 text-left text-[13px] dark:text-slate-200"
-							:class="{ 'bg-slate-100 dark:bg-slate-600': s.active }"
+							class="flex w-full items-center gap-1 rounded-lg px-2 py-1.5 text-left text-[13px] text-body transition hover:bg-neutral-tertiary"
+							:class="{ 'bg-neutral-tertiary': s.active }"
 							:title="s.title"
 						>
 							<span
@@ -704,11 +708,12 @@ function saveEdit(id: string): void {
 								@click.stop
 								@mousedown.stop
 							>
-								<input
+								<FwbInput
 									v-model="renameDraft"
-									class="input min-w-0 flex-1 py-0.5 text-[13px]"
-									maxlength="120"
+									size="sm"
+									wrapper-class="min-w-0 flex-1"
 									:placeholder="s.title"
+									maxlength="120"
 									autofocus
 									@keyup.enter="commitRenameOnEnter($event, s.id)"
 									@keyup.escape="renamingId = null"
@@ -724,14 +729,14 @@ function saveEdit(id: string): void {
 									<span class="inline-flex items-center gap-1"
 										><Icon v-if="s.active" size="16" class="shrink-0"><Checkmark16Regular /></Icon>{{ s.title }}</span
 									>
-									<span class="block truncate text-[11px] text-slate-400">
+									<span class="block truncate text-[11px] text-body-subtle">
 										{{ s.count }} msgs<span v-if="relativeTime(s.updatedAt)"> · {{ relativeTime(s.updatedAt) }}</span>
 									</span>
 								</button>
 								<span class="flex shrink-0 gap-0.5">
 									<button
 										type="button"
-										class="rounded px-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+										class="rounded px-1 text-body-subtle hover:text-heading"
 										title="Rename session"
 										@click.stop="startRename(s.id)"
 										square
@@ -740,7 +745,7 @@ function saveEdit(id: string): void {
 									</button>
 									<button
 										type="button"
-										class="rounded px-1 text-slate-400 hover:text-red-600"
+										class="rounded px-1 text-body-subtle hover:text-danger"
 										title="Delete session"
 										:disabled="chat.sending.value"
 										@click.stop="deleteSession(s.id)"
@@ -761,18 +766,20 @@ function saveEdit(id: string): void {
 				</span>
 				<span v-else class="ml-auto">No model configured — open settings to choose one.</span>
 				<div>
-					<button v-if="chat.sending.value" class="btn btn-secondary shrink-0 self-end" @click="chat.stop()">
+					<FwbButton v-if="chat.sending.value" color="alternative" class="shrink-0 self-end" @click="chat.stop()">
 						Stop
-					</button>
-					<button v-else class="btn btn-primary shrink-0 self-end" :disabled="!input.trim()" @click="send">Send</button>
+					</FwbButton>
+					<FwbButton v-else color="default" class="shrink-0 self-end" :disabled="!input.trim()" @click="send"
+						>Send</FwbButton
+					>
 				</div>
 			</div>
 
 			<div class="no-print flex gap-2">
-				<textarea
+				<FwbTextarea
 					v-model="input"
-					class="textarea"
-					rows="2"
+					:rows="2"
+					wrapper-class="min-w-0 flex-1"
 					placeholder="Ask the agent… (Enter to send)"
 					:disabled="chat.sending.value"
 					@keyup.enter.exact.prevent="sendOnEnter"

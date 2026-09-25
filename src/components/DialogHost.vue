@@ -32,7 +32,7 @@ function onEnter(): void {
 		</template>
 		<template #body>
 			<template v-if="current.kind === 'prompt'">
-				<p v-if="current.label" class="text-sm text-slate-500 dark:text-slate-400">{{ current.label }}</p>
+				<p v-if="current.label" class="text-sm text-body-subtle">{{ current.label }}</p>
 				<FwbInput
 					v-model="draft"
 					:placeholder="current.placeholder"
@@ -42,7 +42,7 @@ function onEnter(): void {
 					@keyup.escape="dismissDialog"
 				/>
 			</template>
-			<p v-else class="text-sm text-slate-500 dark:text-slate-400">{{ current.body }}</p>
+			<p v-else class="text-sm text-body-subtle">{{ current.body }}</p>
 		</template>
 		<template #footer>
 			<div class="flex justify-end gap-2">

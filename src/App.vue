@@ -7,6 +7,7 @@ import {
 	Broom16Regular,
 	DocumentAdd16Regular,
 	DocumentArrowDown16Regular,
+	Settings16Regular,
 	WeatherMoon16Regular,
 	WeatherSunny16Regular,
 } from './data/icons'
@@ -18,7 +19,7 @@ import ResumePreview from './components/ResumePreview.vue'
 import JobList from './components/JobList.vue'
 import AgentPanel from './components/AgentPanel.vue'
 import JDViewer from './components/JDViewer.vue'
-import { FwbDropdown, FwbModal } from 'flowbite-vue'
+import { FwbButton, FwbButtonGroup, FwbDropdown, FwbModal } from 'flowbite-vue'
 import AppSplash from './components/AppSplash.vue'
 import DialogHost from './components/DialogHost.vue'
 import SettingsPage from './components/SettingsPage.vue'
@@ -51,9 +52,7 @@ const settingsOpen = ref(false)
 // Agent identity for the chat panels: remounts them when the configured
 // model or behavior changes in the settings page.
 const { settings: agentSettings } = useAgentSettings()
-const agentKey = computed(() =>
-	[agentSettings.provider, agentSettings.modelId, agentSettings.systemPrompt, agentSettings.contextChars].join('|'),
-)
+const agentKey = computed(() => [agentSettings.provider, agentSettings.modelId, agentSettings.systemPrompt].join('|'))
 
 // --- Theme (light/dark): app chrome only, the resume page stays light ---
 // Persisted inside the merged settings doc (see `data/store/settings.ts`).
@@ -268,7 +267,15 @@ async function restore(): Promise<void> {
 }
 
 function loadSample(): void {
-	Object.assign(workspace, sampleWorkspace())
+	void confirmDialog({
+		title: 'Load sample workspace?',
+		body: 'Your current content and jobs will be replaced by the sample data.',
+		confirmLabel: 'Load sample',
+		danger: true,
+	}).then((ok) => {
+		if (!ok) return
+		Object.assign(workspace, sampleWorkspace())
+	})
 }
 
 function clearAll(): void {
@@ -725,56 +732,73 @@ onMounted(async () => {
 
 <template>
 	<AppSplash v-if="!loaded" />
-	<div
-		v-if="loaded"
-		class="flex min-h-screen flex-col bg-slate-100 text-slate-900 lg:h-dvh dark:bg-slate-950 dark:text-slate-100"
-	>
+	<div v-if="loaded" class="flex min-h-screen flex-col bg-neutral-secondary text-heading lg:h-dvh">
 		<!-- Top bar -->
 		<header
 			id="topbar"
-			class="no-print sticky top-0 z-10 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
+			class="no-print sticky top-0 z-10 shrink-0 border-b border-default bg-neutral-primary/90 backdrop-blur"
 		>
 			<div class="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3">
 				<div class="mr-auto">
 					<h1 class="text-lg font-extrabold tracking-tight">Resume Tailor</h1>
-					<p class="text-xs text-slate-500 dark:text-slate-400">One master resume — a tailored view per job.</p>
+					<p class="text-xs text-body-subtle">One master resume — a tailored view per job.</p>
 				</div>
 
 				<div class="flex items-center gap-2">
-					<button class="btn btn-ghost text-[13px]" @click="loadSample">
-						<Icon size="16"><DocumentAdd16Regular /></Icon> Load sample
-					</button>
-					<button class="btn btn-ghost text-[13px]" @click="clearAll">
-						<Icon size="16"><Broom16Regular /></Icon> Clear
-					</button>
-					<button class="btn btn-ghost text-[13px]" @click="triggerImport">
-						<Icon size="16"><ArrowUpload16Regular /></Icon> Import
-					</button>
-					<button class="btn btn-ghost text-[13px]" :disabled="exportingZip" @click="exportZip">
-						<Icon size="16"><DocumentArrowDown16Regular /></Icon> {{ exportingZip ? 'Exporting…' : 'Export' }}
-					</button>
-					<button class="btn btn-primary text-[13px]" :disabled="exportingPdf" @click="exportPdf">
-						<Icon size="16"><ArrowDownload16Regular /></Icon> {{ exportingPdf ? 'Exporting…' : 'Export PDF' }}
-					</button>
-					<span class="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
-					<button
-						class="btn btn-ghost px-2.5 text-[13px]"
+					<FwbButtonGroup>
+						<FwbButton size="sm" outline @click="loadSample">
+							<template #prefix
+								><Icon size="16"><DocumentAdd16Regular /></Icon
+							></template>
+							Load sample
+						</FwbButton>
+						<FwbButton size="sm" outline @click="clearAll">
+							<template #prefix
+								><Icon size="16"><Broom16Regular /></Icon
+							></template>
+							Clear
+						</FwbButton>
+						<FwbButton size="sm" outline @click="triggerImport">
+							<template #prefix
+								><Icon size="16"><ArrowUpload16Regular /></Icon
+							></template>
+							Import
+						</FwbButton>
+						<FwbButton size="sm" outline :disabled="exportingZip" @click="exportZip">
+							<template #prefix
+								><Icon size="16"><DocumentArrowDown16Regular /></Icon> </template
+							>{{ exportingZip ? 'Exporting…' : 'Export' }}
+						</FwbButton>
+					</FwbButtonGroup>
+					<FwbButton size="sm" :disabled="exportingPdf" @click="exportPdf">
+						<template #prefix
+							><Icon size="16"><ArrowDownload16Regular /></Icon
+						></template>
+						{{ exportingPdf ? 'Exporting…' : 'Export PDF' }}
+					</FwbButton>
+					<span class="mx-1 h-5 w-px bg-neutral-quaternary" aria-hidden="true" />
+					<FwbButton
+						size="sm"
+						square
+						color="alternative"
 						title="Agent settings"
 						aria-label="Agent settings"
 						@click="settingsOpen = true"
 					>
-						Agent
-					</button>
-					<button
-						class="btn btn-ghost px-2.5"
+						<Icon size="16"><Settings16Regular /></Icon>
+					</FwbButton>
+					<FwbButton
+						size="sm"
+						square
+						color="alternative"
 						:title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
 						:aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
 						@click="toggleTheme"
 					>
 						<Icon size="16"><component :is="isDark ? WeatherSunny16Regular : WeatherMoon16Regular" /></Icon>
-					</button>
+					</FwbButton>
 					<a
-						class="btn btn-ghost px-2.5"
+						class="inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-body-subtle transition select-none hover:bg-neutral-tertiary hover:text-heading"
 						href="https://github.com/Anson2251/resume-tailor"
 						target="_blank"
 						rel="noopener noreferrer"
@@ -807,14 +831,14 @@ onMounted(async () => {
 				<h3 class="text-base font-semibold">Export which document?</h3>
 			</template>
 			<template #body>
-				<p class="text-sm text-slate-500 dark:text-slate-400">
+				<p class="text-sm text-body-subtle">
 					Both the resume and the cover letter are on screen. Pick the one to export as PDF.
 				</p>
 			</template>
 			<template #footer>
 				<div class="flex justify-end gap-2">
-					<button class="btn btn-secondary" @click="doExport('resume')">Resume</button>
-					<button class="btn btn-primary" @click="doExport('letter')">Cover letter</button>
+					<FwbButton color="alternative" @click="doExport('resume')">Resume</FwbButton>
+					<FwbButton @click="doExport('letter')">Cover letter</FwbButton>
 				</div>
 			</template>
 		</FwbModal>
@@ -843,7 +867,11 @@ onMounted(async () => {
 				<div class="no-print mb-2 flex items-center gap-2">
 					<FwbDropdown close-inside placement="bottom">
 						<template #trigger>
-							<button type="button" class="btn btn-ghost text-[13px]" title="Switch left pane view">
+							<button
+								type="button"
+								class="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-medium text-body-subtle transition select-none hover:bg-neutral-tertiary hover:text-heading"
+								title="Switch left pane view"
+							>
 								{{ PANE_LABELS[paneA] }} ▾
 							</button>
 						</template>
@@ -852,8 +880,8 @@ onMounted(async () => {
 								v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf'] as PaneView[]"
 								:key="view"
 								type="button"
-								class="btn btn-ghost justify-start text-[13px] dark:text-slate-200"
-								:class="{ 'bg-slate-100 dark:bg-slate-600': paneA === view }"
+								class="inline-flex w-full items-center justify-start gap-1.5 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-body transition hover:bg-neutral-tertiary"
+								:class="{ 'bg-neutral-tertiary': paneA === view }"
 								@click="setPane('a', view)"
 							>
 								{{ PANE_LABELS[view] }}
@@ -869,9 +897,7 @@ onMounted(async () => {
 						@add="addItem"
 						@remove="removeItem"
 					/>
-					<p
-						class="mt-3 text-center text-xs text-slate-400 sticky bottom-0 backdrop-blur-md pt-2 pb-1 dark:text-slate-500"
-					>
+					<p class="sticky bottom-0 mt-3 pt-2 pb-1 text-center text-xs text-body-subtle backdrop-blur-md">
 						Show toggles, order, and section layout save per job. Edits on
 						<strong class="font-semibold">master</strong> change shared content; elsewhere they're customizations.
 						Auto-saves in this browser — Import / Export moves it. PDF: print → “Save as PDF”, margins None.
@@ -880,15 +906,23 @@ onMounted(async () => {
 				<div v-else-if="paneA === 'preview'" class="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
 					<div class="no-print mb-2 flex gap-1">
 						<button
-							class="btn px-3 py-1.5 text-[13px]"
-							:class="previewTabA === 'resume' ? 'btn-primary' : 'btn-ghost'"
+							class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
+							:class="
+								previewTabA === 'resume'
+									? 'bg-brand text-white shadow-sm'
+									: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
+							"
 							@click="setPreviewTab('a', 'resume')"
 						>
 							Resume
 						</button>
 						<button
-							class="btn px-3 py-1.5 text-[13px]"
-							:class="previewTabA === 'letter' ? 'btn-primary' : 'btn-ghost'"
+							class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
+							:class="
+								previewTabA === 'letter'
+									? 'bg-brand text-white shadow-sm'
+									: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
+							"
 							@click="setPreviewTab('a', 'letter')"
 						>
 							Cover letter
@@ -927,7 +961,11 @@ onMounted(async () => {
 				<div class="no-print mb-2 flex items-center gap-2">
 					<FwbDropdown close-inside placement="bottom" align-to-end>
 						<template #trigger>
-							<button type="button" class="btn btn-ghost text-[13px]" title="Switch right pane view">
+							<button
+								type="button"
+								class="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-medium text-body-subtle transition select-none hover:bg-neutral-tertiary hover:text-heading"
+								title="Switch right pane view"
+							>
 								{{ PANE_LABELS[paneB] }} ▾
 							</button>
 						</template>
@@ -936,8 +974,8 @@ onMounted(async () => {
 								v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf'] as PaneView[]"
 								:key="view"
 								type="button"
-								class="btn btn-ghost justify-start text-[13px] dark:text-slate-200"
-								:class="{ 'bg-slate-100 dark:bg-slate-600': paneB === view }"
+								class="inline-flex w-full items-center justify-start gap-1.5 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-body transition hover:bg-neutral-tertiary"
+								:class="{ 'bg-neutral-tertiary': paneB === view }"
 								@click="setPane('b', view)"
 							>
 								{{ PANE_LABELS[view] }}
@@ -957,15 +995,23 @@ onMounted(async () => {
 				<div v-else-if="paneB === 'preview'" class="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
 					<div class="no-print mb-2 flex gap-1">
 						<button
-							class="btn px-3 py-1.5 text-[13px]"
-							:class="previewTabB === 'resume' ? 'btn-primary' : 'btn-ghost'"
+							class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
+							:class="
+								previewTabB === 'resume'
+									? 'bg-brand text-white shadow-sm'
+									: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
+							"
 							@click="setPreviewTab('b', 'resume')"
 						>
 							Resume
 						</button>
 						<button
-							class="btn px-3 py-1.5 text-[13px]"
-							:class="previewTabB === 'letter' ? 'btn-primary' : 'btn-ghost'"
+							class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
+							:class="
+								previewTabB === 'letter'
+									? 'bg-brand text-white shadow-sm'
+									: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
+							"
 							@click="setPreviewTab('b', 'letter')"
 						>
 							Cover letter
@@ -1003,10 +1049,10 @@ onMounted(async () => {
 
 		<div
 			v-if="undoSnapshot"
-			class="no-print fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+			class="no-print fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-default bg-neutral-primary-medium px-4 py-2 shadow-xl"
 		>
 			<span class="text-sm">Job deleted.</span>
-			<button class="btn btn-primary px-3 py-1 text-sm" @click="undoRemove">Undo</button>
+			<FwbButton size="sm" @click="undoRemove">Undo</FwbButton>
 		</div>
 	</div>
 </template>

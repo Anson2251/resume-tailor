@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Icon } from '@vicons/utils'
+import { FwbButton, FwbToggle } from 'flowbite-vue'
 import {
 	Add16Regular,
 	ArrowDown16Regular,
@@ -158,10 +159,13 @@ function onDragEnd(): void {
 </script>
 
 <template>
-	<section class="card scroll-mt-[150px] p-5" :id="sectionId || undefined">
+	<section
+		class="scroll-mt-[150px] rounded-xl border border-default bg-neutral-primary-medium p-5 shadow-sm"
+		:id="sectionId || undefined"
+	>
 		<div class="flex items-baseline justify-between gap-3">
-			<h2 class="section-title">{{ title }}</h2>
-			<span class="shrink-0 text-xs text-slate-400 dark:text-slate-500">{{ shownCount }}/{{ items.length }} shown</span>
+			<h2 class="text-sm font-bold tracking-widest text-body-subtle uppercase">{{ title }}</h2>
+			<span class="shrink-0 text-xs text-body-subtle">{{ shownCount }}/{{ items.length }} shown</span>
 		</div>
 
 		<div class="mt-4 space-y-3">
@@ -169,10 +173,10 @@ function onDragEnd(): void {
 				v-for="(row, i) in rows"
 				:key="row.item.id"
 				:id="`form-item-${row.item.id}`"
-				class="relative scroll-mt-[150px] rounded-lg border bg-slate-50/60 p-4 transition dark:bg-slate-800/40"
+				class="relative scroll-mt-[150px] rounded-lg border bg-neutral-secondary/60 p-4 transition"
 				:class="{
 					'border-amber-300 dark:border-amber-700': hasOverride(row.item.id),
-					'border-slate-200 dark:border-slate-700': !hasOverride(row.item.id),
+					'border-default': !hasOverride(row.item.id),
 					'opacity-60 saturate-0': !row.visible,
 					'opacity-40': dragId === row.item.id,
 				}"
@@ -182,21 +186,21 @@ function onDragEnd(): void {
 				<!-- Drop indicators -->
 				<div
 					v-if="dropTarget?.id === row.item.id && dropTarget.position === 'before'"
-					class="pointer-events-none absolute inset-x-2 -top-1 h-0.5 rounded-full bg-indigo-500"
+					class="pointer-events-none absolute inset-x-2 -top-1 h-0.5 rounded-full bg-brand"
 				/>
 				<div
 					v-if="dropTarget?.id === row.item.id && dropTarget.position === 'after'"
-					class="pointer-events-none absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-indigo-500"
+					class="pointer-events-none absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-brand"
 				/>
 
 				<div class="mb-3">
 					<div class="flex items-start justify-between gap-2">
 						<div class="flex min-w-0 items-center gap-1">
 							<span
-								class="icon-btn shrink-0"
+								class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition"
 								:class="
 									row.visible
-										? 'cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing dark:text-slate-600 dark:hover:text-slate-300'
+										? 'cursor-grab text-body-subtle hover:text-heading active:cursor-grabbing'
 										: 'cursor-not-allowed opacity-30'
 								"
 								:draggable="row.visible"
@@ -209,31 +213,21 @@ function onDragEnd(): void {
 							</span>
 							<p
 								class="min-w-0 text-sm font-semibold"
-								:class="
-									row.visible
-										? 'text-slate-700 dark:text-slate-200'
-										: 'text-slate-400 line-through decoration-black decoration-2 dark:text-slate-500'
-								"
+								:class="row.visible ? 'text-heading' : 'text-body-subtle line-through decoration-black decoration-2'"
 							>
 								<slot name="heading" :item="row.item" :index="i" :visible="row.visible" />
 							</p>
 						</div>
 
 						<div class="flex shrink-0 items-center gap-1">
-							<label
-								class="mr-1 flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+							<FwbToggle
+								:model-value="row.visible"
+								:aria-label="row.visible ? 'Hide on this profile' : 'Show on this profile'"
 								:title="row.visible ? 'Hide on this profile' : 'Show on this profile'"
-							>
-								<input
-									type="checkbox"
-									class="h-4 w-4 rounded accent-indigo-600"
-									:checked="row.visible"
-									@change="toggle(row.item.id, ($event.target as HTMLInputElement).checked)"
-								/>
-								Show
-							</label>
+								@update:model-value="(v) => toggle(row.item.id, v as boolean)"
+							/>
 							<button
-								class="icon-btn"
+								class="inline-flex h-7 w-7 items-center justify-center rounded-md text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading disabled:opacity-30 disabled:hover:bg-transparent"
 								title="Move up"
 								:disabled="!row.visible || row.orderIndex === 0"
 								@click="move(row.item.id, -1)"
@@ -241,7 +235,7 @@ function onDragEnd(): void {
 								<Icon size="16"><ArrowUp16Regular /></Icon>
 							</button>
 							<button
-								class="icon-btn"
+								class="inline-flex h-7 w-7 items-center justify-center rounded-md text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading disabled:opacity-30 disabled:hover:bg-transparent"
 								title="Move down"
 								:disabled="!row.visible || row.orderIndex === order.length - 1"
 								@click="move(row.item.id, 1)"
@@ -249,7 +243,7 @@ function onDragEnd(): void {
 								<Icon size="16"><ArrowDown16Regular /></Icon>
 							</button>
 							<button
-								class="icon-btn hover:bg-red-50 hover:text-red-600"
+								class="inline-flex h-7 w-7 items-center justify-center rounded-md text-body-subtle transition hover:bg-danger-soft hover:text-danger disabled:opacity-30 disabled:hover:bg-transparent"
 								title="Remove everywhere (master + all profiles)"
 								:disabled="!canRemove"
 								@click="emit('remove', row.item.id)"
@@ -277,8 +271,8 @@ function onDragEnd(): void {
 			</article>
 		</div>
 
-		<button class="btn btn-secondary mt-4 w-full border-dashed" @click="emit('add')">
+		<FwbButton color="alternative" class="mt-4 w-full border-dashed" @click="emit('add')">
 			<Icon size="16"><Add16Regular /></Icon> {{ addLabel }}
-		</button>
+		</FwbButton>
 	</section>
 </template>

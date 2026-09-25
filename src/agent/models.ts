@@ -168,6 +168,26 @@ export function modelLabel(provider: string, id: string): string {
 	return findModelChoice(provider, id)?.label ?? `${provider}/${id}`
 }
 
+/** Rough chars-per-token for budgeting char-measured history against token windows. */
+export const CHARS_PER_TOKEN = 4
+/** Output headroom kept out of the history budget (capped so small windows stay usable). */
+const OUTPUT_RESERVE_TOKENS = 4096
+/** Budget floor and unknown-model fallback (matches the retired manual default). */
+export const FALLBACK_CONTEXT_CHARS = 8000
+
+/**
+ * History budget in characters, derived from the pi-ai SDK's per-model
+ * `contextWindow` (tokens) minus output headroom. Custom models inherit
+ * their same-provider template's window via resolveModel; custom providers
+ * carry the 128k estimate from buildCustomProvider.
+ */
+export function contextCharsFor(provider: string, id: string): number {
+	const model = resolveModel(provider, id)
+	if (!model || !Number.isFinite(model.contextWindow) || model.contextWindow <= 0) return FALLBACK_CONTEXT_CHARS
+	const reserve = Math.min(Math.max(model.maxTokens || 0, 0), OUTPUT_RESERVE_TOKENS)
+	return Math.max(1000, Math.round((model.contextWindow - reserve) * CHARS_PER_TOKEN))
+}
+
 /** Enable or disable one model row. */
 export function setModelEnabled(provider: string, id: string, enabled: boolean): void {
 	const state = loadProviderSettings()

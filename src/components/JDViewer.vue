@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
-import { FwbFileInput } from 'flowbite-vue'
+import { FwbButton, FwbFileInput } from 'flowbite-vue'
 import { attachJdPdf, loadJdPdf, jdBlobUrl } from '../agent/jd'
 import type { Job } from '../data/types'
 
@@ -79,22 +79,24 @@ function onNativePick(event: Event): void {
 	<div class="flex min-h-0 flex-col gap-3">
 		<div
 			v-if="job.kind === 'master'"
-			class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+			class="rounded-lg border border-default bg-neutral-secondary px-3 py-2 text-xs text-body-subtle"
 		>
 			Master holds the shared content — it has no JD. Select a job to attach its posting.
 		</div>
 		<div class="no-print flex flex-nowrap items-center gap-2">
-			<span v-if="job.jdSource" class="text-xs text-slate-500 flex flex-nowrap flex-1 text-nowrap">
+			<span v-if="job.jdSource" class="flex flex-1 flex-nowrap text-xs text-nowrap text-body-subtle">
 				<span class="truncate">{{ job.jdSource.filename }}</span> · {{ job.jdSource.pageCount }} pages
 			</span>
-			<button
+			<FwbButton
 				v-if="job.jdSource"
-				class="btn btn-ghost px-2 py-1 text-xs text-nowrap"
+				size="xs"
+				color="alternative"
+				class="text-nowrap"
 				:disabled="busy"
 				@click="fileInput?.click()"
 			>
 				{{ busy ? 'Reading…' : 'Replace JD' }}
-			</button>
+			</FwbButton>
 			<input ref="fileInput" type="file" accept="application/pdf,.pdf" class="hidden" @change="onNativePick" />
 		</div>
 		<fwb-file-input
@@ -110,21 +112,23 @@ function onNativePick(event: Event): void {
 			</template>
 		</fwb-file-input>
 		<p v-if="notice" class="text-xs text-amber-600">{{ notice }}</p>
-		<div v-if="loading" class="text-sm text-slate-400">Loading PDF…</div>
-		<div v-else-if="missing" class="rounded-lg border border-dashed p-4 text-sm text-slate-500">
+		<div v-if="loading" class="text-sm text-body-subtle">Loading PDF…</div>
+		<div v-else-if="missing" class="rounded-lg border border-dashed border-default p-4 text-sm text-body-subtle">
 			JD PDF missing — it isn't part of workspace exports. Re-attach it with the dropzone above.
 		</div>
 		<iframe
 			v-else-if="blobUrl"
 			:src="blobUrl"
 			title="Job description PDF"
-			class="min-h-[50vh] w-full flex-1 rounded-lg border border-slate-200 bg-white"
+			class="min-h-[50vh] w-full flex-1 rounded-lg border border-default bg-neutral-primary"
 		/>
 		<div v-if="job.jobDescription" class="min-h-0 overflow-y-auto">
-			<p class="label">Extracted text (read-only)</p>
-			<pre
-				class="rounded-lg bg-slate-50 p-3 text-xs whitespace-pre-wrap text-slate-700 dark:bg-slate-900 dark:text-slate-300"
-				>{{ job.jobDescription }}</pre>
+			<p class="mb-1 block text-xs font-semibold tracking-wide text-body-subtle uppercase">
+				Extracted text (read-only)
+			</p>
+			<pre class="rounded-lg bg-neutral-secondary p-3 text-xs whitespace-pre-wrap text-body">{{
+				job.jobDescription
+			}}</pre>
 		</div>
 	</div>
 </template>

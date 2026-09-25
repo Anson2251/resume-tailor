@@ -5,7 +5,7 @@
 
 <template>
 	<div
-		class="flex min-h-screen flex-col items-center justify-center bg-slate-100 dark:bg-slate-950"
+		class="flex min-h-screen flex-col items-center justify-center bg-neutral-secondary"
 		role="status"
 		aria-label="Loading Resume Tailor"
 	>
@@ -14,10 +14,10 @@
 		>
 			R
 		</div>
-		<h1 class="mt-4 text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Resume Tailor</h1>
-		<p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Loading your workspace&hellip;</p>
+		<h1 class="mt-4 text-lg font-extrabold tracking-tight text-heading">Resume Tailor</h1>
+		<p class="mt-1 text-xs text-body-subtle">Loading your workspace&hellip;</p>
 		<div
-			class="mt-5 h-7 w-7 animate-spin rounded-full border-[3px] border-slate-300 border-t-sky-500 dark:border-slate-700 dark:border-t-sky-400"
+			class="mt-5 h-7 w-7 animate-spin rounded-full border-[3px] border-neutral-quaternary border-t-sky-500 dark:border-t-sky-400"
 			aria-hidden="true"
 		></div>
 	</div>

@@ -18,25 +18,23 @@ it('loads defaults on first run', () => {
 	expect(loadAgentSettings()).toEqual({ ...DEFAULT_AGENT_SETTINGS })
 })
 
-it('round-trips provider, model, prompt, context chars and thinking level', () => {
+it('round-trips provider, model, prompt and thinking level', () => {
 	saveAgentSettings({
 		provider: 'openai',
 		modelId: 'gpt-4o',
 		systemPrompt: 'Be concise.',
-		contextChars: 16000,
 		thinkingLevel: 'medium',
 	})
 	expect(loadAgentSettings()).toEqual({
 		provider: 'openai',
 		modelId: 'gpt-4o',
 		systemPrompt: 'Be concise.',
-		contextChars: 16000,
 		thinkingLevel: 'medium',
 	})
 })
 
 it('keeps the "not configured" empty state', () => {
-	saveAgentSettings({ provider: '', modelId: '', systemPrompt: 'x', contextChars: 8000, thinkingLevel: 'off' })
+	saveAgentSettings({ provider: '', modelId: '', systemPrompt: 'x', thinkingLevel: 'off' })
 	const loaded = loadAgentSettings()
 	expect(loaded.provider).toBe('')
 	expect(loaded.modelId).toBe('')
@@ -48,9 +46,10 @@ it('falls back to off for unknown thinking levels', () => {
 	expect(normalizeAgentSettings({}).thinkingLevel).toBe('off')
 })
 
-it('clamps context chars into range', () => {
-	expect(normalizeAgentSettings({ contextChars: 999999 }).contextChars).toBe(50000)
-	expect(normalizeAgentSettings({ contextChars: 5 }).contextChars).toBe(1000)
+it('ignores the retired contextChars setting (per-model SDK windows now)', () => {
+	const normalized = normalizeAgentSettings({ contextChars: 999999 })
+	expect('contextChars' in normalized).toBe(false)
+	expect(normalized).toEqual({ ...DEFAULT_AGENT_SETTINGS })
 })
 
 it('hydrates from a store doc and falls back to defaults', () => {

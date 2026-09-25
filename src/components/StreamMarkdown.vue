@@ -27,7 +27,7 @@ const content = computed(() => {
 <template>
 	<div class="md stream-md" :class="{ 'is-streaming': streaming }">
 		<component :is="content" v-if="content" />
-		<span v-else class="text-slate-400">…</span>
+		<span v-else class="text-body-subtle">…</span>
 	</div>
 </template>
 

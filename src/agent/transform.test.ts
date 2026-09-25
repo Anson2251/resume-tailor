@@ -1,11 +1,6 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
-import { dropOrphanToolResults, useAgentChat } from './useAgentChat'
-import { setApiKey } from './keyring'
-import { DEFAULT_MODEL } from './models'
-import { blankResume } from '../data/resume'
-import { blankJob } from '../data/workspace'
-import type { JobMutations } from './tools'
+import { dropOrphanToolResults, truncateTranscript } from './useAgentChat'
 
 function user(text: string): AgentMessage {
 	return { role: 'user', content: text, timestamp: 1 } as unknown as AgentMessage
@@ -90,116 +85,39 @@ it('excises an incomplete batch when the results never arrive', () => {
 	expect(out.map((m) => (m as { role?: string }).role)).toEqual(['user', 'user'])
 })
 
-function textTurn(text: string): string {
-	return [
-		'event: message_start',
-		'data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}}',
-		'',
-		'event: content_block_start',
-		'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
-		'',
-		'event: content_block_delta',
-		`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":${JSON.stringify(text)}}}`,
-		'',
-		'event: content_block_stop',
-		'data: {"type":"content_block_stop","index":0}',
-		'',
-		'event: message_delta',
-		'data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":2}}',
-		'',
-		'event: message_stop',
-		'data: {"type":"message_stop"}',
-		'',
-	].join('\n')
-}
-
-function toolTurn(callId: string, name: string, inputJson: string): string {
-	const mid = Math.ceil(inputJson.length / 2)
-	return [
-		'event: message_start',
-		'data: {"type":"message_start","message":{"id":"msg_2","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}}',
-		'',
-		'event: content_block_start',
-		`data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":${JSON.stringify(callId)},"name":${JSON.stringify(name)},"input":{}}}`,
-		'',
-		'event: content_block_delta',
-		`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":${JSON.stringify(inputJson.slice(0, mid))}}}`,
-		'',
-		'event: content_block_delta',
-		`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":${JSON.stringify(inputJson.slice(mid))}}}`,
-		'',
-		'event: content_block_stop',
-		'data: {"type":"content_block_stop","index":0}',
-		'',
-		'event: message_delta',
-		'data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":2}}',
-		'',
-		'event: message_stop',
-		'data: {"type":"message_stop"}',
-		'',
-	].join('\n')
-}
-
-beforeEach(() => {
-	vi.unstubAllGlobals()
-})
-
-it('truncated follow-up never sends an orphan tool_result (OpenAI 400 regression)', async () => {
-	const requests: { url: string; init: RequestInit }[] = []
-	let n = 0
-	const responses = [toolTurn('toolu_trunc_1', 'read_jd', '{}'), textTurn('Done with JD.'), textTurn('Follow-up done.')]
-	vi.stubGlobal(
-		'fetch',
-		vi.fn(async (url: string, init: RequestInit) => {
-			requests.push({ url, init })
-			const body = responses[Math.min(n++, responses.length - 1)]
-			return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
-		}),
-	)
-	await setApiKey('anthropic', 'sk-test-key')
-	const master = blankResume()
-	const job = blankJob('Test job', master)
-	// Long JD → long toolResult so the transcript exceeds the tiny budget
-	// and the truncator must cut inside/around the tool batch.
-	job.jobDescription = `Senior role needing Vue. ${'Requirement detail. '.repeat(200)}`
-	const mutate: JobMutations = {
-		applyOverride: () => {},
-		setCoverLetter: () => {},
-		setLetterField: () => {},
-		setVisibility: () => {},
-		setTitle: () => {},
-		setSummary: () => {},
+it('truncateTranscript never strands a toolResult under a tiny budget (OpenAI 400 regression)', () => {
+	const sys = { role: 'system', content: 'prompt', timestamp: 0 } as unknown as AgentMessage
+	const bigArgs = { q: 'z'.repeat(500) }
+	const call = {
+		...assistantTool('a'),
+		content: [{ type: 'toolCall', id: 'a', name: 'read_jd', arguments: bigArgs }],
+	} as unknown as AgentMessage
+	const bigResult = {
+		...toolResult('a'),
+		content: [{ type: 'text', text: 'y'.repeat(900) }],
+	} as unknown as AgentMessage
+	// Sizes (~10 + ~524 + ~909 + ~5 + ~10) force the window to land exactly
+	// on the toolResult, so the truncator must expand backwards and keep the
+	// assistant toolCall attached (validity beats budget).
+	const msgs = [sys, user('qqq-opener'), call, bigResult, assistantText('done'), user('follow up')]
+	const out = truncateTranscript(msgs, 1000)
+	const roles = out.map((m) => (m as { role?: string }).role)
+	expect(roles[0]).toBe('system')
+	expect(roles[1]).not.toBe('toolResult')
+	expect(roles.at(-1)).toBe('user')
+	// Every kept toolResult still has its assistant toolCall ahead of it.
+	const callIds = new Set<string>()
+	for (const m of out) {
+		const content = (m as { content?: { type?: string; id?: string }[] }).content
+		for (const block of content ?? []) if (block?.type === 'toolCall' && block.id) callIds.add(block.id)
 	}
-	const chat = useAgentChat(job, master, mutate, DEFAULT_MODEL, {
-		systemPrompt: 'Test system prompt.',
-		contextChars: 1000,
-	})
-
-	await chat.send('Check the JD please.')
-	expect(chat.error.value).toBe(null)
-	await chat.send('Follow up please.')
-	expect(chat.error.value).toBe(null)
-	expect(requests.length).toBeGreaterThanOrEqual(3)
-
-	// Every request after the first must be provider-valid: each tool_result
-	// id is preceded by a tool_use with the same id, and no error assistant
-	// is ever re-sent.
-	for (const req of requests.slice(1)) {
-		const body = JSON.parse(String(req.init.body))
-		const flat = JSON.stringify(body.messages)
-		expect(flat).not.toContain('"stop_reason":"error"')
-		const useIds = [...flat.matchAll(/"tool_use"[^]*?"id"\s*:\s*"([^"]+)"/g)].map((m) => m[1])
-		const resultIds = [...flat.matchAll(/"tool_result"[^]*?"tool_use_id"\s*:\s*"([^"]+)"/g)].map((m) => m[1])
-		// Anthropic wire format nests ids differently; fall back to plain id
-		// presence when the strict patterns find nothing.
-		if (resultIds.length) {
-			for (const id of resultIds) {
-				expect(useIds).toContain(id)
-				expect(flat.indexOf(id)).toBeGreaterThanOrEqual(0)
-			}
+	for (const m of out) {
+		if ((m as { role?: string }).role === 'toolResult') {
+			expect(callIds.has((m as { toolCallId?: string }).toolCallId ?? '')).toBe(true)
 		}
-		// Generic guard that works for both Anthropic and OpenAI wires:
-		// a result marker must never appear without its call marker.
-		if (flat.includes('tool_result')) expect(flat).toContain('toolu_trunc_1')
 	}
+	// The batch survived (not silently dropped) while the old opener did not.
+	const flat = JSON.stringify(out)
+	expect(flat).toContain('z'.repeat(500))
+	expect(flat).not.toContain('qqq-opener')
 })

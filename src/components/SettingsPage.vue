@@ -15,6 +15,7 @@ import { deleteApiKey, getApiKey, setApiKey } from '../agent/keyring'
 import {
 	addCustomModel,
 	addCustomProvider,
+	contextCharsFor,
 	isCustomModel,
 	isModelEnabled,
 	listProviders,
@@ -426,39 +427,32 @@ watch(() => [settings.provider, settings.modelId], clampThinkingLevel)
 
 // --- Conversation section (autosaved, debounced) ---
 
-const contextDraft = ref(String(settings.contextChars))
-const contextHint = ref('')
-
-function syncConversationDraft(): void {
-	contextDraft.value = String(settings.contextChars)
-	contextHint.value = ''
-}
+// History budget, derived from the pi-ai SDK's per-model context window.
+// Read-only: the manual character setting was retired.
+const modelWindowLabel = computed(() => {
+	const model = resolveModel(settings.provider, settings.modelId)
+	if (!model || !Number.isFinite(model.contextWindow) || model.contextWindow <= 0) return 'Unknown model'
+	const tokens = model.contextWindow.toLocaleString('en-US')
+	const chars = contextCharsFor(settings.provider, settings.modelId).toLocaleString('en-US')
+	return `${tokens} tokens (~${chars} chars of history)`
+})
 
 function resetConversation(): void {
 	settings.systemPrompt = ''
-	settings.contextChars = DEFAULT_AGENT_SETTINGS.contextChars
-	syncConversationDraft()
 }
 
 let lastConvSavedJson = ''
 let convTimer: ReturnType<typeof setTimeout> | null = null
 
 watch(
-	() => [settings.systemPrompt, contextDraft.value],
+	() => settings.systemPrompt,
 	() => {
 		convSaveState.value = 'saving'
 		if (convTimer !== null) clearTimeout(convTimer)
 		convTimer = setTimeout(() => {
 			convTimer = null
 			try {
-				const parsed = Number.parseInt(contextDraft.value, 10)
-				if (Number.isFinite(parsed)) {
-					settings.contextChars = Math.min(50000, Math.max(1000, Math.round(parsed)))
-					contextHint.value = ''
-				} else {
-					contextHint.value = 'Enter a number between 1000 and 50000.'
-				}
-				const json = JSON.stringify({ prompt: settings.systemPrompt, chars: settings.contextChars })
+				const json = JSON.stringify({ prompt: settings.systemPrompt })
 				if (json !== lastConvSavedJson) {
 					lastConvSavedJson = json
 					save()
@@ -485,13 +479,12 @@ watch(open, async (isOpen) => {
 		// a model switch outside this page); snapshotted above, so the clamp
 		// below persists through the debounced model save.
 		clampThinkingLevel()
-		lastConvSavedJson = JSON.stringify({ prompt: settings.systemPrompt, chars: settings.contextChars })
+		lastConvSavedJson = JSON.stringify({ prompt: settings.systemPrompt })
 		modelSaveState.value = 'idle'
 		convSaveState.value = 'idle'
 		const ids = providerList.value.map((p) => p.value)
 		selectedProviderId.value = settings.provider && ids.includes(settings.provider) ? settings.provider : (ids[0] ?? '')
 		syncDefaultOption()
-		syncConversationDraft()
 		modelFilter.value = ''
 		resetAddForm()
 		showAddProvider.value = false
@@ -510,18 +503,18 @@ function onKeydown(event: KeyboardEvent): void {
 
 <template>
 	<div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown="onKeydown">
-		<div class="absolute inset-0 bg-slate-950/60" @click="close" aria-hidden="true" />
+		<div class="absolute inset-0 bg-dark-backdrop/60" @click="close" aria-hidden="true" />
 		<div
 			role="dialog"
 			aria-modal="true"
 			aria-label="Agent settings"
-			class="relative flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+			class="relative flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-default bg-neutral-primary-medium shadow-2xl"
 		>
 			<!-- Page header -->
-			<div class="flex shrink-0 items-center gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+			<div class="flex shrink-0 items-center gap-3 border-b border-default px-5 py-4">
 				<div class="mr-auto">
-					<h2 class="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">Agent settings</h2>
-					<p class="text-xs text-slate-500 dark:text-slate-400">
+					<h2 class="text-base font-bold tracking-tight text-heading">Agent settings</h2>
+					<p class="text-xs text-body-subtle">
 						Providers, default model, API keys, and assistant behavior for every job.
 					</p>
 				</div>
@@ -535,7 +528,7 @@ function onKeydown(event: KeyboardEvent): void {
 				<!-- Section nav (wisp-pro SettingsView pattern) -->
 				<nav
 					aria-label="Settings sections"
-					class="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 p-3 sm:w-60 sm:flex-col sm:overflow-y-auto sm:border-r sm:border-b-0 dark:border-slate-700"
+					class="flex shrink-0 gap-1 overflow-x-auto border-b border-default p-3 sm:w-60 sm:flex-col sm:overflow-y-auto sm:border-r sm:border-b-0"
 				>
 					<button
 						v-for="section in sections"
@@ -544,28 +537,20 @@ function onKeydown(event: KeyboardEvent): void {
 						role="option"
 						:aria-selected="activeSection === section.id"
 						class="flex min-w-44 items-center gap-3 rounded-xl px-3 py-2.5 text-left transition sm:min-w-0"
-						:class="
-							activeSection === section.id
-								? 'bg-slate-100 dark:bg-slate-800'
-								: 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
-						"
+						:class="activeSection === section.id ? 'bg-neutral-tertiary' : 'hover:bg-neutral-tertiary'"
 						@click="setActiveSection(section.id)"
 					>
 						<span
 							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-							:class="
-								activeSection === section.id
-									? 'bg-indigo-600 text-white'
-									: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-							"
+							:class="activeSection === section.id ? 'bg-brand text-white' : 'bg-neutral-tertiary text-body-subtle'"
 						>
 							<Icon size="18"><component :is="section.icon" /></Icon>
 						</span>
 						<span class="min-w-0">
-							<span class="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+							<span class="block truncate text-sm font-semibold text-heading">
 								{{ section.title }}
 							</span>
-							<span class="block truncate text-xs text-slate-500 dark:text-slate-400">
+							<span class="block truncate text-xs text-body-subtle">
 								{{ section.description }}
 							</span>
 						</span>
@@ -575,14 +560,14 @@ function onKeydown(event: KeyboardEvent): void {
 				<!-- Detail -->
 				<main class="min-h-0 flex-1 overflow-y-auto p-5">
 					<!-- Providers (wisp-pro ProvidersView pattern) -->
-					<div v-if="activeSection === 'providers'" class="flex min-h-0 flex-col gap-4 lg:flex-row">
-						<!-- Provider list -->
-						<section
-							aria-label="Providers"
-							class="flex shrink-0 flex-col gap-1 lg:max-h-[62vh] lg:w-60 lg:overflow-y-auto"
-						>
+					<div
+						v-if="activeSection === 'providers'"
+						class="flex min-h-0 flex-col gap-4 lg:grid lg:h-full lg:grid-cols-[15rem_minmax(0,1fr)] lg:grid-rows-1"
+					>
+						<!-- Provider list: grid-stretched full height; only the listbox scrolls -->
+						<section aria-label="Providers" class="flex min-w-0 flex-col gap-1 lg:min-h-0 lg:overflow-hidden">
 							<div class="flex items-center justify-between gap-2 px-1 pb-1">
-								<span class="text-sm font-semibold text-slate-900 dark:text-slate-100">Providers</span>
+								<span class="text-sm font-semibold text-heading">Providers</span>
 								<div class="flex items-center gap-2">
 									<FwbBadge type="default">{{ providerCountLabel }}</FwbBadge>
 									<FwbButton
@@ -595,10 +580,7 @@ function onKeydown(event: KeyboardEvent): void {
 									</FwbButton>
 								</div>
 							</div>
-							<div
-								v-if="showAddProvider"
-								class="flex flex-col gap-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700"
-							>
+							<div v-if="showAddProvider" class="flex flex-col gap-2 rounded-xl border border-default p-3">
 								<FwbInput v-model="addId" label="Provider id" placeholder="my-proxy" />
 								<FwbInput v-model="addName" label="Display name" placeholder="My Proxy" />
 								<FwbInput v-model="addBaseUrl" label="Base URL" placeholder="https://proxy.example/v1" />
@@ -610,7 +592,11 @@ function onKeydown(event: KeyboardEvent): void {
 									<FwbButton size="xs" @click="handleAddProvider">Add provider</FwbButton>
 								</div>
 							</div>
-							<div role="listbox" aria-label="Providers" class="flex gap-1 max-lg:overflow-x-auto lg:flex-col">
+							<div
+								role="listbox"
+								aria-label="Providers"
+								class="flex gap-1 max-lg:overflow-x-auto lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-y-auto lg:overscroll-contain"
+							>
 								<button
 									v-for="provider in providerList"
 									:key="provider.value"
@@ -618,18 +604,14 @@ function onKeydown(event: KeyboardEvent): void {
 									role="option"
 									:aria-selected="selectedProviderId === provider.value"
 									class="flex min-w-48 items-center gap-2 rounded-xl px-3 py-2.5 text-left transition lg:min-w-0"
-									:class="
-										selectedProviderId === provider.value
-											? 'bg-slate-100 dark:bg-slate-800'
-											: 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
-									"
+									:class="selectedProviderId === provider.value ? 'bg-neutral-tertiary' : 'hover:bg-neutral-tertiary'"
 									@click="selectProvider(provider.value)"
 								>
 									<span class="min-w-0 flex-1">
-										<span class="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+										<span class="block truncate text-sm font-semibold text-heading">
 											{{ provider.name }}
 										</span>
-										<span class="block truncate text-xs text-slate-500 dark:text-slate-400">
+										<span class="block truncate text-xs text-body-subtle">
 											{{ modelsForProvider(provider.value, true).length }} models{{
 												hasKeys[provider.value] ? ' · key stored' : ''
 											}}
@@ -640,40 +622,36 @@ function onKeydown(event: KeyboardEvent): void {
 									</FwbBadge>
 								</button>
 							</div>
-							<p class="px-1 pt-1 text-xs text-slate-400 dark:text-slate-500">
-								Pick a provider to manage its key and models.
-							</p>
+							<p class="px-1 pt-1 text-xs text-body-subtle">Pick a provider to manage its key and models.</p>
 						</section>
 
-						<!-- Provider detail -->
-						<div v-if="detailProvider" class="min-w-0 flex-1">
-							<header class="mb-4 flex items-start justify-between gap-3">
+						<!-- Provider detail: stretched full height; only the models list scrolls -->
+						<div v-if="detailProvider" class="min-w-0 flex-1 lg:flex lg:min-h-0 lg:flex-col">
+							<header class="mb-4 flex shrink-0 items-start justify-between gap-3">
 								<div class="min-w-0">
-									<h3 class="truncate text-lg font-bold text-slate-900 dark:text-slate-100">
+									<h3 class="truncate text-lg font-bold text-heading">
 										{{ detailProvider.name }}
 									</h3>
-									<p class="text-xs text-slate-500 dark:text-slate-400">{{ detailModelCountLabel }}</p>
+									<p class="text-xs text-body-subtle">{{ detailModelCountLabel }}</p>
 								</div>
 								<div class="flex shrink-0 items-center gap-2 pt-1">
 									<FwbBadge v-if="detailProvider.custom" size="xs" type="indigo">Custom</FwbBadge>
-									<span class="font-mono text-xs text-slate-400 dark:text-slate-500">
-										ID: {{ detailProvider.value }}
-									</span>
+									<span class="font-mono text-xs text-body-subtle"> ID: {{ detailProvider.value }} </span>
 									<FwbButton v-if="detailProvider.custom" size="xs" color="alternative" @click="handleRemoveProvider">
 										Delete
 									</FwbButton>
 								</div>
 							</header>
 
-							<div class="flex flex-col gap-4">
-								<FwbCard class="p-5">
+							<div class="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+								<FwbCard class="shrink-0 p-5">
 									<div class="flex items-center gap-2">
-										<h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">API key</h4>
+										<h4 class="text-sm font-semibold text-heading">API key</h4>
 										<FwbBadge :type="hasKeys[detailProvider.value] ? 'green' : 'default'" size="xs">
 											{{ hasKeys[detailProvider.value] ? 'Stored' : 'No key' }}
 										</FwbBadge>
 									</div>
-									<p class="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+									<p class="mt-2 text-xs leading-relaxed text-body-subtle">
 										Bring your own key. Desktop stores it in your OS keychain{{
 											isElectron() ? '.' : '; the web app keeps it for this session only.'
 										}}
@@ -706,18 +684,20 @@ function onKeydown(event: KeyboardEvent): void {
 											</FwbButton>
 										</div>
 									</div>
-									<p v-if="keyMsgs[detailProvider.value]" class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+									<p v-if="keyMsgs[detailProvider.value]" class="mt-2 text-xs text-body-subtle">
 										{{ keyMsgs[detailProvider.value] }}
 									</p>
 								</FwbCard>
 
-								<FwbCard class="p-5">
-									<div class="flex items-center gap-2">
-										<h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Models</h4>
+								<div
+									class="rounded-xl border border-gray-200 bg-neutral-primary-medium p-5 shadow-sm lg:flex lg:min-h-64 lg:flex-1 lg:flex-col lg:overflow-hidden dark:border-gray-700"
+								>
+									<div class="flex shrink-0 items-center gap-2">
+										<h4 class="text-sm font-semibold text-heading">Models</h4>
 										<FwbTooltip placement="right">
 											<template #trigger>
 												<span
-													class="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-slate-100 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+													class="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-neutral-tertiary text-xs text-body-subtle"
 												>
 													?
 												</span>
@@ -730,7 +710,7 @@ function onKeydown(event: KeyboardEvent): void {
 									<p v-if="!detailModels.length" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
 										This provider lists no models — add a custom one below.
 									</p>
-									<div class="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row dark:border-slate-800">
+									<div class="flex shrink-0 flex-col gap-2 border-t border-default pt-3 sm:flex-row">
 										<div class="flex-1">
 											<FwbInput size="sm" v-model="newModelId" placeholder="New model id" />
 										</div>
@@ -744,17 +724,17 @@ function onKeydown(event: KeyboardEvent): void {
 									<p v-if="newModelError" class="mt-2 text-xs text-red-600 dark:text-red-400">
 										{{ newModelError }}
 									</p>
-									<ul class="mt-3 flex flex-col gap-1">
+									<ul class="mt-3 flex flex-col gap-1 overscroll-contain lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
 										<li
 											v-for="model in detailModels"
 											:key="model.id"
-											class="flex items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-slate-50 dark:hover:bg-slate-800/60"
+											class="flex items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-neutral-tertiary"
 										>
 											<span class="min-w-0 flex-1">
-												<span class="block truncate text-sm text-slate-900 dark:text-slate-100">
+												<span class="block truncate text-sm text-heading">
 													{{ model.label }}
 												</span>
-												<span class="block truncate font-mono text-xs text-slate-400 dark:text-slate-500">
+												<span class="block truncate font-mono text-xs text-body-subtle">
 													{{ model.id }}
 												</span>
 											</span>
@@ -775,7 +755,7 @@ function onKeydown(event: KeyboardEvent): void {
 											</FwbButton>
 										</li>
 									</ul>
-								</FwbCard>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -784,11 +764,11 @@ function onKeydown(event: KeyboardEvent): void {
 					<div v-else-if="activeSection === 'model'" class="flex flex-col gap-4">
 						<FwbCard class="p-5">
 							<div class="flex items-center gap-2">
-								<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Default agent model</h3>
+								<h3 class="text-sm font-semibold text-heading">Default agent model</h3>
 								<FwbTooltip placement="right">
 									<template #trigger>
 										<span
-											class="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-slate-100 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+											class="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-neutral-tertiary text-xs text-body-subtle"
 										>
 											?
 										</span>
@@ -815,15 +795,13 @@ function onKeydown(event: KeyboardEvent): void {
 								>
 									<template #option="{ option }">
 										<span class="block truncate text-sm">{{ option.label }}</span>
-										<span class="block truncate text-xs text-slate-400">
+										<span class="block truncate text-xs text-body-subtle">
 											{{ option.providerName }} · {{ option.id }}
 										</span>
 									</template>
 								</FwbAutocomplete>
 							</div>
-							<div
-								class="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-800"
-							>
+							<div class="mt-4 flex items-center justify-between gap-3 border-t border-default pt-4">
 								<FwbBadge :type="isModelConfigured ? 'green' : 'yellow'">
 									{{ configuredLabel }}
 								</FwbBadge>
@@ -837,11 +815,11 @@ function onKeydown(event: KeyboardEvent): void {
 						</FwbCard>
 						<FwbCard class="p-5">
 							<div class="flex items-center gap-2">
-								<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Reasoning effort</h3>
+								<h3 class="text-sm font-semibold text-heading">Reasoning effort</h3>
 								<FwbTooltip placement="right">
 									<template #trigger>
 										<span
-											class="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-slate-100 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+											class="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-neutral-tertiary text-xs text-body-subtle"
 										>
 											?
 										</span>
@@ -852,48 +830,46 @@ function onKeydown(event: KeyboardEvent): void {
 									</template>
 								</FwbTooltip>
 								<span
-									class="ml-auto rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 tabular-nums dark:bg-indigo-900 dark:text-indigo-200"
+									class="ml-auto rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-fg-brand tabular-nums"
 								>
 									{{ thinkingLabel }}
 								</span>
 							</div>
 							<div v-if="supportedThinking.length > 1" class="mt-4">
 								<div class="flex items-center gap-2">
-									<span class="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">Off</span>
+									<span class="shrink-0 text-[11px] text-body-subtle">Off</span>
 									<input
 										type="range"
 										:min="0"
 										:max="supportedThinking.length - 1"
 										:step="1"
 										:value="thinkingIndex"
-										class="w-full accent-indigo-600"
+										class="w-full accent-brand"
 										aria-label="Reasoning effort"
 										:title="`Reasoning effort: ${thinkingLabel}`"
 										@input="setThinkingIndex(Number(($event.target as HTMLInputElement).value))"
 									/>
-									<span class="shrink-0 text-[11px] text-slate-400 capitalize dark:text-slate-500">{{
+									<span class="shrink-0 text-[11px] text-body-subtle capitalize">{{
 										supportedThinking[supportedThinking.length - 1]
 									}}</span>
 								</div>
-								<p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+								<p class="mt-2 text-xs text-body-subtle">
 									Effort {{ thinkingLabel.toLowerCase()
 									}}<span v-if="thinkingNativeHint"> · sends “{{ thinkingNativeHint }}” to the provider</span>.
 								</p>
 							</div>
-							<p v-else class="mt-4 text-xs text-slate-500 dark:text-slate-400">
-								This model doesn't support adjustable reasoning.
-							</p>
+							<p v-else class="mt-4 text-xs text-body-subtle">This model doesn't support adjustable reasoning.</p>
 						</FwbCard>
 					</div>
 
 					<!-- Conversation -->
 					<div v-else class="flex flex-col gap-4">
 						<FwbCard class="p-5">
-							<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Assistant behavior</h3>
+							<h3 class="text-sm font-semibold text-heading">Assistant behavior</h3>
 							<div class="mt-4">
-								<p class="text-xs font-medium text-slate-700 dark:text-slate-300">Core prompt (locked)</p>
+								<p class="text-xs font-medium text-body">Core prompt (locked)</p>
 								<pre
-									class="mt-1 max-h-48 overflow-y-auto rounded-lg bg-slate-50 p-3 text-xs whitespace-pre-wrap text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+									class="mt-1 max-h-48 overflow-y-auto rounded-lg bg-neutral-secondary p-3 text-xs whitespace-pre-wrap text-body"
 									>{{ DEFAULT_SYSTEM_PROMPT }}</pre>
 							</div>
 							<div class="mt-4">
@@ -905,16 +881,12 @@ function onKeydown(event: KeyboardEvent): void {
 								/>
 							</div>
 							<div class="mt-4 max-w-xs">
-								<FwbInput v-model="contextDraft" label="Context window (characters)" inputmode="numeric">
-									<template #helper> Recent chat kept per request (1000–50000). </template>
-								</FwbInput>
-								<p v-if="contextHint" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-									{{ contextHint }}
+								<p class="text-xs font-medium text-body">Context window</p>
+								<p class="mt-1 text-xs text-body-subtle">
+									{{ modelWindowLabel }} — from the model's SDK data, history only.
 								</p>
 							</div>
-							<div
-								class="mt-4 flex items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-slate-800"
-							>
+							<div class="mt-4 flex items-center justify-end gap-3 border-t border-default pt-4">
 								<FwbButton size="sm" color="alternative" @click="resetConversation">
 									Clear extra instructions
 								</FwbButton>

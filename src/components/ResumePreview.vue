@@ -4,7 +4,8 @@ import { Icon } from '@vicons/utils'
 import ModernTemplate from './templates/ModernTemplate.vue'
 import ClassicTemplate from './templates/ClassicTemplate.vue'
 import MinimalTemplate from './templates/MinimalTemplate.vue'
-import { FwbDropdown } from 'flowbite-vue'
+import { FwbButton, FwbDropdown, FwbInput, FwbToggle } from 'flowbite-vue'
+import { confirmDialog } from '../data/dialogs'
 import {
 	ACCENTS,
 	COLUMNS,
@@ -92,10 +93,18 @@ function renameSection(id: string, title: string): void {
 function resetSections(): void {
 	// Built-ins go back to defaults; user-created sections are kept (shown,
 	// default names, column flow) so reset never destroys content.
-	const customs = (sections.value || [])
-		.filter((s) => isCustomSection(s.id))
-		.map((s) => ({ ...s, title: '', visible: true, direction: 'col' as const }))
-	sections.value = [...blankSections(), ...customs]
+	void confirmDialog({
+		title: 'Reset sections?',
+		body: 'Section order, visibility, names and layout go back to defaults. Your content is kept.',
+		confirmLabel: 'Reset',
+		danger: true,
+	}).then((ok) => {
+		if (!ok) return
+		const customs = (sections.value || [])
+			.filter((s) => isCustomSection(s.id))
+			.map((s) => ({ ...s, title: '', visible: true, direction: 'col' as const }))
+		sections.value = [...blankSections(), ...customs]
+	})
 }
 
 function toggleDirection(id: string): void {
@@ -280,7 +289,7 @@ function onViewportWheel(event: WheelEvent): void {
 				<template #trigger>
 					<button
 						type="button"
-						class="btn gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-slate-500 shadow-sm ring-1 ring-slate-200 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700 dark:hover:text-slate-100"
+						class="inline-flex items-center justify-center gap-2 rounded-lg border border-default bg-neutral-primary px-3 py-1.5 text-[13px] font-medium text-body-subtle shadow-sm transition select-none hover:text-heading"
 						title="Accent color and font"
 					>
 						<div class="flex gap-2 items-center">
@@ -288,7 +297,7 @@ function onViewportWheel(event: WheelEvent): void {
 								<Icon size="16"><PaintBrush16Regular /></Icon>
 								Style
 							</div>
-							<span class="mx-1 h-4 w-px bg-slate-300 dark:bg-slate-600" aria-hidden="true"></span>
+							<span class="mx-1 h-4 w-px bg-neutral-quaternary" aria-hidden="true"></span>
 							<span class="h-3.5 w-3.5 rounded-full ring-1 ring-slate-900/15" :style="{ backgroundColor: accent }" />
 							<span v-if="template && font && columns">
 								· {{ template[0].toUpperCase() + template.slice(1) }} · {{ font[0].toUpperCase() + font.slice(1) }} ·
@@ -300,14 +309,12 @@ function onViewportWheel(event: WheelEvent): void {
 
 				<div class="space-y-4">
 					<div>
-						<p
-							class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400"
-						>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
 							<Icon size="18"><Shapes16Regular /></Icon> Templates
 						</p>
 						<!-- Template switcher -->
 						<div
-							class="flex items-center gap-1 rounded-lg bg-white p-1 shadow-sm ring-1 ring-slate-200 border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700"
+							class="flex items-center gap-1 rounded-lg border border-default bg-neutral-primary p-1 shadow-sm"
 							role="tablist"
 							aria-label="Resume template"
 						>
@@ -315,11 +322,9 @@ function onViewportWheel(event: WheelEvent): void {
 								v-for="t in TEMPLATES"
 								:key="t.id"
 								:title="t.hint"
-								class="btn px-3 py-1.5 text-[13px]"
+								class="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition select-none"
 								:class="
-									template === t.id
-										? 'font-semibold text-white shadow-sm'
-										: 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
+									template === t.id ? 'font-semibold text-white shadow-sm' : 'text-body-subtle hover:text-heading'
 								"
 								:style="template === t.id ? { backgroundColor: accent } : null"
 								@click="template = t.id"
@@ -330,14 +335,12 @@ function onViewportWheel(event: WheelEvent): void {
 					</div>
 
 					<div>
-						<p
-							class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400"
-						>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
 							<Icon size="18"><TextColumnTwo20Regular /></Icon> Columns
 						</p>
 						<!-- Columns -->
 						<div
-							class="grid grid-cols-2 items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm ring-1 ring-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700"
+							class="grid grid-cols-2 items-center gap-1 rounded-lg border border-default bg-neutral-primary p-1 shadow-sm"
 							role="group"
 							aria-label="Columns"
 						>
@@ -345,12 +348,8 @@ function onViewportWheel(event: WheelEvent): void {
 								v-for="c in COLUMNS"
 								:key="c"
 								:title="c === 1 ? 'Single column' : 'Two columns'"
-								class="btn px-3 py-1.5 text-[13px]"
-								:class="
-									columns === c
-										? 'font-semibold text-white shadow-sm'
-										: 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
-								"
+								class="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition select-none"
+								:class="columns === c ? 'font-semibold text-white shadow-sm' : 'text-body-subtle hover:text-heading'"
 								:style="columns === c ? { backgroundColor: accent } : null"
 								@click="columns = c"
 							>
@@ -360,34 +359,30 @@ function onViewportWheel(event: WheelEvent): void {
 					</div>
 
 					<div>
-						<p
-							class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400"
-						>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
 							<Icon size="18"><AlignSpaceAroundHorizontal20Regular /></Icon> Spacing
 							<span class="ml-auto font-medium normal-case tabular-nums">{{ densityPercent }}</span>
 						</p>
 						<div class="flex items-center gap-2">
-							<span class="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">Compact</span>
+							<span class="shrink-0 text-[11px] text-body-subtle">Compact</span>
 							<input
 								type="range"
 								:min="MIN_DENSITY"
 								:max="MAX_DENSITY"
 								step="0.05"
 								:value="density"
-								class="w-full accent-indigo-600"
+								class="w-full accent-brand"
 								aria-label="Resume spacing"
 								title="Resume spacing: tighten to fit on one page, loosen for air (double-click to reset)"
 								@input="setDensity(parseFloat(($event.target as HTMLInputElement).value))"
 								@dblclick="resetDensity"
 							/>
-							<span class="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">Roomy</span>
+							<span class="shrink-0 text-[11px] text-body-subtle">Roomy</span>
 						</div>
 					</div>
 
 					<div>
-						<p
-							class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400"
-						>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
 							<Icon size="18"><Color16Regular /></Icon> Accent color
 						</p>
 						<div class="flex flex-wrap items-center gap-2">
@@ -396,7 +391,7 @@ function onViewportWheel(event: WheelEvent): void {
 								:key="c"
 								type="button"
 								:title="c"
-								class="h-6 w-6 rounded-full ring-2 ring-offset-2 ring-offset-white transition dark:ring-offset-slate-900"
+								class="h-6 w-6 rounded-full ring-2 ring-offset-2 ring-offset-neutral-primary transition"
 								:class="
 									accent === c
 										? 'ring-slate-400 dark:ring-slate-500'
@@ -409,9 +404,7 @@ function onViewportWheel(event: WheelEvent): void {
 					</div>
 
 					<div>
-						<p
-							class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400"
-						>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
 							<Icon size="18"><TextFont16Regular /></Icon> Font
 						</p>
 						<div class="grid gap-1.5">
@@ -421,23 +414,16 @@ function onViewportWheel(event: WheelEvent): void {
 								type="button"
 								class="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left transition"
 								:class="
-									font === f.id
-										? 'border-slate-900 bg-slate-50 dark:border-slate-100 dark:bg-slate-800'
-										: 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+									font === f.id ? 'border-heading bg-neutral-secondary' : 'border-default hover:bg-neutral-secondary'
 								"
 								:style="{ fontFamily: fontStack(f.id) }"
 								@click="font = f.id"
 							>
 								<span class="min-w-0">
-									<span class="block text-[13px] font-medium text-slate-800 dark:text-slate-100">{{ f.name }}</span>
-									<span class="block text-[11px] text-slate-400 dark:text-slate-500">{{ f.hint }}</span>
+									<span class="block text-[13px] font-medium text-heading">{{ f.name }}</span>
+									<span class="block text-[11px] text-body-subtle">{{ f.hint }}</span>
 								</span>
-								<Icon
-									v-if="font === f.id"
-									size="14"
-									class="shrink-0 text-slate-900 dark:text-slate-100"
-									aria-hidden="true"
-								>
+								<Icon v-if="font === f.id" size="14" class="shrink-0 text-heading" aria-hidden="true">
 									<Checkmark16Regular />
 								</Icon>
 							</button>
@@ -450,7 +436,7 @@ function onViewportWheel(event: WheelEvent): void {
 				<template #trigger>
 					<button
 						type="button"
-						class="btn gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-slate-500 shadow-sm ring-1 ring-slate-200 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700 dark:hover:text-slate-100"
+						class="inline-flex items-center justify-center gap-2 rounded-lg border border-default bg-neutral-primary px-3 py-1.5 text-[13px] font-medium text-body-subtle shadow-sm transition select-none hover:text-heading"
 						title="Reorder, rename, show/hide, lay out resume sections"
 					>
 						<div class="flex items-center gap-2">
@@ -458,14 +444,14 @@ function onViewportWheel(event: WheelEvent): void {
 								<Icon size="16"><List16Regular /></Icon>
 								Sections
 							</div>
-							<span class="mx-1 h-4 w-px bg-slate-300 dark:bg-slate-600" aria-hidden="true"></span>
+							<span class="mx-1 h-4 w-px bg-neutral-quaternary" aria-hidden="true"></span>
 							<span>{{ visibleSectionCount }}/{{ sectionCount }}</span>
 						</div>
 					</button>
 				</template>
 
 				<div class="space-y-3">
-					<p class="text-xs text-slate-500 dark:text-slate-400">
+					<p class="text-xs text-body-subtle">
 						Reorder, rename, show/hide — saved on this profile. Empty name uses the template default. The grid button
 						lays a section's entries out in a row instead of a column.
 					</p>
@@ -473,22 +459,22 @@ function onViewportWheel(event: WheelEvent): void {
 						<div
 							v-for="s in sections"
 							:key="s.id"
-							class="relative rounded-lg border border-slate-200 bg-white p-2 transition dark:border-slate-700 dark:bg-slate-900"
+							class="relative rounded-lg border border-default bg-neutral-primary-medium p-2 transition"
 							:class="{ 'opacity-60 saturate-0': s.visible === false, 'opacity-40': dragSectionId === s.id }"
 							@dragover="onSectionDragOver($event, s)"
 							@drop="onSectionDrop($event, s)"
 						>
 							<div
 								v-if="dropSectionTarget?.id === s.id && dropSectionTarget.position === 'before'"
-								class="pointer-events-none absolute inset-x-2 top-0 h-0.5 rounded-full bg-indigo-500"
+								class="pointer-events-none absolute inset-x-2 top-0 h-0.5 rounded-full bg-brand"
 							/>
 							<div
 								v-if="dropSectionTarget?.id === s.id && dropSectionTarget.position === 'after'"
-								class="pointer-events-none absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-indigo-500"
+								class="pointer-events-none absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-brand"
 							/>
 							<div class="flex items-center gap-1.5">
 								<span
-									class="cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing dark:text-slate-600 dark:hover:text-slate-300"
+									class="cursor-grab text-body-subtle hover:text-heading active:cursor-grabbing"
 									draggable="true"
 									title="Drag to reorder"
 									aria-hidden="true"
@@ -497,28 +483,23 @@ function onViewportWheel(event: WheelEvent): void {
 								>
 									<Icon size="16"><ReOrderDotsVertical16Regular /></Icon>
 								</span>
-								<label
-									class="flex shrink-0 cursor-pointer items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+								<FwbToggle
+									:model-value="s.visible !== false"
+									:aria-label="s.visible !== false ? 'Hide section' : 'Show section'"
 									:title="s.visible !== false ? 'Hide section' : 'Show section'"
-								>
-									<input
-										type="checkbox"
-										class="h-4 w-4 rounded accent-indigo-600"
-										:checked="s.visible !== false"
-										@change="toggleSection(s.id, ($event.target as HTMLInputElement).checked)"
-									/>
-									Show
-								</label>
-								<input
-									:value="s.title"
-									class="input min-w-0 flex-1 py-1 text-[13px]"
+									@update:model-value="(v) => toggleSection(s.id, v as boolean)"
+								/>
+								<FwbInput
+									:model-value="s.title"
+									size="sm"
+									wrapper-class="min-w-0 flex-1"
 									:placeholder="isCustomSection(s.id) ? 'Section name' : sectionLabel(s.id)"
 									:title="isCustomSection(s.id) ? 'Rename section' : `Rename “${sectionLabel(s.id)}” section`"
 									maxlength="60"
-									@input="renameSection(s.id, ($event.target as HTMLInputElement).value)"
+									@update:model-value="(v) => renameSection(s.id, String(v))"
 								/>
 								<button
-									class="icon-btn"
+									class="inline-flex h-7 w-7 items-center justify-center rounded-md text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading disabled:opacity-30 disabled:hover:bg-transparent"
 									title="Move up"
 									:disabled="sections.findIndex((x) => x.id === s.id) === 0"
 									@click="moveSection(s.id, -1)"
@@ -526,7 +507,7 @@ function onViewportWheel(event: WheelEvent): void {
 									<Icon size="16"><ArrowUp16Regular /></Icon>
 								</button>
 								<button
-									class="icon-btn"
+									class="inline-flex h-7 w-7 items-center justify-center rounded-md text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading disabled:opacity-30 disabled:hover:bg-transparent"
 									title="Move down"
 									:disabled="sections.findIndex((x) => x.id === s.id) === sections.length - 1"
 									@click="moveSection(s.id, 1)"
@@ -535,7 +516,7 @@ function onViewportWheel(event: WheelEvent): void {
 								</button>
 								<button
 									v-if="s.id !== 'summary'"
-									class="icon-btn"
+									class="inline-flex h-7 w-7 items-center justify-center rounded-md text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading disabled:opacity-30 disabled:hover:bg-transparent"
 									:title="sectionDirection(s.id) === 'row' ? 'Use column layout' : 'Use row layout'"
 									:style="sectionDirection(s.id) === 'row' ? { backgroundColor: accent, color: '#fff' } : null"
 									@click="toggleDirection(s.id)"
@@ -544,7 +525,7 @@ function onViewportWheel(event: WheelEvent): void {
 								</button>
 								<button
 									v-if="isCustomSection(s.id)"
-									class="icon-btn hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+									class="inline-flex h-7 w-7 items-center justify-center rounded-md text-body-subtle transition hover:bg-danger-soft hover:text-danger disabled:opacity-30 disabled:hover:bg-transparent"
 									title="Delete section everywhere (master + all profiles)"
 									@click="emit('delete-section', s.id)"
 								>
@@ -554,20 +535,20 @@ function onViewportWheel(event: WheelEvent): void {
 						</div>
 					</div>
 					<div class="flex gap-2">
-						<button class="btn btn-ghost flex-1 text-[13px]" @click="resetSections">
+						<FwbButton size="sm" color="alternative" class="flex-1" @click="resetSections">
 							<Icon size="16"><ArrowReset20Regular /></Icon> Reset
-						</button>
-						<button class="btn btn-ghost flex-1 text-[13px]" @click="emit('add-section')">
+						</FwbButton>
+						<FwbButton size="sm" color="alternative" class="flex-1" @click="emit('add-section')">
 							<Icon size="16"><Add16Regular /></Icon> Add
-						</button>
+						</FwbButton>
 					</div>
 				</div>
 			</FwbDropdown>
 			<!-- Zoom: out / percent / in -->
-			<div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+			<div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-body-subtle">
 				<button
 					type="button"
-					class="icon-btn"
+					class="inline-flex h-7 w-7 items-center justify-center rounded-md text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading disabled:opacity-30 disabled:hover:bg-transparent"
 					title="Zoom out"
 					aria-label="Zoom out"
 					:disabled="zoom <= MIN_ZOOM"
@@ -577,7 +558,7 @@ function onViewportWheel(event: WheelEvent): void {
 				</button>
 				<button
 					type="button"
-					class="min-w-14 rounded-md px-1 py-1 text-center font-medium tabular-nums transition hover:bg-slate-200/70 dark:hover:bg-slate-800"
+					class="min-w-14 rounded-md px-1 py-1 text-center font-medium tabular-nums transition hover:bg-neutral-tertiary"
 					title="Reset zoom to 100%"
 					@click="resetZoom"
 				>
@@ -585,7 +566,7 @@ function onViewportWheel(event: WheelEvent): void {
 				</button>
 				<button
 					type="button"
-					class="icon-btn"
+					class="inline-flex h-7 w-7 items-center justify-center rounded-md text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading disabled:opacity-30 disabled:hover:bg-transparent"
 					title="Zoom in"
 					aria-label="Zoom in"
 					:disabled="zoom >= MAX_ZOOM"
@@ -598,7 +579,7 @@ function onViewportWheel(event: WheelEvent): void {
 		<div
 			id="print-area"
 			ref="printArea"
-			class="print-area block overflow-auto rounded-lg border border-slate-300 bg-slate-200/70 p-6 select-none lg:min-h-0 lg:flex-1 dark:border-slate-800 dark:bg-slate-950"
+			class="print-area block overflow-auto rounded-lg border border-default bg-neutral-tertiary/70 p-6 select-none lg:min-h-0 lg:flex-1"
 			:class="dragging ? 'cursor-grabbing' : 'cursor-grab'"
 			@mousedown="onViewportMouseDown"
 			@dragstart.prevent

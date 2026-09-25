@@ -5,7 +5,7 @@ import type { Job, MasterResume } from '../data/types'
 import type { ChatThread } from './threads'
 import { uid } from '../data/resume'
 import { getApiKey } from './keyring'
-import { DEFAULT_MODEL, resolveModel, streamFn, type ModelChoice } from './models'
+import { DEFAULT_MODEL, contextCharsFor, resolveModel, streamFn, type ModelChoice } from './models'
 import { resolveSystemPrompt, loadAgentSettings } from './agentSettings'
 import {
 	draftingPartials,
@@ -265,10 +265,62 @@ function toLlmText(text: string): Message[] {
 	return [{ role: 'user', content: [{ type: 'text', text }], timestamp: Date.now() }]
 }
 
+/**
+ * Bound the context window but keep the leading system message(s) intact:
+ * they carry the prompt and the tool declarations. Truncate at message
+ * boundaries (newest retained) instead of slicing one blob of text
+ * mid-message. Truncation is tool-pair safe: a `toolResult` without its
+ * preceding assistant `toolCall` is a 400 on OpenAI-compatible APIs
+ * ("Messages with role 'tool' must be a response to a preceding message
+ * with 'tool_calls'"). Exported pure for tests (no settings knob remains —
+ * callers pass the model's derived budget).
+ */
+export function truncateTranscript(msgs: AgentMessage[], budgetChars: number): AgentMessage[] {
+	const isSystem = (m: AgentMessage): boolean => (m as { role?: string }).role === 'system'
+	const head = msgs.filter(isSystem)
+	// Strip failed assistant turns first so a previous error is never
+	// re-sent and can never strand a tool batch mid-sequence.
+	const clean = msgs.filter((m) => !isSystem(m) && !isFailedAssistant(m))
+	const sizes = clean.map((m) => messageSize(m))
+	const total = sizes.reduce((a, b) => a + b, 0)
+	if (total <= budgetChars) {
+		// Even without truncation the transcript can hold an orphan
+		// (e.g. a persisted error stripped above left a dangling
+		// toolResult) — sweep it before returning.
+		return [...head, ...dropOrphanToolResults(clean)]
+	}
+	let start = clean.length
+	let used = 0
+	for (let i = clean.length - 1; i >= 0; i--) {
+		const size = sizes[i]
+		if (start < clean.length && used + size > budgetChars) break
+		start = i
+		used += size
+		if (used >= budgetChars) break
+	}
+	// Always keep at least the newest message so a request is never empty.
+	if (start >= clean.length && clean.length) start = clean.length - 1
+	// Expand backwards past a leading toolResult so the batch's
+	// assistant toolCall stays attached (validity beats budget).
+	while (start > 0 && isToolResultMessage(clean[start])) start--
+	let kept = clean.slice(start)
+	// A transcript that starts with toolResults is corrupt — drop the
+	// orphans rather than sending an invalid request.
+	while (kept.length && isToolResultMessage(kept[0])) kept = kept.slice(1)
+	kept = dropOrphanToolResults(kept)
+	// Last resort: never send a head-only (or empty) request.
+	if (!kept.length && clean.length) {
+		const fallback = [...clean].reverse().find((m) => msgRole(m) === 'user')
+		kept = fallback ? [fallback] : [clean[clean.length - 1]]
+		kept = dropOrphanToolResults(kept)
+		if (!kept.length && clean.length) kept = [clean[clean.length - 1]]
+	}
+	return [...head, ...kept]
+}
+
 /** Chat composable bound to one Job's persisted thread. */
 export interface AgentChatOptions {
 	systemPrompt?: string
-	contextChars?: number
 	thinkingLevel?: ThinkingLevel
 }
 
@@ -291,10 +343,10 @@ export function useAgentChat(
 	const assistantStreaming = ref(false)
 
 	const basePrompt = computed(() => resolveSystemPrompt(opts.systemPrompt?.trim() || loadAgentSettings().systemPrompt))
-	const contextChars =
-		typeof opts.contextChars === 'number' && Number.isFinite(opts.contextChars)
-			? Math.min(50000, Math.max(1000, Math.round(opts.contextChars)))
-			: loadAgentSettings().contextChars
+	// History budget comes from the pi-ai SDK's per-model context window
+	// (tokens → chars); the panel remounts on model change (App agentKey)
+	// so a switch picks up the new model's budget automatically.
+	const contextChars = contextCharsFor(model.provider, model.id)
 
 	// Session binding (wisp-pro parity): the live transcript follows the
 	// job's active conversation; switching sessions replays that session's
@@ -346,55 +398,7 @@ export function useAgentChat(
 				}
 				return []
 			}),
-		transformContext: async (msgs: AgentMessage[]) => {
-			// Bound the context window but keep the leading system message(s)
-			// intact: they carry the prompt and the tool declarations.
-			// Truncate at message boundaries (newest retained) instead of
-			// slicing one blob of text mid-message. Truncation is tool-pair
-			// safe: a `toolResult` without its preceding assistant `toolCall`
-			// is a 400 on OpenAI-compatible APIs ("Messages with role 'tool'
-			// must be a response to a preceding message with 'tool_calls'").
-			const isSystem = (m: AgentMessage): boolean => (m as { role?: string }).role === 'system'
-			const head = msgs.filter(isSystem)
-			// Strip failed assistant turns first so a previous error is never
-			// re-sent and can never strand a tool batch mid-sequence.
-			const clean = msgs.filter((m) => !isSystem(m) && !isFailedAssistant(m))
-			const sizes = clean.map((m) => messageSize(m))
-			const total = sizes.reduce((a, b) => a + b, 0)
-			if (total <= contextChars) {
-				// Even without truncation the transcript can hold an orphan
-				// (e.g. a persisted error stripped above left a dangling
-				// toolResult) — sweep it before returning.
-				return [...head, ...dropOrphanToolResults(clean)]
-			}
-			let start = clean.length
-			let used = 0
-			for (let i = clean.length - 1; i >= 0; i--) {
-				const size = sizes[i]
-				if (start < clean.length && used + size > contextChars) break
-				start = i
-				used += size
-				if (used >= contextChars) break
-			}
-			// Always keep at least the newest message so a request is never empty.
-			if (start >= clean.length && clean.length) start = clean.length - 1
-			// Expand backwards past a leading toolResult so the batch's
-			// assistant toolCall stays attached (validity beats budget).
-			while (start > 0 && isToolResultMessage(clean[start])) start--
-			let kept = clean.slice(start)
-			// A transcript that starts with toolResults is corrupt — drop the
-			// orphans rather than sending an invalid request.
-			while (kept.length && isToolResultMessage(kept[0])) kept = kept.slice(1)
-			kept = dropOrphanToolResults(kept)
-			// Last resort: never send a head-only (or empty) request.
-			if (!kept.length && clean.length) {
-				const fallback = [...clean].reverse().find((m) => msgRole(m) === 'user')
-				kept = fallback ? [fallback] : [clean[clean.length - 1]]
-				kept = dropOrphanToolResults(kept)
-				if (!kept.length && clean.length) kept = [clean[clean.length - 1]]
-			}
-			return [...head, ...kept]
-		},
+		transformContext: async (msgs: AgentMessage[]) => truncateTranscript(msgs, contextChars),
 	})
 
 	/** Refresh the leading system message so JD/title/summary edits land on the next request. */

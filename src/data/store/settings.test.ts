@@ -13,7 +13,7 @@ describe('merged settings doc', () => {
 	it('keeps valid theme/agent/providers sections', () => {
 		const doc = normalizeSettingsDoc({
 			theme: 'dark',
-			agent: { provider: 'openai', modelId: 'gpt-4o', systemPrompt: 'Hi.', contextChars: 12000 },
+			agent: { provider: 'openai', modelId: 'gpt-4o', systemPrompt: 'Hi.' },
 			providers: { customProviders: [], customModels: {}, disabledModels: ['a/b'] },
 		})
 		expect(doc.theme).toBe('dark')

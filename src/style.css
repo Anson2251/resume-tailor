@@ -1,8 +1,18 @@
 @import 'tailwindcss';
-/* Scan flowbite-vue's static theme classes so the app build generates their
-   utilities (including `dark:`) with the class-based variant below. */
+/* Flowbite theme: the single token source (--color-brand, --color-body,
+   --color-default, --color-neutral-*, ...). Ships light values plus
+   class-based `.dark` overrides, matching the app toggle below. */
+@import 'flowbite/src/themes/default';
+/* Scan Flowbite + flowbite-vue so the app Tailwind build generates their
+   utilities (including `dark:`) with the class-based variant below. Do NOT
+   `@import "flowbite-vue/index.css"` wholesale: its prebuilt `dark:`
+   utilities sit inside `@media (prefers-color-scheme: dark)` and would
+   follow the OS setting instead of the app toggle. */
+@source "../node_modules/flowbite";
 @source "../node_modules/flowbite-vue/dist";
-@import './flowbite-compat.css';
+/* Scoped component CSS that `@source` cannot generate (fwb-*, v-popper,
+   transitions). Form/tooltip base comes from the plugin below, not this file. */
+@import './flowbite-components.css';
 @plugin 'flowbite/plugin';
 
 /* Class-based dark mode: the theme toggle adds/removes `.dark` on <html>.
@@ -25,41 +35,10 @@
 	--color-slate-950: #020617;
 }
 
-@layer components {
-	.label {
-		@apply mb-1 block text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400;
-	}
-	.input {
-		@apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm transition outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-900;
-	}
-	.textarea {
-		@apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm leading-relaxed text-slate-900 placeholder-slate-400 shadow-sm transition outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-900;
-	}
-	.btn {
-		@apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition select-none disabled:cursor-wait disabled:opacity-60;
-	}
-	.btn-primary {
-		@apply bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 active:bg-indigo-800;
-	}
-	.btn-secondary {
-		@apply border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:active:bg-slate-800;
-	}
-	.btn-ghost {
-		@apply text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100;
-	}
-	.btn-danger-ghost {
-		@apply text-slate-400 hover:bg-red-50 hover:text-red-600;
-	}
-	.card {
-		@apply rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
-	}
-	.section-title {
-		@apply text-sm font-bold tracking-widest text-slate-400 uppercase dark:text-slate-500;
-	}
-	.icon-btn {
-		@apply inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200 dark:disabled:hover:bg-transparent;
-	}
-}
+/* App chrome uses Flowbite components (Fwb*) + Flowbite semantic tokens
+   (bg-neutral-*, text-body, border-default, bg-brand, ...). No custom
+   component classes remain — the resume templates below pin their own
+   print-exact slate/hex styling and stay theme-independent. */
 
 /* ---------- Screen preview: exact A4 size (210 × 297 mm) ---------- */
 /* The resume page is pinned to a light theme: app dark mode never bleeds
@@ -338,14 +317,11 @@ body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar h
 	line-height: calc(1.625 * (0.9 + 0.1 * var(--sp, 1)));
 }
 
+button > div.mr-2,
 button > span[class=''] {
 	display: flex;
 	align-items: center;
-}
-
-button {
-	display: flex;
-	align-items: center;
+	justify-content: center;
 }
 
 /* ---------- Markdown content ----------

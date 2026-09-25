@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Icon } from '@vicons/utils'
-import { FwbButton, FwbInput, FwbModal } from 'flowbite-vue'
+import { FwbButton, FwbFileInput, FwbInput, FwbModal } from 'flowbite-vue'
 import { Copy16Regular, Dismiss16Regular, Edit16Regular } from '../data/icons'
 import type { Job, MasterResume } from '../data/types'
 
@@ -35,30 +35,27 @@ function statusOf(job: Job): { dot: string; label: string } {
 	const letter = !!(job.letter?.body || '').trim()
 	if (tailored && letter) return { dot: 'bg-emerald-500', label: 'Tailored + cover letter' }
 	if (tailored || letter) return { dot: 'bg-amber-500', label: 'Draft in progress' }
-	return { dot: 'bg-slate-300 dark:bg-slate-600', label: 'Not tailored yet' }
+	return { dot: 'bg-neutral-quaternary', label: 'Not tailored yet' }
 }
 
 const showNew = ref(false)
 const company = ref('')
 const role = ref('')
-const file = ref<File | null>(null)
+const file = ref<File | File[] | null>(null)
 const fileError = ref('')
 
-function onFileChange(event: Event): void {
-	const input = event.target as HTMLInputElement | null
-	const picked = input?.files?.[0] ?? null
+watch(file, (picked) => {
+	const f = Array.isArray(picked) ? picked[0] : picked
 	fileError.value = ''
-	if (picked && picked.size > 10 * 1024 * 1024) {
+	if (f && f.size > 10 * 1024 * 1024) {
 		fileError.value = 'That PDF is larger than 10MB.'
 		file.value = null
-		if (input) input.value = ''
-		return
 	}
-	file.value = picked
-}
+})
 
 function submitNew(): void {
-	emit('create', { company: company.value.trim(), role: role.value.trim(), file: file.value })
+	const f = (Array.isArray(file.value) ? file.value[0] : file.value) ?? null
+	emit('create', { company: company.value.trim(), role: role.value.trim(), file: f })
 	company.value = ''
 	role.value = ''
 	file.value = null
@@ -66,9 +63,7 @@ function submitNew(): void {
 }
 
 function rowClass(active: boolean): string {
-	return active
-		? 'border-indigo-300 bg-indigo-50 font-semibold dark:border-indigo-700 dark:bg-indigo-950'
-		: 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'
+	return active ? 'border-brand-subtle bg-brand-softer font-semibold' : 'border-transparent hover:bg-neutral-tertiary'
 }
 </script>
 
@@ -76,7 +71,7 @@ function rowClass(active: boolean): string {
 	<div class="no-print flex min-h-0 flex-col gap-4">
 		<!-- Level 1: the shared source of truth (no JD, no tailoring of its own). -->
 		<section>
-			<span class="px-1 text-xs font-semibold tracking-wide text-slate-400 uppercase">Master</span>
+			<span class="px-1 text-xs font-semibold tracking-wide text-body-subtle uppercase">Master</span>
 			<div
 				v-if="masterJob"
 				:key="masterJob.id"
@@ -95,19 +90,12 @@ function rowClass(active: boolean): string {
 				>
 				<span class="min-w-0 flex-1">
 					<span class="block truncate">{{ masterJob.name || 'Master' }}</span>
-					<span class="block truncate text-[11px] font-normal text-slate-400">
+					<span class="block truncate text-[11px] font-normal text-body-subtle">
 						{{ sharedCount }} shared items · edits affect all jobs
 					</span>
 				</span>
 				<span class="hidden shrink-0 group-hover:flex">
-					<FwbButton
-						color="alternative"
-						outline
-						size="xs"
-						square
-						title="Rename"
-						@click.stop="emit('rename', masterJob.id)"
-					>
+					<FwbButton outline size="xs" square title="Rename" @click.stop="emit('rename', masterJob.id)">
 						<Icon size="16"><Edit16Regular /></Icon>
 					</FwbButton>
 				</span>
@@ -117,10 +105,10 @@ function rowClass(active: boolean): string {
 		<!-- Level 2: tailored applications, each a view over the master. -->
 		<section class="flex min-h-0 flex-col">
 			<div class="flex items-center justify-between px-1">
-				<span class="text-xs font-semibold tracking-wide text-slate-400 uppercase">
+				<span class="text-xs font-semibold tracking-wide text-body-subtle uppercase">
 					Jobs<span v-if="jobProfiles.length"> · {{ jobProfiles.length }}</span>
 				</span>
-				<button class="btn btn-ghost px-2 py-1 text-[13px]" @click="showNew = true">+ New job</button>
+				<FwbButton size="xs" class="m-1" outline @click="showNew = true">+ New job</FwbButton>
 			</div>
 			<div class="flex min-h-0 flex-col gap-1 overflow-y-auto">
 				<div
@@ -139,17 +127,10 @@ function rowClass(active: boolean): string {
 						{{ job.company || 'Untitled' }} — {{ job.jobTitleTarget || job.name }}
 					</span>
 					<span class="hidden shrink-0 gap-1 group-hover:flex">
-						<FwbButton
-							color="alternative"
-							outline
-							size="xs"
-							square
-							title="Duplicate job"
-							@click.stop="emit('duplicate', job.id)"
-						>
+						<FwbButton outline size="xs" square title="Duplicate job" @click.stop="emit('duplicate', job.id)">
 							<Icon size="16"><Copy16Regular /></Icon>
 						</FwbButton>
-						<FwbButton color="alternative" outline size="xs" square title="Rename" @click.stop="emit('rename', job.id)">
+						<FwbButton outline size="xs" square title="Rename" @click.stop="emit('rename', job.id)">
 							<Icon size="16"><Edit16Regular /></Icon>
 						</FwbButton>
 						<FwbButton color="red" outline size="xs" square title="Delete job" @click.stop="emit('remove', job.id)">
@@ -157,17 +138,22 @@ function rowClass(active: boolean): string {
 						</FwbButton>
 					</span>
 				</div>
-				<p v-if="!jobProfiles.length" class="rounded-lg border border-dashed px-2.5 py-3 text-xs text-slate-400">
+				<p
+					v-if="!jobProfiles.length"
+					class="rounded-lg border border-dashed border-default px-2.5 py-3 text-xs text-body-subtle"
+				>
 					No applications yet — create a job to tailor the master for a role.
 				</p>
 			</div>
-			<button
+			<FwbButton
 				v-if="!activeIsMaster"
-				class="btn btn-ghost mt-1 px-2 py-1 text-xs text-slate-400"
+				size="xs"
+				outline
+				class="mt-1 self-start w-full border-none"
 				@click="emit('clear-overrides')"
 			>
 				Reset active job customizations
-			</button>
+			</FwbButton>
 		</section>
 
 		<FwbModal v-if="showNew" size="md" @close="showNew = false">
@@ -179,10 +165,9 @@ function rowClass(active: boolean): string {
 					<FwbInput v-model="company" label="Company" placeholder="Acme Inc." />
 					<FwbInput v-model="role" label="Role" placeholder="Frontend Engineer" />
 					<div>
-						<label class="label" for="new-job-pdf">Job description (PDF)</label>
-						<input id="new-job-pdf" type="file" accept="application/pdf,.pdf" class="input" @change="onFileChange" />
-						<p v-if="fileError" class="mt-1 text-xs text-red-600">{{ fileError }}</p>
-						<p v-else class="mt-1 text-xs text-slate-400">
+						<FwbFileInput v-model="file" label="Job description (PDF)" accept="application/pdf,.pdf" />
+						<p v-if="fileError" class="mt-1 text-xs text-danger">{{ fileError }}</p>
+						<p v-else class="mt-1 text-xs text-body-subtle">
 							The JD text is read-only — replaced by uploading a new file.
 						</p>
 					</div>

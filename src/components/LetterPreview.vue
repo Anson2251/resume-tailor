@@ -178,7 +178,7 @@ onBeforeUnmount(() => {
 				<template #trigger>
 					<button
 						type="button"
-						class="btn gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-slate-500 shadow-sm ring-1 ring-slate-200 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700 dark:hover:text-slate-100"
+						class="inline-flex items-center justify-center gap-2 rounded-lg border border-default bg-neutral-primary px-3 py-1.5 text-[13px] font-medium text-body-subtle shadow-sm transition select-none hover:text-heading"
 						title="Letter accent color and font"
 					>
 						<div class="flex gap-2 items-center">
@@ -186,7 +186,7 @@ onBeforeUnmount(() => {
 								<Icon size="16"><PaintBrush16Regular /></Icon>
 								Style
 							</div>
-							<span class="mx-1 h-4 w-px bg-slate-300 dark:bg-slate-600" aria-hidden="true"></span>
+							<span class="mx-1 h-4 w-px bg-neutral-quaternary" aria-hidden="true"></span>
 							<span class="h-3.5 w-3.5 rounded-full ring-1 ring-slate-900/15" :style="{ backgroundColor: accent }" />
 							<span v-if="template && font">
 								· {{ template[0].toUpperCase() + template.slice(1) }} · {{ font[0].toUpperCase() + font.slice(1) }} ·
@@ -198,13 +198,11 @@ onBeforeUnmount(() => {
 
 				<div class="space-y-4">
 					<div>
-						<p
-							class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400"
-						>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
 							<Icon size="18"><Shapes16Regular /></Icon> Templates
 						</p>
 						<div
-							class="flex items-center gap-1 rounded-lg bg-white p-1 shadow-sm ring-1 ring-slate-200 border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700"
+							class="flex items-center gap-1 rounded-lg border border-default bg-neutral-primary p-1 shadow-sm"
 							role="tablist"
 							aria-label="Cover letter template"
 						>
@@ -212,11 +210,9 @@ onBeforeUnmount(() => {
 								v-for="t in TEMPLATES"
 								:key="t.id"
 								:title="t.hint"
-								class="btn px-3 py-1.5 text-[13px]"
+								class="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition select-none"
 								:class="
-									template === t.id
-										? 'font-semibold text-white shadow-sm'
-										: 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
+									template === t.id ? 'font-semibold text-white shadow-sm' : 'text-body-subtle hover:text-heading'
 								"
 								:style="template === t.id ? { backgroundColor: accent } : null"
 								@click="template = t.id"
@@ -227,33 +223,29 @@ onBeforeUnmount(() => {
 					</div>
 
 					<div>
-						<p
-							class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400"
-						>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
 							<Icon size="18"><AlignSpaceAroundHorizontal20Regular /></Icon> Spacing
 							<span class="ml-auto font-medium normal-case tabular-nums">{{ densityPercent }}</span>
 						</p>
 						<div class="flex items-center gap-2">
-							<span class="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">Compact</span>
+							<span class="shrink-0 text-[11px] text-body-subtle">Compact</span>
 							<input
 								type="range"
 								:min="MIN_DENSITY"
 								:max="MAX_DENSITY"
 								step="0.05"
 								:value="density"
-								class="w-full accent-indigo-600"
+								class="w-full accent-brand"
 								aria-label="Letter spacing"
 								@input="setDensity(parseFloat(($event.target as HTMLInputElement).value))"
 								@dblclick="density = 1"
 							/>
-							<span class="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">Roomy</span>
+							<span class="shrink-0 text-[11px] text-body-subtle">Roomy</span>
 						</div>
 					</div>
 
 					<div>
-						<p
-							class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400"
-						>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
 							<Icon size="18"><Color16Regular /></Icon> Accent color
 						</p>
 						<div class="flex flex-wrap items-center gap-2">
@@ -262,7 +254,7 @@ onBeforeUnmount(() => {
 								:key="c"
 								type="button"
 								:title="c"
-								class="h-6 w-6 rounded-full ring-2 ring-offset-2 ring-offset-white transition dark:ring-offset-slate-900"
+								class="h-6 w-6 rounded-full ring-2 ring-offset-2 ring-offset-neutral-primary transition"
 								:class="
 									accent === c
 										? 'ring-slate-400 dark:ring-slate-500'
@@ -275,9 +267,7 @@ onBeforeUnmount(() => {
 					</div>
 
 					<div>
-						<p
-							class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400"
-						>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
 							<Icon size="18"><TextFont16Regular /></Icon> Font
 						</p>
 						<div class="grid gap-1.5">
@@ -287,23 +277,16 @@ onBeforeUnmount(() => {
 								type="button"
 								class="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left transition"
 								:class="
-									font === f.id
-										? 'border-slate-900 bg-slate-50 dark:border-slate-100 dark:bg-slate-800'
-										: 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+									font === f.id ? 'border-heading bg-neutral-secondary' : 'border-default hover:bg-neutral-secondary'
 								"
 								:style="{ fontFamily: fontStack(f.id) }"
 								@click="font = f.id"
 							>
 								<span class="min-w-0">
-									<span class="block text-[13px] font-medium text-slate-800 dark:text-slate-100">{{ f.name }}</span>
-									<span class="block text-[11px] text-slate-400 dark:text-slate-500">{{ f.hint }}</span>
+									<span class="block text-[13px] font-medium text-heading">{{ f.name }}</span>
+									<span class="block text-[11px] text-body-subtle">{{ f.hint }}</span>
 								</span>
-								<Icon
-									v-if="font === f.id"
-									size="14"
-									class="shrink-0 text-slate-900 dark:text-slate-100"
-									aria-hidden="true"
-								>
+								<Icon v-if="font === f.id" size="14" class="shrink-0 text-heading" aria-hidden="true">
 									<Checkmark16Regular />
 								</Icon>
 							</button>
@@ -311,10 +294,10 @@ onBeforeUnmount(() => {
 					</div>
 				</div>
 			</FwbDropdown>
-			<div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+			<div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-body-subtle">
 				<button
 					type="button"
-					class="icon-btn"
+					class="inline-flex h-7 w-7 items-center justify-center rounded-md text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading disabled:opacity-30"
 					title="Zoom out"
 					aria-label="Zoom out"
 					:disabled="zoom <= MIN_ZOOM"
@@ -324,7 +307,7 @@ onBeforeUnmount(() => {
 				</button>
 				<button
 					type="button"
-					class="min-w-14 rounded-md px-1 py-1 text-center font-medium tabular-nums transition hover:bg-slate-200/70 dark:hover:bg-slate-800"
+					class="min-w-14 rounded-md px-1 py-1 text-center font-medium tabular-nums transition hover:bg-neutral-tertiary"
 					title="Reset zoom to 100%"
 					@click="resetZoom"
 				>
@@ -332,7 +315,7 @@ onBeforeUnmount(() => {
 				</button>
 				<button
 					type="button"
-					class="icon-btn"
+					class="inline-flex h-7 w-7 items-center justify-center rounded-md text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading disabled:opacity-30"
 					title="Zoom in"
 					aria-label="Zoom in"
 					:disabled="zoom >= MAX_ZOOM"
@@ -344,7 +327,7 @@ onBeforeUnmount(() => {
 		</div>
 		<div
 			ref="printArea"
-			class="print-area block overflow-auto rounded-lg border border-slate-300 bg-slate-200/70 p-6 select-none lg:min-h-0 lg:flex-1 dark:border-slate-800 dark:bg-slate-950"
+			class="print-area block overflow-auto rounded-lg border border-default bg-neutral-tertiary/70 p-6 select-none lg:min-h-0 lg:flex-1"
 			:class="dragging ? 'cursor-grabbing' : 'cursor-grab'"
 			@mousedown="onViewportMouseDown"
 			@dragstart.prevent

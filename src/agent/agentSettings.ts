@@ -84,7 +84,6 @@ export const DEFAULT_AGENT_SETTINGS = {
 	modelId: 'claude-sonnet-4-5',
 	// Append-era: no extra instructions by default; the locked core always applies.
 	systemPrompt: '',
-	contextChars: 8000,
 	thinkingLevel: 'off',
 } as const
 
@@ -93,7 +92,6 @@ export interface AgentSettings {
 	modelId: string
 	/** Additional user instructions appended to the locked core prompt (never a replacement). */
 	systemPrompt: string
-	contextChars: number
 	thinkingLevel: ThinkingLevel
 }
 
@@ -118,8 +116,8 @@ export function normalizeAgentSettings(raw: unknown): AgentSettings {
 	// (stock collapses to '', genuine customs survive as extras). Empty extra
 	// is valid and means "core only".
 	if (typeof doc.systemPrompt === 'string') base.systemPrompt = extractExtraPrompt(doc.systemPrompt)
-	if (typeof doc.contextChars === 'number' && Number.isFinite(doc.contextChars))
-		base.contextChars = Math.min(50000, Math.max(1000, Math.round(doc.contextChars)))
+	// Retired: per-model SDK windows replaced the manual contextChars
+	// setting; old stored values are ignored (no migration needed).
 	base.thinkingLevel = normalizeThinkingLevel(doc.thinkingLevel)
 	return base
 }
