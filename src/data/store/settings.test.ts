@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { blankSettingsDoc, collectSettingsDoc, normalizeSettingsDoc, setCurrentTheme } from './settings'
+import {
+	blankSettingsDoc,
+	collectSettingsDoc,
+	isFairUseAcknowledged,
+	normalizeSettingsDoc,
+	setCurrentTheme,
+	setFairUseAcknowledged,
+} from './settings'
 import { hydrateAgentSettings } from '../../agent/agentSettings'
 import { DEFAULT_AGENT_SETTINGS } from '../../agent/agentSettings'
 import { hydrateProviderSettings } from '../../agent/providerSettings'
@@ -14,23 +21,36 @@ describe('merged settings doc', () => {
 		const doc = normalizeSettingsDoc({
 			theme: 'dark',
 			agent: { provider: 'openai', modelId: 'gpt-4o', systemPrompt: 'Hi.' },
-			providers: { customProviders: [], customModels: {}, disabledModels: ['a/b'] },
+			providers: { customProviders: [], customModels: {}, enabledModels: ['a/b'] },
 		})
 		expect(doc.theme).toBe('dark')
 		expect(doc.agent.modelId).toBe('gpt-4o')
-		expect(doc.providers.disabledModels).toEqual(['a/b'])
+		expect(doc.providers.enabledModels).toEqual(['a/b'])
 	})
 
 	it('collects live singletons into a storable doc', () => {
 		hydrateAgentSettings({ ...DEFAULT_AGENT_SETTINGS })
-		hydrateProviderSettings({ customProviders: [], customModels: {}, disabledModels: [] })
+		hydrateProviderSettings({ customProviders: [], customModels: {}, enabledModels: [] })
 		setCurrentTheme('light')
 		const doc = collectSettingsDoc()
 		expect(doc.version).toBe(1)
 		expect(doc.theme).toBe('light')
 		expect(doc.agent.provider).toBe(DEFAULT_AGENT_SETTINGS.provider)
 		// Collect must deep-copy (mutating the doc must not touch live state).
-		doc.providers.disabledModels.push('x/y')
-		expect(collectSettingsDoc().providers.disabledModels).toEqual([])
+		doc.providers.enabledModels.push('x/y')
+		expect(collectSettingsDoc().providers.enabledModels).toEqual([])
+	})
+
+	it('defaults the fair-use ack to false and round-trips it', () => {
+		expect(blankSettingsDoc().fairUseAcknowledged).toBe(false)
+		expect(normalizeSettingsDoc(null).fairUseAcknowledged).toBe(false)
+		expect(normalizeSettingsDoc({ fairUseAcknowledged: true }).fairUseAcknowledged).toBe(true)
+		expect(normalizeSettingsDoc({ fairUseAcknowledged: 'yes' }).fairUseAcknowledged).toBe(false)
+		setFairUseAcknowledged(false)
+		expect(isFairUseAcknowledged()).toBe(false)
+		expect(collectSettingsDoc().fairUseAcknowledged).toBe(false)
+		setFairUseAcknowledged(true)
+		expect(collectSettingsDoc().fairUseAcknowledged).toBe(true)
+		setFairUseAcknowledged(false)
 	})
 })

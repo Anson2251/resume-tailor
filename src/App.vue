@@ -35,11 +35,14 @@ import { isElectron, exportPdfFile, notifyRendererReady, revealInFolder } from '
 import { getStore } from './data/store'
 import {
 	collectSettingsDoc,
+	isFairUseAcknowledged,
 	normalizeSettingsDoc,
 	persistSettingsNow,
 	scheduleSettingsPersist,
 	setCurrentTheme,
+	setFairUseAcknowledged,
 } from './data/store/settings'
+import { FAIR_USE_BODY, FAIR_USE_TITLE } from './data/fairUse'
 import { migrateWebLegacy } from './data/store/migrate'
 import { buildExportZip, parseImportBytes } from './data/transfer'
 import type { ContentItem, Job, Profile, ThemeName } from './data/types'
@@ -257,6 +260,7 @@ async function restore(): Promise<void> {
 	const settings = normalizeSettingsDoc(settingsRaw)
 	hydrateAgentSettings(settings.agent)
 	hydrateProviderSettings(settings.providers)
+	setFairUseAcknowledged(settings.fairUseAcknowledged)
 	initTheme(settings.theme)
 	try {
 		const restored = workspaceRaw ? migrate(workspaceRaw) : null
@@ -723,6 +727,14 @@ onMounted(async () => {
 	// Write back after migration from an older save.
 	void persistWorkspaceNow()
 	void persistSettingsNow()
+	if (!isFairUseAcknowledged()) {
+		// First run: the dialog host only exists after first paint, so wait
+		// a frame before queueing the notice.
+		await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+		await notifyDialog({ title: FAIR_USE_TITLE, body: FAIR_USE_BODY, markdown: true })
+		setFairUseAcknowledged(true)
+		scheduleSettingsPersist()
+	}
 	// Let the Electron main process swap the splash screen for the app window.
 	// requestAnimationFrame waits for first paint so the splash never lifts
 	// onto a blank window.
@@ -889,7 +901,7 @@ onMounted(async () => {
 						</div>
 					</FwbDropdown>
 				</div>
-				<div v-if="paneA === 'form'" class="lg:min-h-0 lg:overflow-y-auto">
+				<div v-if="paneA === 'form'" class="no-print lg:min-h-0 lg:overflow-y-auto">
 					<ResumeForm
 						v-model="workspace.master"
 						:profile="activeProfile"
@@ -944,6 +956,7 @@ onMounted(async () => {
 				</div>
 				<AgentPanel
 					v-else-if="paneA === 'agent'"
+					class="no-print"
 					:key="`${activeJob.id}-${agentKey}`"
 					:job="activeJob"
 					:master="workspace.master"
@@ -951,10 +964,10 @@ onMounted(async () => {
 					@open-jd="setPane('a', 'jdpdf')"
 					@open-letter="revealLetter('a')"
 				/>
-				<div v-else-if="paneA === 'letter'" class="lg:min-h-0 lg:overflow-y-auto">
+				<div v-else-if="paneA === 'letter'" class="no-print lg:min-h-0 lg:overflow-y-auto">
 					<CoverLetterForm :job="activeJob" :master="workspace.master" />
 				</div>
-				<JDViewer v-else :key="activeJob.id" :job="activeJob" />
+				<JDViewer v-else class="no-print" :key="activeJob.id" :job="activeJob" />
 			</div>
 
 			<div class="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
@@ -983,7 +996,7 @@ onMounted(async () => {
 						</div>
 					</FwbDropdown>
 				</div>
-				<div v-if="paneB === 'form'" class="lg:min-h-0 lg:overflow-y-auto">
+				<div v-if="paneB === 'form'" class="no-print lg:min-h-0 lg:overflow-y-auto">
 					<ResumeForm
 						v-model="workspace.master"
 						:profile="activeProfile"
@@ -1033,6 +1046,7 @@ onMounted(async () => {
 				</div>
 				<AgentPanel
 					v-else-if="paneB === 'agent'"
+					class="no-print"
 					:key="`${activeJob.id}-${agentKey}`"
 					:job="activeJob"
 					:master="workspace.master"
@@ -1040,10 +1054,10 @@ onMounted(async () => {
 					@open-jd="setPane('b', 'jdpdf')"
 					@open-letter="revealLetter('b')"
 				/>
-				<div v-else-if="paneB === 'letter'" class="lg:min-h-0 lg:overflow-y-auto">
+				<div v-else-if="paneB === 'letter'" class="no-print lg:min-h-0 lg:overflow-y-auto">
 					<CoverLetterForm :job="activeJob" :master="workspace.master" />
 				</div>
-				<JDViewer v-else :key="activeJob.id" :job="activeJob" />
+				<JDViewer v-else class="no-print" :key="activeJob.id" :job="activeJob" />
 			</div>
 		</main>
 

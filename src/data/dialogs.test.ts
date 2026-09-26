@@ -34,8 +34,7 @@ describe('dialog queue', () => {
 		await expect(empty).resolves.toBe(null)
 	})
 
-	it('queues FIFO and acknowledges notices', async () => {
-		const first = confirmDialog({ title: 'First', body: '1' })
+	it('queues FIFO and acknowledges notices', async () => {		const first = confirmDialog({ title: 'First', body: '1' })
 		const second = notifyDialog({ title: 'Second', body: '2' })
 		expect(dialogQueue().queue).toHaveLength(2)
 		expect(activeDialog()?.title).toBe('First')
@@ -45,5 +44,14 @@ describe('dialog queue', () => {
 		ackNotify()
 		await expect(second).resolves.toBeUndefined()
 		expect(activeDialog()).toBe(null)
+	})
+
+	it('passes the markdown flag through (defaults to false)', () => {
+		void notifyDialog({ title: 'N', body: '**hi**', markdown: true })
+		expect(activeDialog()).toMatchObject({ kind: 'notify', markdown: true })
+		ackNotify()
+		void confirmDialog({ title: 'C', body: 'plain' })
+		expect(activeDialog()).toMatchObject({ kind: 'confirm', markdown: false })
+		dismissDialog()
 	})
 })

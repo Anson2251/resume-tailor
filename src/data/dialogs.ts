@@ -5,6 +5,8 @@ export interface ConfirmOptions {
 	body: string
 	confirmLabel?: string
 	danger?: boolean
+	/** Render body as markdown (StreamMarkdown) instead of plain text. */
+	markdown?: boolean
 }
 
 export interface PromptOptions {
@@ -19,6 +21,8 @@ export interface PromptOptions {
 export interface NotifyOptions {
 	title: string
 	body: string
+	/** Render body as markdown (StreamMarkdown) instead of plain text. */
+	markdown?: boolean
 }
 
 type DialogState =
@@ -60,6 +64,7 @@ export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
 			body: opts.body,
 			confirmLabel: opts.confirmLabel ?? 'Confirm',
 			danger: opts.danger ?? false,
+			markdown: opts.markdown ?? false,
 			resolve: (value: boolean) => {
 				resolve(value)
 			},
@@ -86,7 +91,13 @@ export function promptDialog(opts: PromptOptions): Promise<string | null> {
 
 export function notifyDialog(opts: NotifyOptions): Promise<void> {
 	return new Promise<void>((resolve) => {
-		store.queue.push({ kind: 'notify', title: opts.title, body: opts.body, resolve })
+		store.queue.push({
+			kind: 'notify',
+			title: opts.title,
+			body: opts.body,
+			markdown: opts.markdown ?? false,
+			resolve,
+		})
 	})
 }
 

@@ -19,15 +19,17 @@ export interface ProviderSettingsState {
 	customProviders: CustomProvider[]
 	/** Builtin provider id -> user-added models. */
 	customModels: Record<string, CustomModel[]>
-	/** Disabled models as `providerId/modelId` strings. */
-	disabledModels: string[]
+	/** Opt-in inventory: enabled models as `providerId/modelId` strings.
+	 * Empty means nothing is enabled — every model starts disabled and the
+	 * user enables them manually in Providers settings. */
+	enabledModels: string[]
 }
 
-const BLANK: ProviderSettingsState = { customProviders: [], customModels: {}, disabledModels: [] }
+const BLANK: ProviderSettingsState = { customProviders: [], customModels: {}, enabledModels: [] }
 
 export const PROVIDER_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,48}$/
 
-export function disabledKey(provider: string, id: string): string {
+export function modelKey(provider: string, id: string): string {
 	return `${provider}/${id}`
 }
 
@@ -81,7 +83,7 @@ export function validateModelId(id: string, taken: string[]): string | null {
 }
 
 export function normalizeProviderSettings(raw: unknown): ProviderSettingsState {
-	const base: ProviderSettingsState = { customProviders: [], customModels: {}, disabledModels: [] }
+	const base: ProviderSettingsState = { customProviders: [], customModels: {}, enabledModels: [] }
 	if (!raw || typeof raw !== 'object') return base
 	const doc = raw as Partial<Record<keyof ProviderSettingsState, unknown>>
 	const taken: string[] = []
@@ -108,14 +110,17 @@ export function normalizeProviderSettings(raw: unknown): ProviderSettingsState {
 			if (provider && cleaned.length) base.customModels[provider] = cleaned
 		}
 	}
-	if (Array.isArray(doc.disabledModels)) {
+	if (Array.isArray(doc.enabledModels)) {
 		const seen = new Set<string>()
-		for (const entry of doc.disabledModels) {
+		for (const entry of doc.enabledModels) {
 			if (typeof entry !== 'string' || !entry.includes('/') || seen.has(entry)) continue
 			seen.add(entry)
-			base.disabledModels.push(entry)
+			base.enabledModels.push(entry)
 		}
 	}
+	// Legacy opt-out `disabledModels` is intentionally NOT migrated: the
+	// inventory is now opt-in, so old docs start with nothing enabled and the
+	// user re-enables the models they want.
 	return base
 }
 
@@ -145,11 +150,11 @@ export function saveProviderSettings(next?: ProviderSettingsState): void {
 	writeStored({
 		customProviders: state.customProviders,
 		customModels: state.customModels,
-		disabledModels: state.disabledModels,
+		enabledModels: state.enabledModels,
 	})
 }
 
 export function resetProviderSettings(): void {
-	Object.assign(state, { customProviders: [], customModels: {}, disabledModels: [] })
-	writeStored({ customProviders: [], customModels: {}, disabledModels: [] })
+	Object.assign(state, { customProviders: [], customModels: {}, enabledModels: [] })
+	writeStored({ customProviders: [], customModels: {}, enabledModels: [] })
 }

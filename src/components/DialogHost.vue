@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { FwbButton, FwbInput, FwbModal } from 'flowbite-vue'
 import { acceptDialog, ackNotify, dialogQueue, dismissDialog, submitPrompt } from '../data/dialogs'
+import StreamMarkdown from './StreamMarkdown.vue'
 
 const queue = dialogQueue()
 const current = computed(() => queue.queue[0] ?? null)
@@ -26,7 +27,7 @@ function onEnter(): void {
 </script>
 
 <template>
-	<FwbModal v-if="current" size="md" @close="dismissDialog">
+	<FwbModal v-if="current" :size="current.kind !== 'prompt' && current.markdown ? 'lg' : 'md'" @close="dismissDialog">
 		<template #header>
 			<h3 class="text-base font-semibold">{{ current.title }}</h3>
 		</template>
@@ -42,6 +43,7 @@ function onEnter(): void {
 					@keyup.escape="dismissDialog"
 				/>
 			</template>
+			<StreamMarkdown v-else-if="current.markdown" :text="current.body" />
 			<p v-else class="text-sm text-body-subtle">{{ current.body }}</p>
 		</template>
 		<template #footer>

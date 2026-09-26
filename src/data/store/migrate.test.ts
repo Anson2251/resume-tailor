@@ -26,7 +26,7 @@ describe('production v2 migration', () => {
 			'resume-tailor-data-v2': JSON.stringify({ version: 2, master: null, profiles: [] }),
 			'resume-tailor-theme': 'dark',
 			'resume-tailor-agent-settings-v1': JSON.stringify({ provider: 'openai', modelId: 'gpt-4o' }),
-			'resume-tailor-provider-settings-v1': JSON.stringify({ disabledModels: ['a/b'] }),
+			'resume-tailor-provider-settings-v1': JSON.stringify({ enabledModels: ['a/b'] }),
 		}
 		stubStorage(backing)
 		const result = migrateWebLegacy()
@@ -34,10 +34,18 @@ describe('production v2 migration', () => {
 		expect(result.workspaceRaw).toMatchObject({ version: 2 })
 		expect(result.settings.theme).toBe('dark')
 		expect(result.settings.agent.provider).toBe('openai')
-		expect(result.settings.providers.disabledModels).toEqual(['a/b'])
+		expect(result.settings.providers.enabledModels).toEqual(['a/b'])
 		// Legacy keys are consumed.
 		for (const key of Object.keys(backing)) {
 			expect(localStorage.getItem(key)).toBe(null)
 		}
+	})
+
+	it('drops legacy opt-out disabledModels: inventory restarts fully disabled', () => {
+		stubStorage({
+			'resume-tailor-provider-settings-v1': JSON.stringify({ disabledModels: ['a/b'] }),
+		})
+		const result = migrateWebLegacy()
+		expect(result.settings.providers.enabledModels).toEqual([])
 	})
 })

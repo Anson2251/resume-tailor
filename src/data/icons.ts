@@ -30,6 +30,7 @@ export { default as AlignSpaceAroundHorizontal20Regular } from '@vicons/fluent/e
 export { default as List16Regular } from '@vicons/fluent/es/List16Regular'
 export { default as PaintBrush16Regular } from '@vicons/fluent/es/PaintBrush16Regular'
 export { default as ReOrderDotsVertical16Regular } from '@vicons/fluent/es/ReOrderDotsVertical16Regular'
+export { default as Send16Regular } from '@vicons/fluent/es/Send16Regular'
 export { default as TextFont16Regular } from '@vicons/fluent/es/TextFont16Regular'
 export { default as Toolbox16Regular } from '@vicons/fluent/es/Toolbox16Regular'
 export { default as WeatherMoon16Regular } from '@vicons/fluent/es/WeatherMoon16Regular'

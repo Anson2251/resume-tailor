@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { FwbButton, FwbDropdown, FwbInput, FwbTextarea } from 'flowbite-vue'
 import { Icon } from '@vicons/utils'
 import { JsonTreeView } from 'json-tree-view-vue3'
@@ -15,9 +15,12 @@ import {
 	ChevronRight16Regular,
 	Dismiss16Regular,
 	Edit16Regular,
+	Key16Regular,
+	Send16Regular,
 	Toolbox16Regular,
 } from '../data/icons'
-import { findModelChoice, modelLabel, resolveThinkingLevel } from '../agent/models'
+import { findModelChoice, listProviders, modelLabel, resolveThinkingLevel } from '../agent/models'
+import { getApiKey } from '../agent/keyring'
 import { useAgentSettings } from '../agent/agentSettings'
 import { getSiblings, toolArgsJson, toolResultJson, type ChatMsg } from '../agent/threads'
 import {
@@ -49,6 +52,23 @@ const emit = defineEmits<{
 const input = ref('')
 const scroller = ref<InstanceType<typeof AutoScrollWrapper> | null>(null)
 
+/**
+ * Forced scroll deferred past Vue's async render. Callers mutate the thread
+ * (or switch conversations) but the DOM only grows on a later microtask, so
+ * scrolling synchronously targets the old content height — and the premature
+ * programmatic scroll's own late `scroll` event can then flip the wrapper's
+ * `wasAtBottom` to false, cancelling its ResizeObserver follow-up and leaving
+ * the view stuck above the new bubbles. rAF runs after the render flush,
+ * before paint, when scrollHeight is final.
+ */
+function scrollToBottomAfterRender(): void {
+	const go = (): void => {
+		scroller.value?.scrollToBottom(true)
+	}
+	if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(go)
+	else go()
+}
+
 const { settings } = useAgentSettings()
 const isConfigured = computed(() => !!settings.provider && !!settings.modelId)
 const activeModel = computed(() => {
@@ -75,8 +95,32 @@ const thinkingPillLabel = computed(() => {
 	return `Thinking: ${level.charAt(0).toUpperCase() + level.slice(1)}`
 })
 
-function findMasterItem(id: string): ContentItem | undefined {
-	for (const key of ['experience', 'projects', 'education', 'skills'] as const) {
+// BYOK gate: Mira needs the active provider's API key. Checked on mount and
+// whenever the configured provider changes; 'unknown' while loading so the
+// panel never flashes the tip. After returning from Settings (provider
+// unchanged) the user re-checks explicitly via the tip's button.
+const keyState = ref<'unknown' | 'missing' | 'ok'>('unknown')
+
+async function refreshKeyState(): Promise<void> {
+	const provider = settings.provider
+	if (!provider) {
+		keyState.value = 'missing'
+		return
+	}
+	keyState.value = 'unknown'
+	try {
+		keyState.value = (await getApiKey(provider)) ? 'ok' : 'missing'
+	} catch {
+		keyState.value = 'missing'
+	}
+}
+
+const showKeyTip = computed(() => keyState.value === 'missing')
+const activeProviderName = computed(
+	() => listProviders().find((p) => p.value === settings.provider)?.name ?? settings.provider,
+)
+
+function findMasterItem(id: string): ContentItem | undefined {	for (const key of ['experience', 'projects', 'education', 'skills'] as const) {
 		const found = props.master[key].find((item) => item.id === id)
 		if (found) return found
 	}
@@ -154,7 +198,7 @@ function selectSession(id: string): void {
 	if (id === convo.value.id || chat.sending.value) return
 	props.job.activeConversationId = id
 	touchConversation(activeConversation(props.job.conversations, id))
-	scroller.value?.scrollToBottom(true)
+	scrollToBottomAfterRender()
 }
 
 function newSession(): void {
@@ -162,7 +206,7 @@ function newSession(): void {
 	const fresh = blankConversation()
 	props.job.conversations.push(fresh)
 	props.job.activeConversationId = fresh.id
-	scroller.value?.scrollToBottom(true)
+	scrollToBottomAfterRender()
 }
 
 function deleteSession(id: string): void {
@@ -177,7 +221,7 @@ function deleteSession(id: string): void {
 	}).then((ok) => {
 		if (!ok) return
 		props.job.activeConversationId = deleteConversation(props.job.conversations, id)
-		scroller.value?.scrollToBottom(true)
+		scrollToBottomAfterRender()
 	})
 }
 
@@ -228,14 +272,14 @@ function send(): void {
 	// Empty immediately so the draft can't be edited/resent mid-generation;
 	// the box stays disabled via chat.sending until the run ends.
 	input.value = ''
-	scroller.value?.scrollToBottom(true)
+	scrollToBottomAfterRender()
 	void chat.send(text)
 }
 
 function cycleAt(id: string, dir: 1 | -1): void {
 	if (chat.sending.value) return
 	selectSibling(convo.value.thread, id, dir)
-	scroller.value?.scrollToBottom(true)
+	scrollToBottomAfterRender()
 }
 
 function siblingOf(id: string): { ids: string[]; index: number } | null {
@@ -246,6 +290,7 @@ function siblingOf(id: string): { ids: string[]; index: number } | null {
 const TOOL_LABELS: Record<string, string> = {
 	read_resume: 'Read resume',
 	read_jd: 'Read job description',
+	read_manual: 'Read manual',
 	propose_bullet_rewrite: 'Rewrite field',
 	update_title: 'Update title',
 	update_summary: 'Update summary',
@@ -299,6 +344,17 @@ onMounted(() => {
 	})
 	darkObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
 })
+
+onMounted(() => {
+	void refreshKeyState()
+})
+
+watch(
+	() => settings.provider,
+	() => {
+		void refreshKeyState()
+	},
+)
 
 onUnmounted(() => {
 	darkObserver?.disconnect()
@@ -402,7 +458,7 @@ function saveEdit(id: string): void {
 	const text = editDraft.value.trim()
 	editingId.value = null
 	editDraft.value = ''
-	scroller.value?.scrollToBottom(true)
+	scrollToBottomAfterRender()
 	void chat.resendEdited(id, text)
 }
 </script>
@@ -432,6 +488,32 @@ function saveEdit(id: string): void {
 			letter and visibility live on jobs.
 		</div>
 
+		<div
+			v-if="showKeyTip"
+			class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-default px-6 py-10 text-center"
+		>
+			<span class="inline-flex rounded-full bg-brand-soft p-3 text-fg-brand">
+				<Icon size="24"><Key16Regular /></Icon>
+			</span>
+			<h3 class="text-sm font-semibold text-heading">
+				{{ isConfigured ? `Add your ${activeProviderName} key to use Mira` : 'Set up Mira to start tailoring' }}
+			</h3>
+			<p v-if="isConfigured" class="max-w-72 text-xs leading-relaxed text-body-subtle">
+				Mira brings the models — you bring the key (BYOK). Keys stay in your OS keychain on desktop,
+				and in this session only on web. Nothing is saved in your workspace.
+			</p>
+			<p v-else class="max-w-72 text-xs leading-relaxed text-body-subtle">
+				Pick a provider and model in Settings, then add its API key. Mira brings the models — you bring
+				the key (BYOK).
+			</p>
+			<div class="no-print flex items-center gap-2">
+				<FwbButton size="sm" @click="emit('open-settings')">Open settings</FwbButton>
+				<FwbButton v-if="isConfigured" size="sm" color="alternative" @click="void refreshKeyState()">
+					I&rsquo;ve added it — check again
+				</FwbButton>
+			</div>
+		</div>
+		<template v-else>
 		<div class="flex min-h-0 flex-1 flex-col gap-2">
 			<AutoScrollWrapper ref="scroller" class="min-h-0 flex-1">
 				<div class="flex flex-col gap-2">
@@ -769,9 +851,19 @@ function saveEdit(id: string): void {
 					<FwbButton v-if="chat.sending.value" color="alternative" class="shrink-0 self-end" @click="chat.stop()">
 						Stop
 					</FwbButton>
-					<FwbButton v-else color="default" class="shrink-0 self-end" :disabled="!input.trim()" @click="send"
-						>Send</FwbButton
+					<FwbButton
+						v-else
+						color="default"
+						square
+						size="md"
+						class="shrink-0 self-end"
+						title="Send"
+						aria-label="Send message"
+						:disabled="!input.trim()"
+						@click="send"
 					>
+						<Icon size="16"><Send16Regular /></Icon>
+					</FwbButton>
 				</div>
 			</div>
 
@@ -786,6 +878,7 @@ function saveEdit(id: string): void {
 				/>
 			</div>
 		</div>
+		</template>
 	</div>
 </template>
 

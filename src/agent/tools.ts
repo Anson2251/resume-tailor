@@ -4,6 +4,7 @@ import { CUSTOM_ITEM_FIELDS, SECTION_FIELDS, isSectionKey, readField } from '../
 import { buildPreview } from '../data/workspace'
 import type { ContentItem, Job, MasterResume } from '../data/types'
 import { JD_CONTEXT_CHARS, truncate } from './context'
+import { MANUAL_BODY_CHARS, MANUALS, getManual, manualBodyFor } from './manuals'
 
 export interface JobMutations {
 	applyOverride: (itemId: string, patch: Record<string, string | boolean>) => void
@@ -327,9 +328,39 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 		},
 	}
 
+	const readManual: AgentTool = {
+		name: 'read_manual',
+		label: 'Read manual',
+		description:
+			'Read one Mira manual by exact name for its full guidance. Check dynamically when the trigger matches: app-behavior questions, cover-letter drafting, or brainstorming with no ideas. Names and triggers are listed in the system prompt.',
+		parameters: Type.Object({ name: Type.String() }),
+		execute: async (_id, params) => {
+			const p = params as { name: string }
+			if (typeof p.name !== 'string' || !p.name.trim()) {
+				return err(`Manual name is required. Available: ${MANUALS.map((m) => m.name).join(', ')}.`)
+			}
+			const manual = getManual(p.name)
+			if (!manual) {
+				return err(`Unknown manual "${p.name}". Available: ${MANUALS.map((m) => m.name).join(', ')}.`)
+			}
+			const { body, truncated } = manualBodyFor(manual, MANUAL_BODY_CHARS)
+			return ok(
+				JSON.stringify({
+					name: manual.name,
+					description: manual.description,
+					chars: manual.chars,
+					truncated,
+					body,
+				}),
+				{ manual: manual.name },
+			)
+		},
+	}
+
 	return [
 		readResume,
 		readJd,
+		readManual,
 		rewriteField,
 		updateTitle,
 		updateSummary,

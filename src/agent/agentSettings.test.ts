@@ -87,9 +87,23 @@ it('preserves genuine custom prompts as appended extras', () => {
 	expect(normalizeAgentSettings({ systemPrompt: '' }).systemPrompt).toBe('')
 })
 
-it('teaches the core prompt the Master vs job model', () => {
+it('keeps only minimal app grounding in the core prompt (details live in manuals)', () => {
 	expect(DEFAULT_SYSTEM_PROMPT).toContain('Master')
-	expect(DEFAULT_SYSTEM_PROMPT).toContain('copy-on-write')
 	expect(DEFAULT_SYSTEM_PROMPT).toContain('update_letter_field')
 	expect(DEFAULT_SYSTEM_PROMPT).toContain('propose_bullet_rewrite')
+	// Mechanics moved to the system manual — the prompt must not duplicate them.
+	expect(DEFAULT_SYSTEM_PROMPT).not.toContain('copy-on-write')
+})
+
+it('preinjects the manual name+description index into the core prompt', () => {
+	expect(DEFAULT_SYSTEM_PROMPT).toContain('read_manual')
+	expect(DEFAULT_SYSTEM_PROMPT).toContain('cover-letter-writer:')
+	expect(DEFAULT_SYSTEM_PROMPT).toContain('resume-tailor-system:')
+	expect(DEFAULT_SYSTEM_PROMPT).toContain('skill-brainstorm:')
+})
+
+it('guides manual use per trigger (system questions, letters, stuck users)', () => {
+	expect(DEFAULT_SYSTEM_PROMPT).toContain('resume-tailor-system before answering')
+	expect(DEFAULT_SYSTEM_PROMPT).toContain('cover-letter-writer before drafting')
+	expect(DEFAULT_SYSTEM_PROMPT).toContain('skill-brainstorm when the user is stuck')
 })

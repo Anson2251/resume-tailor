@@ -145,6 +145,15 @@ watch(() => [settings.provider, settings.modelId, settings.thinkingLevel], sched
 
 const providerList = computed(() => listProviders())
 
+/** Free-text filter narrowing the provider list (matches name, id). */
+const providerFilter = ref('')
+
+const filteredProviderList = computed(() => {
+	const query = providerFilter.value.trim().toLowerCase()
+	if (!query) return providerList.value
+	return providerList.value.filter((p) => [p.name, p.value].some((field) => field.toLowerCase().includes(query)))
+})
+
 const selectedProviderId = ref<string>('')
 
 const detailProvider = computed(
@@ -159,18 +168,29 @@ const detailModels = computed(() =>
 	})),
 )
 
+/** Free-text filter narrowing the selected provider's model list (matches label, id). */
+const detailModelFilter = ref('')
+
+const filteredDetailModels = computed(() => {
+	const query = detailModelFilter.value.trim().toLowerCase()
+	if (!query) return detailModels.value
+	return detailModels.value.filter((m) => [m.label, m.id].some((field) => field.toLowerCase().includes(query)))
+})
+
 const providerCountLabel = computed(() => {
 	const count = providerList.value.length
 	return `${count} provider${count === 1 ? '' : 's'}`
 })
 
 const detailModelCountLabel = computed(() => {
-	const count = detailModels.value.length
-	return `${count} model${count === 1 ? '' : 's'}`
+	const total = detailModels.value.length
+	const enabled = detailModels.value.filter((m) => m.enabled).length
+	return `${enabled} of ${total} enabled`
 })
 
 function selectProvider(id: string): void {
 	selectedProviderId.value = id
+	detailModelFilter.value = ''
 	newModelId.value = ''
 	newModelName.value = ''
 	newModelError.value = ''
@@ -343,17 +363,6 @@ const allEnabledModels = computed<ModelOption[]>(() =>
 
 const defaultOption = ref<ModelOption | null>(null)
 
-/** Free-text filter narrowing the model picker (matches label, id, provider). */
-const modelFilter = ref('')
-
-const filteredEnabledModels = computed<ModelOption[]>(() => {
-	const query = modelFilter.value.trim().toLowerCase()
-	if (!query) return allEnabledModels.value
-	return allEnabledModels.value.filter((m) =>
-		[m.label, m.id, m.providerName].some((field) => field.toLowerCase().includes(query)),
-	)
-})
-
 function syncDefaultOption(): void {
 	if (!settings.modelId) {
 		defaultOption.value = null
@@ -485,7 +494,8 @@ watch(open, async (isOpen) => {
 		const ids = providerList.value.map((p) => p.value)
 		selectedProviderId.value = settings.provider && ids.includes(settings.provider) ? settings.provider : (ids[0] ?? '')
 		syncDefaultOption()
-		modelFilter.value = ''
+		providerFilter.value = ''
+		detailModelFilter.value = ''
 		resetAddForm()
 		showAddProvider.value = false
 		await refreshKeys()
@@ -592,19 +602,24 @@ function onKeydown(event: KeyboardEvent): void {
 									<FwbButton size="xs" @click="handleAddProvider">Add provider</FwbButton>
 								</div>
 							</div>
+							<FwbInput v-model="providerFilter" size="sm" placeholder="Filter providers…" />
 							<div
 								role="listbox"
 								aria-label="Providers"
 								class="flex gap-1 max-lg:overflow-x-auto lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-y-auto lg:overscroll-contain"
 							>
 								<button
-									v-for="provider in providerList"
+									v-for="provider in filteredProviderList"
 									:key="provider.value"
 									type="button"
 									role="option"
 									:aria-selected="selectedProviderId === provider.value"
-									class="flex min-w-48 items-center gap-2 rounded-xl px-3 py-2.5 text-left transition lg:min-w-0"
-									:class="selectedProviderId === provider.value ? 'bg-neutral-tertiary' : 'hover:bg-neutral-tertiary'"
+								class="flex min-w-48 items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition lg:min-w-0"
+								:class="
+									selectedProviderId === provider.value
+										? 'border-brand-subtle bg-brand-softer font-semibold'
+										: 'border-transparent hover:bg-neutral-tertiary'
+								"
 									@click="selectProvider(provider.value)"
 								>
 									<span class="min-w-0 flex-1">
@@ -612,15 +627,19 @@ function onKeydown(event: KeyboardEvent): void {
 											{{ provider.name }}
 										</span>
 										<span class="block truncate text-xs text-body-subtle">
-											{{ modelsForProvider(provider.value, true).length }} models{{
-												hasKeys[provider.value] ? ' · key stored' : ''
+											{{ modelsForProvider(provider.value).length }}/{{
+												modelsForProvider(provider.value, true).length
 											}}
+											enabled{{ hasKeys[provider.value] ? ' · key stored' : '' }}
 										</span>
 									</span>
 									<FwbBadge v-if="settings.provider === provider.value && isModelConfigured" size="xs" type="green">
 										Default
 									</FwbBadge>
 								</button>
+								<p v-if="!filteredProviderList.length" class="px-1 py-2 text-xs text-body-subtle">
+									No providers match.
+								</p>
 							</div>
 							<p class="px-1 pt-1 text-xs text-body-subtle">Pick a provider to manage its key and models.</p>
 						</section>
@@ -680,7 +699,7 @@ function onKeydown(event: KeyboardEvent): void {
 												:disabled="!!keyBusy[detailProvider.value] || !(keyInputs[detailProvider.value] ?? '').trim()"
 												@click="saveKey(detailProvider.value)"
 											>
-												Save key
+												Save
 											</FwbButton>
 										</div>
 									</div>
@@ -703,35 +722,25 @@ function onKeydown(event: KeyboardEvent): void {
 												</span>
 											</template>
 											<template #content>
-												Disabled models stay hidden from the Model page. Only custom models can be deleted.
+												Only enabled models appear on the Model page — enable them manually below. Only custom models
+												can be deleted.
 											</template>
 										</FwbTooltip>
 									</div>
 									<p v-if="!detailModels.length" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
 										This provider lists no models — add a custom one below.
 									</p>
-									<div class="flex shrink-0 flex-col gap-2 border-t border-default pt-3 sm:flex-row">
-										<div class="flex-1">
-											<FwbInput size="sm" v-model="newModelId" placeholder="New model id" />
-										</div>
-										<div class="flex-1">
-											<FwbInput size="sm" v-model="newModelName" placeholder="Display name (optional)" />
-										</div>
-										<div class="flex gap-2">
-											<FwbButton size="sm" @click="handleAddModel"> Add Model</FwbButton>
-										</div>
+									<div class="mt-3 shrink-0">
+										<FwbInput size="sm" v-model="detailModelFilter" placeholder="Filter models…" />
 									</div>
-									<p v-if="newModelError" class="mt-2 text-xs text-red-600 dark:text-red-400">
-										{{ newModelError }}
-									</p>
 									<ul class="mt-3 flex flex-col gap-1 overscroll-contain lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
 										<li
-											v-for="model in detailModels"
+											v-for="model in filteredDetailModels"
 											:key="model.id"
-											class="flex items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-neutral-tertiary"
+											class="flex items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-slate-500/10"
 										>
-											<span class="min-w-0 flex-1">
-												<span class="block truncate text-sm text-heading">
+											<span class="min-w-0 flex-1" :class="{ 'brightness-75 grayscale': !model.enabled }">
+												<span class="block truncate text-sm text-heading" :class="{ 'line-through': !model.enabled }">
 													{{ model.label }}
 												</span>
 												<span class="block truncate font-mono text-xs text-body-subtle">
@@ -754,14 +763,34 @@ function onKeydown(event: KeyboardEvent): void {
 												Delete
 											</FwbButton>
 										</li>
+										<li
+											v-if="detailModels.length && !filteredDetailModels.length"
+											class="px-2 py-2 text-xs text-body-subtle"
+										>
+											No models match.
+										</li>
 									</ul>
+									<div class="flex shrink-0 flex-col gap-2 border-t border-default pt-3 sm:flex-row">
+										<div class="flex-1">
+											<FwbInput size="sm" v-model="newModelId" placeholder="New model id" />
+										</div>
+										<div class="flex-1">
+											<FwbInput size="sm" v-model="newModelName" placeholder="Display name (optional)" />
+										</div>
+										<div class="flex gap-2">
+											<FwbButton size="sm" @click="handleAddModel"> Add </FwbButton>
+										</div>
+									</div>
+									<p v-if="newModelError" class="mt-2 text-xs text-red-600 dark:text-red-400">
+										{{ newModelError }}
+									</p>
 								</div>
 							</div>
 						</div>
 					</div>
 
 					<!-- Dedicated Model page: pick the default agent model -->
-					<div v-else-if="activeSection === 'model'" class="flex flex-col gap-4">
+					<div v-else-if="activeSection === 'model'" class="flex flex-col gap-4 min-h-100">
 						<FwbCard class="p-5">
 							<div class="flex items-center gap-2">
 								<h3 class="text-sm font-semibold text-heading">Default agent model</h3>
@@ -780,13 +809,15 @@ function onKeydown(event: KeyboardEvent): void {
 								</FwbTooltip>
 							</div>
 							<div class="mt-4 flex flex-col gap-3">
-								<FwbInput v-model="modelFilter" placeholder="Filter by name, id, or provider…" />
+								<p v-if="!allEnabledModels.length" class="text-xs text-amber-600 dark:text-amber-400">
+									No models enabled yet — enable models under Providers first.
+								</p>
 								<FwbAutocomplete
 									v-model="defaultOption"
 									label="Model"
 									placeholder="Search models…"
 									no-results-text="No models match."
-									:options="filteredEnabledModels"
+									:options="allEnabledModels"
 									:search-fields="['label', 'id', 'providerName']"
 									display="label"
 									:z-index="60"

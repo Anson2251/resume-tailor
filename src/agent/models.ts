@@ -3,7 +3,7 @@ import { createProvider } from '@earendil-works/pi-ai'
 import { envApiKeyAuth, openAICompletionsApi } from '@earendil-works/pi-ai/compat'
 import type { Api, Model } from '@earendil-works/pi-ai'
 import type { StreamFn, ThinkingLevel } from '@earendil-works/pi-agent-core'
-import { disabledKey, loadProviderSettings, saveProviderSettings, type CustomProvider } from './providerSettings'
+import { loadProviderSettings, modelKey, saveProviderSettings, type CustomProvider } from './providerSettings'
 
 export interface ModelChoice {
 	provider: string
@@ -112,14 +112,16 @@ export function isCustomModel(provider: string, id: string): boolean {
 	return customModelsFor(provider).some((m) => m.id === id)
 }
 
+/** Opt-in check: a model is usable only after the user enables it manually. */
 export function isModelEnabled(provider: string, id: string): boolean {
-	return !loadProviderSettings().disabledModels.includes(disabledKey(provider, id))
+	return loadProviderSettings().enabledModels.includes(modelKey(provider, id))
 }
 
 /**
  * Every model for one provider: builtins plus customs, minus disabled ones
  * unless `includeDisabled` is set (the provider detail needs the full list
- * to render its toggles).
+ * to render its toggles). Nothing is enabled by default — the caller only
+ * sees models the user has opted in to.
  */
 export function modelsForProvider(provider: string, includeDisabled = false): ModelChoice[] {
 	if (!provider) return []
@@ -133,8 +135,8 @@ export function modelsForProvider(provider: string, includeDisabled = false): Mo
 	const customs = customModelsFor(provider).filter((m) => !builtinIds.has(m.id))
 	const all = [...builtin, ...customs]
 	if (includeDisabled) return all
-	const disabled = new Set(loadProviderSettings().disabledModels)
-	return all.filter((m) => !disabled.has(disabledKey(provider, m.id)))
+	const enabled = new Set(loadProviderSettings().enabledModels)
+	return all.filter((m) => enabled.has(modelKey(provider, m.id)))
 }
 
 /**
@@ -188,17 +190,18 @@ export function contextCharsFor(provider: string, id: string): number {
 	return Math.max(1000, Math.round((model.contextWindow - reserve) * CHARS_PER_TOKEN))
 }
 
-/** Enable or disable one model row. */
+/** Enable or disable one model row (opt-in: off unless explicitly enabled). */
 export function setModelEnabled(provider: string, id: string, enabled: boolean): void {
 	const state = loadProviderSettings()
-	const key = disabledKey(provider, id)
-	const next = state.disabledModels.filter((entry) => entry !== key)
-	if (!enabled) next.push(key)
-	state.disabledModels = next
+	const key = modelKey(provider, id)
+	const next = state.enabledModels.filter((entry) => entry !== key)
+	if (enabled) next.push(key)
+	state.enabledModels = next
 	saveProviderSettings()
 }
 
-/** Add a user-defined model to a builtin or custom provider. */
+/** Add a user-defined model to a builtin or custom provider.
+ * Manually adding a model counts as opting in, so it starts enabled. */
 export function addCustomModel(provider: string, model: { id: string; name: string }): void {
 	const state = loadProviderSettings()
 	const entry = { id: model.id, name: model.name?.trim() || model.id }
@@ -212,11 +215,13 @@ export function addCustomModel(provider: string, model: { id: string; name: stri
 		list.push(entry)
 		state.customModels[provider] = list
 	}
+	const key = modelKey(provider, entry.id)
+	if (!state.enabledModels.includes(key)) state.enabledModels = [...state.enabledModels, key]
 	saveProviderSettings()
 	refreshCustomProviders()
 }
 
-/** Delete a user-defined model (plus its disabled flag, if any). */
+/** Delete a user-defined model (plus its enabled flag, if any). */
 export function removeCustomModel(provider: string, id: string): void {
 	const state = loadProviderSettings()
 	const custom = state.customProviders.find((cp) => cp.id === provider)
@@ -225,26 +230,31 @@ export function removeCustomModel(provider: string, id: string): void {
 	} else {
 		state.customModels[provider] = (state.customModels[provider] ?? []).filter((m) => m.id !== id)
 	}
-	const key = disabledKey(provider, id)
-	state.disabledModels = state.disabledModels.filter((entry) => entry !== key)
+	const key = modelKey(provider, id)
+	state.enabledModels = state.enabledModels.filter((entry) => entry !== key)
 	saveProviderSettings()
 	refreshCustomProviders()
 }
 
-/** Register a fully user-defined (OpenAI-compatible) provider. */
+/** Register a fully user-defined (OpenAI-compatible) provider.
+ * Its seed model was added manually, so it starts enabled. */
 export function addCustomProvider(entry: CustomProvider): void {
 	const state = loadProviderSettings()
 	if (state.customProviders.some((cp) => cp.id === entry.id)) return
 	state.customProviders.push(entry)
+	for (const m of entry.models) {
+		const key = modelKey(entry.id, m.id)
+		if (!state.enabledModels.includes(key)) state.enabledModels = [...state.enabledModels, key]
+	}
 	saveProviderSettings()
 	refreshCustomProviders()
 }
 
-/** Delete a user-defined provider, its models, and its disabled flags. */
+/** Delete a user-defined provider, its models, and its enabled flags. */
 export function removeCustomProvider(id: string): void {
 	const state = loadProviderSettings()
 	state.customProviders = state.customProviders.filter((cp) => cp.id !== id)
-	state.disabledModels = state.disabledModels.filter((entry) => !entry.startsWith(`${id}/`))
+	state.enabledModels = state.enabledModels.filter((entry) => !entry.startsWith(`${id}/`))
 	saveProviderSettings()
 	refreshCustomProviders()
 }

@@ -20,6 +20,7 @@ export interface SettingsDoc {
 	theme: ThemeName | null
 	agent: AgentSettings
 	providers: ProviderSettingsState
+	fairUseAcknowledged: boolean
 }
 
 export function blankSettingsDoc(): SettingsDoc {
@@ -27,7 +28,8 @@ export function blankSettingsDoc(): SettingsDoc {
 		version: 1,
 		theme: null,
 		agent: { ...DEFAULT_AGENT_SETTINGS },
-		providers: { customProviders: [], customModels: {}, disabledModels: [] },
+		providers: { customProviders: [], customModels: {}, enabledModels: [] },
+		fairUseAcknowledged: false,
 	}
 }
 
@@ -40,6 +42,7 @@ export function normalizeSettingsDoc(raw: unknown): SettingsDoc {
 		theme: doc.theme === 'light' || doc.theme === 'dark' ? doc.theme : null,
 		agent: normalizeAgentSettings(doc.agent),
 		providers: normalizeProviderSettings(doc.providers),
+		fairUseAcknowledged: doc.fairUseAcknowledged === true,
 	}
 }
 
@@ -51,6 +54,18 @@ export function setCurrentTheme(theme: ThemeName | null): void {
 	currentTheme = theme
 }
 
+// First-run fair-use ack, same holder pattern: set once from App after the
+// user acknowledges the notice, collected by the debounced flush.
+let fairUseAcknowledged = false
+
+export function setFairUseAcknowledged(value: boolean): void {
+	fairUseAcknowledged = value
+}
+
+export function isFairUseAcknowledged(): boolean {
+	return fairUseAcknowledged
+}
+
 /** Snapshot the live singletons into a storable doc. */
 export function collectSettingsDoc(): SettingsDoc {
 	const providers = loadProviderSettings()
@@ -58,12 +73,13 @@ export function collectSettingsDoc(): SettingsDoc {
 		version: 1,
 		theme: currentTheme,
 		agent: loadAgentSettings(),
+		fairUseAcknowledged,
 		providers: {
 			customProviders: JSON.parse(
 				JSON.stringify(providers.customProviders),
 			) as ProviderSettingsState['customProviders'],
 			customModels: JSON.parse(JSON.stringify(providers.customModels)) as ProviderSettingsState['customModels'],
-			disabledModels: [...providers.disabledModels],
+			enabledModels: [...providers.enabledModels],
 		},
 	}
 }

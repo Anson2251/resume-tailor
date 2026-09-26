@@ -117,8 +117,7 @@ describe('hybrid guard', () => {
 		expect(bad.details).toMatchObject({ error: true })
 	})
 
-	it('refuses job tailoring on master but allows field rewrites', async () => {
-		const m = mutate()
+	it('refuses job tailoring on master but allows field rewrites', async () => {		const m = mutate()
 		const tools = agentToolsFor(
 			{
 				id: 'm1',
@@ -156,5 +155,43 @@ describe('hybrid guard', () => {
 		expect(m.setVisibility).not.toHaveBeenCalled()
 		const jd = await tools.find((t) => t.name === 'read_jd')!.execute('master-jd', {})
 		expect(JSON.parse((jd.content[0] as { text: string }).text)).toMatchObject({ attached: false })
+	})
+})
+
+describe('read_manual', () => {
+	it('reads a manual by exact name', async () => {
+		const tools = agentToolsFor(
+			{ id: 'j1', view: { experience: [] }, overrides: {} } as never,
+			masterWith([]),
+			mutate(),
+		)
+		const res = await tools.find((t) => t.name === 'read_manual')!.execute('m1', { name: 'skill-brainstorm' })
+		expect(res.details).toMatchObject({ manual: 'skill-brainstorm' })
+		expect(JSON.parse((res.content[0] as { text: string }).text)).toMatchObject({ name: 'skill-brainstorm' })
+	})
+
+	it('rejects unknown and empty names without mutating', async () => {
+		const m = mutate()
+		const tools = agentToolsFor(
+			{ id: 'j1', view: { experience: [] }, overrides: {} } as never,
+			masterWith([]),
+			m,
+		)
+		const read = tools.find((t) => t.name === 'read_manual')!
+		const bad = await read.execute('m2', { name: 'nope' })
+		expect(bad.details).toMatchObject({ error: true })
+		const empty = await read.execute('m3', { name: '  ' })
+		expect(empty.details).toMatchObject({ error: true })
+		expect(m.applyOverride).not.toHaveBeenCalled()
+	})
+
+	it('works on master (read-only)', async () => {
+		const tools = agentToolsFor(
+			{ id: 'm1', kind: 'master', view: { experience: [] }, overrides: {} } as never,
+			masterWith([]),
+			mutate(),
+		)
+		const res = await tools.find((t) => t.name === 'read_manual')!.execute('m4', { name: 'resume-tailor-system' })
+		expect(res.details).toMatchObject({ manual: 'resume-tailor-system' })
 	})
 })

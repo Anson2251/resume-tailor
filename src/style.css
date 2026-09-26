@@ -147,7 +147,9 @@ body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar h
 		overflow: visible !important;
 	}
 
-	/* Export chooser: only the chosen document lands on the sheet. */
+	/* Export chooser: only the chosen document lands on the sheet.
+	   Non-preview panes (resume form, letter form, agent, JD) carry `no-print`
+	   in App.vue, so these two rules only ever choose between preview pages. */
 	body[data-print-doc='resume'] .letter-page {
 		display: none !important;
 	}
@@ -318,6 +320,7 @@ body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar h
 }
 
 button > div.mr-2,
+button > span[class='xicon'],
 button > span[class=''] {
 	display: flex;
 	align-items: center;
