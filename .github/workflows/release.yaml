@@ -51,6 +51,10 @@ jobs:
       - name: Package installer
         run: npx electron-builder ${{ matrix.builder-args }} --publish never
 
+      # builder-debug.yml is local diagnostics, not a release asset.
+      - name: Drop build diagnostics
+        run: rm -f release/builder-debug.yml
+
       - name: Upload artifacts to release
         uses: softprops/action-gh-release@v2
         with:
