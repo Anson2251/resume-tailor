@@ -1,5 +1,7 @@
 # Resume Tailor
 
+A simple resume-tailoring tool
+
 > **One master resume — a tailored view per job.**
 > Stop copying your resume for every application. Keep one source of truth, then let Mira — the built-in LLM agent — tailor each job fast.
 
