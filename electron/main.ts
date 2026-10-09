@@ -64,6 +64,30 @@ function registerPdfIpc(): void {
 }
 
 // ---------------------------------------------------------------------------
+// External links: always open in the system browser, never inside the app.
+// Anchor tags with target="_blank" (GitHub button, markdown links in the
+// resume preview, agent chat content) would otherwise navigate the app window
+// away from the workspace or open a second Electron window.
+// ---------------------------------------------------------------------------
+function isSafeExternalUrl(value: unknown): value is string {
+	if (typeof value !== 'string') return false
+	try {
+		const parsed = new URL(value)
+		return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+	} catch {
+		return false
+	}
+}
+
+function registerExternalLinks(): void {
+	ipcMain.handle('resume-tailor:open-external', (_event, url: unknown) => {
+		if (!isSafeExternalUrl(url)) return false
+		void shell.openExternal(url)
+		return true
+	})
+}
+
+// ---------------------------------------------------------------------------
 // Agent keys (OS keychain via safeStorage) + JD PDFs (app-data files).
 // ---------------------------------------------------------------------------
 // Agent keys (OS keychain via safeStorage, encrypted in agent-keys.json).
@@ -181,6 +205,12 @@ function createMainWindow(): void {
 	mainWindow.on('closed', () => {
 		mainWindow = null
 	})
+	// External links (target="_blank" anchors, window.open) open in the
+	// system browser instead of navigating the app or spawning a new window.
+	mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+		if (isSafeExternalUrl(url)) void shell.openExternal(url)
+		return { action: 'deny' }
+	})
 	// Fullscreen hides the OS controls, so tell the renderer to collapse the
 	// header's top strip (it would otherwise sit there as dead space).
 	mainWindow.on('enter-full-screen', () => sendFullscreenChanged(true))
@@ -252,6 +282,7 @@ async function boot(): Promise<void> {
 	registerDbIpc()
 	registerPdfIpc()
 	registerAgentIpc()
+	registerExternalLinks()
 
 	ipcMain.on('resume-tailor:renderer-ready', () => {
 		rendererReady = true

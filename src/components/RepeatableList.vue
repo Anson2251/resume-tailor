@@ -160,7 +160,7 @@ function onDragEnd(): void {
 
 <template>
 	<section
-		class="scroll-mt-[150px] rounded-xl border border-default bg-neutral-primary-medium p-5 shadow-sm"
+		class="scroll-mt-[150px] rounded-xl border border-default bg-neutral-primary-medium p-5 shadow-md dark:shadow-lg dark:shadow-black/60"
 		:id="sectionId || undefined"
 	>
 		<div class="flex items-baseline justify-between gap-3">

@@ -119,7 +119,7 @@ function resetOverrides(id: string): void {
 		<!-- Contact information (always on top: shared on every profile) -->
 		<section
 			id="form-section-contact"
-			class="scroll-mt-[150px] rounded-xl border border-default bg-neutral-primary-medium p-5 shadow-sm"
+			class="scroll-mt-[150px] rounded-xl border border-default bg-neutral-primary-medium p-5 shadow-md dark:shadow-lg dark:shadow-black/60"
 		>
 			<div class="flex items-baseline justify-between gap-3">
 				<h2 class="text-sm font-bold tracking-widest text-body-subtle uppercase">Contact Information</h2>
@@ -153,7 +153,7 @@ function resetOverrides(id: string): void {
 			<section
 				v-if="sid === 'summary'"
 				id="form-section-summary"
-				class="scroll-mt-[150px] rounded-xl border border-brand-subtle bg-neutral-primary-medium p-5 shadow-sm"
+				class="scroll-mt-[150px] rounded-xl border border-brand-subtle bg-neutral-primary-medium p-5 shadow-md dark:shadow-lg dark:shadow-black/60"
 			>
 				<div class="flex items-baseline justify-between gap-3">
 					<h2 class="text-sm font-bold tracking-widest text-fg-brand uppercase">Tailoring</h2>

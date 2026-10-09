@@ -41,3 +41,20 @@ export function revealInFolder(filePath: string): void {
 		/* not in Electron — ignore */
 	}
 }
+
+/**
+ * Open a URL in the system browser. In Electron this goes through
+ * `shell.openExternal` (validated as http(s) in the main process) so the
+ * link never navigates the app window; on web it falls back to a new tab.
+ */
+export function openExternalUrl(url: string): void {
+	if (isElectron() && typeof window.electronAPI?.openExternal === 'function') {
+		try {
+			void window.electronAPI.openExternal(url)
+			return
+		} catch {
+			/* fall through to window.open */
+		}
+	}
+	window.open(url, '_blank', 'noopener,noreferrer')
+}

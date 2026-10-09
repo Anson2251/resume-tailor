@@ -45,4 +45,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 	// Renders the resume page to a PDF file (save dialog + printToPDF in main).
 	exportPdf: (filename: string) => ipcRenderer.invoke('resume-tailor:export-pdf', filename),
 	revealInFolder: (filePath: string) => ipcRenderer.send('resume-tailor:reveal-in-folder', filePath),
+	// Opens a URL in the system browser (validated as http(s) in main).
+	openExternal: (url: string) => ipcRenderer.invoke('resume-tailor:open-external', url),
 })

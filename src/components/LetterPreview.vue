@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Icon } from '@vicons/utils'
-import { FwbDropdown } from 'flowbite-vue'
+import { FwbDropdown, FwbSelect } from 'flowbite-vue'
 import ModernLetterTemplate from './templates/letters/ModernLetterTemplate.vue'
 import ClassicLetterTemplate from './templates/letters/ClassicLetterTemplate.vue'
 import MinimalLetterTemplate from './templates/letters/MinimalLetterTemplate.vue'
@@ -38,6 +38,8 @@ const template = computed({
 		props.job.letterTemplate = v
 	},
 })
+
+const templateOptions = computed(() => TEMPLATES.map((t) => ({ value: t.id, name: `${t.name} — ${t.hint}` })))
 const accent = computed({
 	get: (): string => props.job.letterAccent ?? ACCENTS[0],
 	set: (v: string) => {
@@ -201,25 +203,7 @@ onBeforeUnmount(() => {
 						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
 							<Icon size="18"><Shapes16Regular /></Icon> Templates
 						</p>
-						<div
-							class="flex items-center gap-1 rounded-lg border border-default bg-neutral-primary p-1 shadow-sm"
-							role="tablist"
-							aria-label="Cover letter template"
-						>
-							<button
-								v-for="t in TEMPLATES"
-								:key="t.id"
-								:title="t.hint"
-								class="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition select-none"
-								:class="
-									template === t.id ? 'font-semibold text-white shadow-sm' : 'text-body-subtle hover:text-heading'
-								"
-								:style="template === t.id ? { backgroundColor: accent } : null"
-								@click="template = t.id"
-							>
-								{{ t.name }}
-							</button>
-						</div>
+						<FwbSelect v-model="template" aria-label="Cover letter template" :options="templateOptions" />
 					</div>
 
 					<div>
@@ -333,7 +317,7 @@ onBeforeUnmount(() => {
 			@dragstart.prevent
 		>
 			<div
-				class="resume-page letter-page overflow-hidden rounded-sm shadow-xl ring-1 ring-slate-900/10"
+				class="resume-page letter-page overflow-hidden rounded-sm shadow-xl ring-1 ring-slate-900/10 dark:shadow-2xl dark:shadow-black/60 dark:ring-white/15"
 				:style="{ zoom: printZoom, '--sp': density }"
 			>
 				<component :is="activeComponent" :letter="job.letter" :contact="contact" :accent="accent" :font="font" />

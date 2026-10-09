@@ -5,6 +5,8 @@ import {
 	ArrowDownload16Regular,
 	ArrowUpload16Regular,
 	Broom16Regular,
+	ChevronLeft16Regular,
+	ChevronRight16Regular,
 	DocumentAdd16Regular,
 	DocumentArrowDown16Regular,
 	Settings16Regular,
@@ -31,7 +33,7 @@ import { SECTION_FACTORY, appendMasterItem, blankCustomItem, isSectionKey, uid }
 import { blankJob, blankWorkspace, buildPreview, cloneJob, migrate, sampleWorkspace } from './data/workspace'
 import { resolvePaneViews, syncPreviewTabs, type PaneView, type PreviewTab } from './agent/panes'
 import { attachJdPdf, copyJdPdf, loadJdPdf, pruneJdPdfs, referencedJdPdfs } from './agent/jd'
-import { isElectron, exportPdfFile, notifyRendererReady, revealInFolder } from './data/persistence'
+import { isElectron, exportPdfFile, notifyRendererReady, openExternalUrl, revealInFolder } from './data/persistence'
 import { getStore } from './data/store'
 import {
 	collectSettingsDoc,
@@ -74,6 +76,8 @@ function toggleTheme(): void {
 	applyTheme(isDark.value ? 'light' : 'dark')
 }
 
+const GITHUB_URL = 'https://github.com/Anson2251/resume-tailor'
+
 function initTheme(stored: unknown): void {
 	// index.html already applied the prefers-color-scheme fallback before
 	// first paint; mirror whatever it chose instead of flashing.
@@ -94,6 +98,88 @@ const activeProfile = computed(() => activeJob.value)
 // Dual panes: each hosts Resume | Preview | Cover letter | Agent | JD PDF (Resume form in one pane only).
 const paneA = ref<PaneView>('form')
 const paneB = ref<PaneView>('preview')
+
+// --- Collapsible profile rail + resizable split ---
+// railCollapsed hides the left JobList column; splitPct is pane A's share (%)
+// of the remaining two-pane area on large screens (stacked vertically on mobile).
+const railCollapsed = ref(false)
+const splitPct = ref(50)
+const panesRef = ref<HTMLElement | null>(null)
+const draggingSplit = ref(false)
+
+function toggleRail(force?: boolean): void {
+	railCollapsed.value = force ?? !railCollapsed.value
+	try {
+		localStorage.setItem('rt:railCollapsed', railCollapsed.value ? '1' : '0')
+	} catch {
+		/* private mode: layout pref just won't persist */
+	}
+}
+
+function clampSplit(pct: number): number {
+	return Math.min(80, Math.max(20, pct))
+}
+
+function setSplitFromClientX(clientX: number): void {
+	const el = panesRef.value
+	if (!el) return
+	const rect = el.getBoundingClientRect()
+	if (rect.width <= 0) return
+	splitPct.value = clampSplit(((clientX - rect.left) / rect.width) * 100)
+}
+
+function startSplitDrag(event: PointerEvent): void {
+	// Only the primary button starts a drag; keyboard users get arrows instead.
+	if (event.button !== 0) return
+	event.preventDefault()
+	draggingSplit.value = true
+	setSplitFromClientX(event.clientX)
+	const target = event.currentTarget as HTMLElement | null
+	target?.setPointerCapture?.(event.pointerId)
+	const onMove = (e: PointerEvent): void => setSplitFromClientX(e.clientX)
+	const onUp = (): void => {
+		draggingSplit.value = false
+		window.removeEventListener('pointermove', onMove)
+		window.removeEventListener('pointerup', onUp)
+		window.removeEventListener('pointercancel', onUp)
+		try {
+			localStorage.setItem('rt:splitPct', String(Math.round(splitPct.value)))
+		} catch {
+			/* ignore */
+		}
+	}
+	window.addEventListener('pointermove', onMove)
+	window.addEventListener('pointerup', onUp)
+	window.addEventListener('pointercancel', onUp)
+}
+
+function resetSplit(): void {
+	splitPct.value = 50
+	try {
+		localStorage.setItem('rt:splitPct', '50')
+	} catch {
+		/* ignore */
+	}
+}
+
+function nudgeSplit(delta: number): void {
+	splitPct.value = clampSplit(splitPct.value + delta)
+	try {
+		localStorage.setItem('rt:splitPct', String(Math.round(splitPct.value)))
+	} catch {
+		/* ignore */
+	}
+}
+
+function restoreLayoutPrefs(): void {
+	try {
+		railCollapsed.value = localStorage.getItem('rt:railCollapsed') === '1'
+		const raw = Number(localStorage.getItem('rt:splitPct'))
+		if (Number.isFinite(raw)) splitPct.value = clampSplit(raw)
+	} catch {
+		/* ignore */
+	}
+}
 
 // The preview pane hosts a Resume | Cover letter tab; each pane remembers its own tab.
 // When both panes preview, they stay on alternative views (see syncPreviewTabs).
@@ -716,6 +802,7 @@ watch(
 )
 
 onMounted(async () => {
+	restoreLayoutPrefs()
 	window.addEventListener('afterprint', () => {
 		delete document.body.dataset.printDoc
 	})
@@ -809,11 +896,26 @@ onMounted(async () => {
 					>
 						<Icon size="16"><component :is="isDark ? WeatherSunny16Regular : WeatherMoon16Regular" /></Icon>
 					</FwbButton>
-					<a
+					<button
+						v-if="isElectron()"
+						type="button"
 						class="inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-body-subtle transition select-none hover:bg-neutral-tertiary hover:text-heading"
-						href="https://github.com/Anson2251/resume-tailor"
+						title="View on GitHub"
+						aria-label="View on GitHub"
+						@click="openExternalUrl(GITHUB_URL)"
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+							<path
+								d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+							/>
+						</svg>
+					</button>
+					<a
+						v-else
+						:href="GITHUB_URL"
 						target="_blank"
 						rel="noopener noreferrer"
+						class="inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-body-subtle transition select-none hover:bg-neutral-tertiary hover:text-heading"
 						title="View on GitHub"
 						aria-label="View on GitHub"
 					>
@@ -859,10 +961,47 @@ onMounted(async () => {
 		<FormNav :profile="activeProfile" :master="workspace.master" :accent="accent" />
 
 		<!-- Main: job rail + two panes (Form / Preview / Agent / JD PDF) -->
-		<main
-			class="mx-auto grid w-full max-w-[1600px] flex-1 grid-cols-1 gap-6 px-4 py-6 lg:min-h-0 lg:grid-cols-[260px_minmax(0,1fr)_minmax(0,1fr)]"
+		<main class="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-6 lg:min-h-0 lg:flex-row"
+		:class="{ 'gap-6': !railCollapsed }"
 		>
-			<div class="no-print min-w-0 lg:min-h-0 lg:overflow-y-auto">
+			<!-- Slim expand strip when the profile rail is hidden (desktop) -->
+			<div v-if="railCollapsed" class="no-print hidden shrink-0 lg:flex lg:flex-col lg:items-center lg:pt-1">
+				<button
+					type="button"
+					class="inline-flex items-center justify-center rounded-lg p-2 text-body-subtle transition select-none hover:bg-neutral-tertiary hover:text-heading"
+					title="Show profile panel"
+					aria-label="Show profile panel"
+					@click="toggleRail(false)"
+				>
+					<Icon size="16"><ChevronRight16Regular /></Icon>
+				</button>
+			</div>
+			<!-- Full-width restore button when hidden (mobile, panes stack) -->
+			<div v-if="railCollapsed" class="no-print lg:hidden">
+				<button
+					type="button"
+					class="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-default bg-neutral-primary px-3 py-2 text-[13px] font-medium text-body transition hover:bg-neutral-tertiary"
+					@click="toggleRail(false)"
+				>
+					<Icon size="16"><ChevronRight16Regular /></Icon>
+					Show profiles
+				</button>
+			</div>
+
+			<div v-show="!railCollapsed" class="no-print min-w-0 lg:min-h-0 lg:w-[260px] lg:shrink-0 lg:overflow-y-auto">
+				<div class="mb-2 flex items-center justify-between gap-2">
+					<span class="px-1 text-[13px] font-semibold tracking-wide text-body-subtle uppercase">Profiles</span>
+					<button
+						type="button"
+						class="inline-flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[13px] font-medium text-body-subtle transition select-none hover:bg-neutral-tertiary hover:text-heading"
+						title="Hide profile panel"
+						aria-label="Hide profile panel"
+						@click="toggleRail(true)"
+					>
+						<Icon size="16"><ChevronLeft16Regular /></Icon>
+						<span class="hidden xl:inline">Hide</span>
+					</button>
+				</div>
 				<JobList
 					v-model="workspace.activeJobId"
 					:jobs="workspace.jobs"
@@ -875,16 +1014,25 @@ onMounted(async () => {
 				/>
 			</div>
 
-			<div class="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
-				<div class="no-print mb-2 flex items-center gap-2">
-					<FwbDropdown close-inside placement="bottom">
-						<template #trigger>
-							<button
-								type="button"
-								class="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-medium text-body-subtle transition select-none hover:bg-neutral-tertiary hover:text-heading"
-								title="Switch left pane view"
-							>
-								{{ PANE_LABELS[paneA] }} ▾
+			<!-- Resizable two-pane area. Stacks on mobile; side-by-side with a
+				draggable divider on large screens. Pane A width = --split. -->
+			<div
+				ref="panesRef"
+				:style="{ '--split': `${splitPct}%` } as Record<string, string>"
+				class="flex min-w-0 flex-1 flex-col gap-6 lg:min-h-0 lg:flex-row lg:gap-0"
+			>
+				<div
+					class="min-w-0 lg:flex lg:min-h-0 lg:w-[var(--split,50%)] lg:shrink-0 lg:grow-0 lg:flex-col lg:overflow-hidden lg:pr-2"
+				>
+					<div class="no-print mb-2 flex items-center gap-2">
+						<FwbDropdown close-inside placement="bottom">
+							<template #trigger>
+								<button
+									type="button"
+									class="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-medium text-body-subtle transition select-none hover:bg-neutral-tertiary hover:text-heading"
+									title="Switch left pane view"
+								>
+									{{ PANE_LABELS[paneA] }} ▾
 							</button>
 						</template>
 						<div class="flex min-w-32 flex-col gap-1 p-1">
@@ -970,7 +1118,30 @@ onMounted(async () => {
 				<JDViewer v-else class="no-print" :key="activeJob.id" :job="activeJob" />
 			</div>
 
-			<div class="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
+			<!-- Draggable divider (desktop only; panes stack on mobile) -->
+			<div
+				role="separator"
+				aria-orientation="vertical"
+				aria-label="Resize panes"
+				:title="`Split ${Math.round(splitPct)} / ${Math.round(100 - splitPct)} — drag to resize, double-click to reset`"
+				tabindex="0"
+				class="no-print hidden shrink-0 cursor-col-resize touch-none items-stretch justify-center self-stretch px-1.5 outline-none lg:flex"
+				:class="draggingSplit ? 'is-dragging' : ''"
+				@pointerdown="startSplitDrag"
+				@dblclick="resetSplit"
+				@keydown.left.prevent="nudgeSplit(-2)"
+				@keydown.right.prevent="nudgeSplit(2)"
+				@keydown.home.prevent="splitPct = 50"
+			>
+				<div
+					class="w-1 rounded-full transition-colors"
+					:class="draggingSplit ? 'bg-brand' : 'bg-neutral-quaternary hover:bg-brand/60'"
+				/>
+			</div>
+
+			<div
+				class="min-w-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden lg:pl-2"
+			>
 				<div class="no-print mb-2 flex items-center gap-2">
 					<FwbDropdown close-inside placement="bottom" align-to-end>
 						<template #trigger>
@@ -1059,7 +1230,8 @@ onMounted(async () => {
 				</div>
 				<JDViewer v-else class="no-print" :key="activeJob.id" :job="activeJob" />
 			</div>
-		</main>
+		</div>
+	</main>
 
 		<div
 			v-if="undoSnapshot"

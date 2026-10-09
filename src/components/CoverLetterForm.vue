@@ -17,7 +17,7 @@ const credentialPlaceholder = computed(
 
 <template>
 	<div class="flex flex-col gap-5">
-		<FwbCard class="p-4">
+		<FwbCard class="p-4 shadow-md dark:shadow-lg dark:shadow-black/60">
 			<h2 class="mb-3 text-sm font-bold tracking-widest text-body-subtle uppercase">Recipient</h2>
 			<div class="flex flex-col gap-3">
 				<FwbInput v-model="letter.recipientTitle" label="Hiring division" placeholder="Hiring Team" />
@@ -25,7 +25,7 @@ const credentialPlaceholder = computed(
 			</div>
 		</FwbCard>
 
-		<FwbCard class="p-4">
+		<FwbCard class="p-4 shadow-md dark:shadow-lg dark:shadow-black/60">
 			<h2 class="mb-3 text-sm font-bold tracking-widest text-body-subtle uppercase">Subject</h2>
 			<div class="flex flex-col gap-3">
 				<FwbInput v-model="letter.jobTitle" label="Job title" :placeholder="job.jobTitleTarget || 'Role'" />
@@ -34,7 +34,7 @@ const credentialPlaceholder = computed(
 			</div>
 		</FwbCard>
 
-		<FwbCard class="p-4">
+		<FwbCard class="p-4 shadow-md dark:shadow-lg dark:shadow-black/60">
 			<h2 class="mb-3 text-sm font-bold tracking-widest text-body-subtle uppercase">Letter</h2>
 			<FwbTextarea
 				v-model="letter.body"
@@ -44,7 +44,7 @@ const credentialPlaceholder = computed(
 			/>
 		</FwbCard>
 
-		<FwbCard class="p-4">
+		<FwbCard class="p-4 shadow-md dark:shadow-lg dark:shadow-black/60">
 			<h2 class="mb-3 text-sm font-bold tracking-widest text-body-subtle uppercase">Signature &amp; date</h2>
 			<div class="flex flex-col gap-3">
 				<FwbInput v-model="letter.signoff" label="Sign-off" placeholder="Sincerely," />

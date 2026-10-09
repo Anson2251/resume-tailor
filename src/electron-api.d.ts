@@ -23,6 +23,7 @@ export interface ElectronAPI {
 	notifyReady: () => void
 	exportPdf: (filename: string) => Promise<PdfExportResult | null>
 	revealInFolder: (filePath: string) => void
+	openExternal: (url: string) => Promise<boolean>
 	onFullscreenChanged: (callback: (fullscreen: boolean) => void) => () => void
 }
 

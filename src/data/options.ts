@@ -9,6 +9,7 @@ export const TEMPLATES: TemplateOption[] = [
 	{ id: 'modern', name: 'Modern', hint: 'Accent header', font: 'sans' },
 	{ id: 'classic', name: 'Classic', hint: 'Centered serif', font: 'serif' },
 	{ id: 'minimal', name: 'Minimal', hint: 'Airy + hairlines', font: 'sans' },
+	{ id: 'compact', name: 'Compact', hint: 'Dense single-page', font: 'serif' },
 ]
 
 /** The body can flow in 1 or 2 columns (per profile). */

@@ -4,7 +4,8 @@ import { Icon } from '@vicons/utils'
 import ModernTemplate from './templates/ModernTemplate.vue'
 import ClassicTemplate from './templates/ClassicTemplate.vue'
 import MinimalTemplate from './templates/MinimalTemplate.vue'
-import { FwbButton, FwbDropdown, FwbInput, FwbToggle } from 'flowbite-vue'
+import CompactTemplate from './templates/CompactTemplate.vue'
+import { FwbButton, FwbDropdown, FwbInput, FwbSelect, FwbToggle } from 'flowbite-vue'
 import { confirmDialog } from '../data/dialogs'
 import {
 	ACCENTS,
@@ -56,12 +57,16 @@ const emit = defineEmits<{
 /** Built-in sections can only be hidden; user-created ones can be deleted. */
 const isCustomSection = (id: string): boolean => !SECTION_IDS.includes(id)
 
+const templateOptions = computed(() => TEMPLATES.map((t) => ({ value: t.id, name: `${t.name} — ${t.hint}` })))
+
 const activeComponent = computed(() => {
 	switch (template.value) {
 		case 'classic':
 			return ClassicTemplate
 		case 'minimal':
 			return MinimalTemplate
+		case 'compact':
+			return CompactTemplate
 		default:
 			return ModernTemplate
 	}
@@ -313,25 +318,7 @@ function onViewportWheel(event: WheelEvent): void {
 							<Icon size="18"><Shapes16Regular /></Icon> Templates
 						</p>
 						<!-- Template switcher -->
-						<div
-							class="flex items-center gap-1 rounded-lg border border-default bg-neutral-primary p-1 shadow-sm"
-							role="tablist"
-							aria-label="Resume template"
-						>
-							<button
-								v-for="t in TEMPLATES"
-								:key="t.id"
-								:title="t.hint"
-								class="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition select-none"
-								:class="
-									template === t.id ? 'font-semibold text-white shadow-sm' : 'text-body-subtle hover:text-heading'
-								"
-								:style="template === t.id ? { backgroundColor: accent } : null"
-								@click="template = t.id"
-							>
-								{{ t.name }}
-							</button>
-						</div>
+						<FwbSelect v-model="template" aria-label="Resume template" :options="templateOptions" />
 					</div>
 
 					<div>
@@ -579,7 +566,7 @@ function onViewportWheel(event: WheelEvent): void {
 		<div
 			id="print-area"
 			ref="printArea"
-			class="print-area block overflow-auto rounded-lg border border-default bg-neutral-tertiary/70 p-6 select-none lg:min-h-0 lg:flex-1"
+			class="shadow-md dark:shadow-lg dark:shadow-black/60 print-area block overflow-auto rounded-lg border border-default bg-neutral-tertiary/70 p-6 select-none lg:min-h-0 lg:flex-1"
 			:class="dragging ? 'cursor-grabbing' : 'cursor-grab'"
 			@mousedown="onViewportMouseDown"
 			@dragstart.prevent
