@@ -53,6 +53,7 @@ jobs:
 
       # builder-debug.yml is local diagnostics, not a release asset.
       - name: Drop build diagnostics
+        shell: bash
         run: rm -f release/builder-debug.yml
 
       - name: Upload artifacts to release

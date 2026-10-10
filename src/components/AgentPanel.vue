@@ -332,7 +332,7 @@ const TOOL_LABELS: Record<string, string> = {
 	read_note: "Oh right, finding that thing",
 	patch_note: "Scribbling in the margins",
 	search_notes: "Ctrl+F-ing my brain",
-	save_notes: "Jotting this down for later",
+	save_note: "Jotting this down for later",
 	delete_note: "Yeeting this from memory",
 }
 
