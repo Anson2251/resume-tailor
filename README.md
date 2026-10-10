@@ -3,7 +3,7 @@
     <span>
         <img src="src/components/icons/ResumeStackIcon.svg" width="120" alt="Resume Tailor icon — stacked resumes" />
     </span>
-<h1>
+</h1>
 
 A simple resume-tailoring tool
 
