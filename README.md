@@ -1,8 +1,8 @@
 <h1>
-    <span>Resume Tailor</span>
     <span>
-        <img src="src/components/icons/ResumeStackIcon.svg" width="120" alt="Resume Tailor icon — stacked resumes" />
+        <img src="src/components/icons/ResumeStackIcon.svg" height="120" alt="Resume Tailor icon — stacked resumes" />
     </span>
+    <span>Resume Tailor</span>
 </h1>
 
 A simple resume-tailoring tool
