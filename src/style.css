@@ -68,8 +68,9 @@ body[data-electron-platform] #topbar {
 body[data-electron-platform='darwin'] #topbar {
 	padding-top: 0px !important;
 }
-body[data-electron-platform='darwin'] #topbar h1 {
+body[data-electron-platform='darwin'] #topbar #title-row {
 	padding-left: 72px;
+	transition: padding-left 0.3s ease;
 }
 body[data-electron-platform] #topbar button,
 body[data-electron-platform] #topbar a,
@@ -83,8 +84,8 @@ body[data-electron-platform] #topbar [contenteditable] {
 body[data-electron-fullscreen='true'] #topbar {
 	padding-top: 0;
 }
-body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar h1 {
-	padding-left: 0;
+body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar #title-row {
+	padding-left: 0 !important;
 }
 
 /* ---------- Print / Export PDF ---------- */
@@ -133,6 +134,31 @@ body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar h
 		max-height: none !important;
 	}
 
+	/* The two-pane flex row keeps its screen `gap-6` in print: the `lg:gap-0`
+	   override only applies at viewport widths >=1024px, but the printed page
+	   is ~794px wide, so the empty non-preview pane plus the 24px gap rendered
+	   as a white strip above the resume and pushed content onto page two. */
+	#panes {
+		display: block !important;
+		gap: 0 !important;
+		padding: 0 !important;
+		margin: 0 !important;
+		overflow: visible !important;
+		height: auto !important;
+		max-height: none !important;
+		min-height: 0 !important;
+	}
+	.pane-col {
+		display: block !important;
+		padding: 0 !important;
+		margin: 0 !important;
+		overflow: visible !important;
+		width: auto !important;
+		height: auto !important;
+		max-height: none !important;
+		min-height: 0 !important;
+	}
+
 	#print-area,
 	.print-area {
 		display: block !important;
@@ -143,6 +169,7 @@ body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar h
 		   print area 2px taller than the page and force a blank second sheet. */
 		border: none !important;
 		border-radius: 0 !important;
+		box-shadow: none !important;
 		background: #fff !important;
 		overflow: visible !important;
 	}

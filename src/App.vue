@@ -24,6 +24,7 @@ import JDViewer from './components/JDViewer.vue'
 import { FwbButton, FwbButtonGroup, FwbDropdown, FwbModal } from 'flowbite-vue'
 import AppSplash from './components/AppSplash.vue'
 import DialogHost from './components/DialogHost.vue'
+import ResumeStackIconSmall from './components/icons/ResumeStackIconSmall.vue'
 import SettingsPage from './components/SettingsPage.vue'
 import { confirmDialog, notifyDialog, promptDialog } from './data/dialogs'
 import { hydrateAgentSettings, useAgentSettings, useAgentSettingsMutable } from './agent/agentSettings'
@@ -839,7 +840,10 @@ onMounted(async () => {
 		>
 			<div class="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3">
 				<div class="mr-auto">
-					<h1 class="text-lg font-extrabold tracking-tight">Resume Tailor</h1>
+    				<div class="flex flex-row" id="title-row">
+                        <ResumeStackIconSmall :size="28" aria-hidden="true" />
+    					<h1 class="text-lg font-extrabold tracking-tight pl-2">Resume Tailor</h1>
+                    </div>
 					<p class="text-xs text-body-subtle">One master resume — a tailored view per job.</p>
 				</div>
 
@@ -1018,11 +1022,12 @@ onMounted(async () => {
 				draggable divider on large screens. Pane A width = --split. -->
 			<div
 				ref="panesRef"
+				id="panes"
 				:style="{ '--split': `${splitPct}%` } as Record<string, string>"
 				class="flex min-w-0 flex-1 flex-col gap-6 lg:min-h-0 lg:flex-row lg:gap-0"
 			>
 				<div
-					class="min-w-0 lg:flex lg:min-h-0 lg:w-[var(--split,50%)] lg:shrink-0 lg:grow-0 lg:flex-col lg:overflow-hidden lg:pr-2"
+					class="pane-col min-w-0 lg:flex lg:min-h-0 lg:w-[var(--split,50%)] lg:shrink-0 lg:grow-0 lg:flex-col lg:overflow-hidden lg:pr-2"
 				>
 					<div class="no-print mb-2 flex items-center gap-2">
 						<FwbDropdown close-inside placement="bottom">
@@ -1140,7 +1145,7 @@ onMounted(async () => {
 			</div>
 
 			<div
-				class="min-w-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden lg:pl-2"
+				class="pane-col min-w-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden lg:pl-2"
 			>
 				<div class="no-print mb-2 flex items-center gap-2">
 					<FwbDropdown close-inside placement="bottom" align-to-end>

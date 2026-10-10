@@ -6,6 +6,15 @@ import { getBackend, peekStoredTheme, registerDbIpc } from './db'
 
 const DEV_URL = process.env.ELECTRON_DEV_URL || 'http://localhost:5173'
 
+// Runtime window icon (Linux window decorations; macOS uses the bundle .icns,
+// Windows the exe .ico — both set via electron-builder, this is a no-op there).
+// The file ships in dist/ (Vite copies public/ there) when packaged.
+function runtimeIconPath(): string {
+	return app.isPackaged
+		? path.join(__dirname, '../../dist/icons/icon-512.png')
+		: path.join(__dirname, '../../public/icons/icon-512.png')
+}
+
 interface PdfExportResult {
 	ok: boolean
 	canceled?: boolean
@@ -188,6 +197,7 @@ function createMainWindow(): void {
 		// traffic lights on macOS, caption buttons via overlay on Windows/Linux —
 		// and the header's top strip acts as the drag handle (see #topbar CSS).
 		title: 'Resume Tailor',
+		icon: runtimeIconPath(),
 		titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
 		titleBarOverlay: isMac ? undefined : { color: '#ffffff', symbolColor: '#0f172a', height: 36 },
 		webPreferences: {

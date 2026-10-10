@@ -572,7 +572,7 @@ function onViewportWheel(event: WheelEvent): void {
 			@dragstart.prevent
 		>
 			<div
-				class="resume-page overflow-hidden rounded-sm shadow-xl ring-1 ring-slate-900/10"
+				class="resume-page overflow-hidden rounded-sm ring-1 ring-slate-900/10"
 				:style="{ zoom: printZoom, '--sp': density }"
 			>
 				<component

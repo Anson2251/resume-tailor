@@ -32,21 +32,26 @@
 			"dist/**",
 			"electron/dist/**",
 			"electron/splash.html",
-			"package.json"
+			"package.json",
+			"!dist/icons/icon.icns",
+			"!dist/icons/icon.ico"
 		],
 		"mac": {
 			"category": "public.app-category.productivity",
+			"icon": "public/icons/icon.icns",
 			"target": [
 				"dmg"
 			]
 		},
 		"win": {
+			"icon": "public/icons/icon.ico",
 			"target": [
 				"nsis"
 			]
 		},
 		"linux": {
 			"category": "Office",
+			"icon": "public/icons/icon-512.png",
 			"target": [
 				"AppImage"
 			]
