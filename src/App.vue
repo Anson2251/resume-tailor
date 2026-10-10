@@ -21,6 +21,7 @@ import ResumePreview from './components/ResumePreview.vue'
 import JobList from './components/JobList.vue'
 import AgentPanel from './components/AgentPanel.vue'
 import JDViewer from './components/JDViewer.vue'
+import NotebookPanel from './components/NotebookPanel.vue'
 import { FwbButton, FwbButtonGroup, FwbDropdown, FwbModal } from 'flowbite-vue'
 import AppSplash from './components/AppSplash.vue'
 import DialogHost from './components/DialogHost.vue'
@@ -218,6 +219,7 @@ const PANE_LABELS: Record<PaneView, string> = {
 	letter: 'Cover letter',
 	agent: 'Agent',
 	jdpdf: 'JD PDF',
+	notes: 'Notebook',
 }
 
 function setPane(which: 'a' | 'b', view: PaneView): void {
@@ -1042,7 +1044,7 @@ onMounted(async () => {
 						</template>
 						<div class="flex min-w-32 flex-col gap-1 p-1">
 							<button
-								v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf'] as PaneView[]"
+								v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf', 'notes'] as PaneView[]"
 								:key="view"
 								type="button"
 								class="inline-flex w-full items-center justify-start gap-1.5 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-body transition hover:bg-neutral-tertiary"
@@ -1120,6 +1122,9 @@ onMounted(async () => {
 				<div v-else-if="paneA === 'letter'" class="no-print lg:min-h-0 lg:overflow-y-auto">
 					<CoverLetterForm :job="activeJob" :master="workspace.master" />
 				</div>
+				<div v-else-if="paneA === 'notes'" class="no-print lg:min-h-0 lg:overflow-y-auto">
+					<NotebookPanel v-model="workspace.master" />
+				</div>
 				<JDViewer v-else class="no-print" :key="activeJob.id" :job="activeJob" />
 			</div>
 
@@ -1148,7 +1153,7 @@ onMounted(async () => {
 				class="pane-col min-w-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden lg:pl-2"
 			>
 				<div class="no-print mb-2 flex items-center gap-2">
-					<FwbDropdown close-inside placement="bottom" align-to-end>
+					<FwbDropdown close-inside placement="bottom">
 						<template #trigger>
 							<button
 								type="button"
@@ -1160,7 +1165,7 @@ onMounted(async () => {
 						</template>
 						<div class="flex min-w-32 flex-col gap-1 p-1">
 							<button
-								v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf'] as PaneView[]"
+								v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf', 'notes'] as PaneView[]"
 								:key="view"
 								type="button"
 								class="inline-flex w-full items-center justify-start gap-1.5 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-body transition hover:bg-neutral-tertiary"
@@ -1232,6 +1237,9 @@ onMounted(async () => {
 				/>
 				<div v-else-if="paneB === 'letter'" class="no-print lg:min-h-0 lg:overflow-y-auto">
 					<CoverLetterForm :job="activeJob" :master="workspace.master" />
+				</div>
+				<div v-else-if="paneB === 'notes'" class="no-print lg:min-h-0 lg:overflow-y-auto">
+					<NotebookPanel v-model="workspace.master" />
 				</div>
 				<JDViewer v-else class="no-print" :key="activeJob.id" :job="activeJob" />
 			</div>

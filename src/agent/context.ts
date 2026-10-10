@@ -4,6 +4,7 @@ import { buildPreview } from '../data/workspace'
 export const JD_CONTEXT_CHARS = 6000
 export const RESUME_FIELD_CHARS = 1200
 export const COVER_LETTER_CONTEXT_CHARS = 2000
+export const NOTE_BODY_CHARS = 4000
 
 export function truncate(text: string, max: number): string {
 	if (!text) return ''
@@ -82,6 +83,18 @@ export function coverLetterBlock(job: Job): string {
 	return `Cover letter draft (${text.length} chars)${header ? ` — ${header}` : ''}:\n${truncate(text, COVER_LETTER_CONTEXT_CHARS)}`
 }
 
+/** Index-only notebook block: titles go into every prompt, bodies stay behind read_note. */
+export function notebookBlock(master: MasterResume): string {
+	const notes = master?.notes || []
+	if (!notes.length) return 'Notebook: empty — no private notes yet. If the user shares background worth reusing, save it with save_note.'
+	const titles = notes.map((n) => n.title?.trim() || '(untitled)').slice(0, 30)
+	const extra = notes.length > 30 ? ` (+${notes.length - 30} more)` : ''
+	return [
+		`Notebook: ${notes.length} private note(s) — ${titles.join(' | ')}${extra}`,
+		'Check list_notes / search_notes / read_note before asking the user to repeat background they may have written down.',
+	].join('\n')
+}
+
 /** Grounded per-job context appended to the base system prompt on every request. */
 export function buildJobContext(job: Job, master: MasterResume): string {
 	const scope =
@@ -95,6 +108,8 @@ export function buildJobContext(job: Job, master: MasterResume): string {
 		'',
 		'## Tailored resume snapshot',
 		resumeSnapshot(job, master),
+		'',
+		notebookBlock(master),
 		'',
 		`## ${coverLetterBlock(job)}`,
 	].join('\n')

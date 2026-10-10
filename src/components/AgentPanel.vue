@@ -32,6 +32,7 @@ import {
 	touchConversation,
 } from '../agent/conversations'
 import { selectSibling } from '../agent/panes'
+import { patchNoteInList } from '../agent/tools'
 import { useAgentChat } from '../agent/useAgentChat'
 import { confirmDialog } from '../data/dialogs'
 import AutoScrollWrapper from './AutoScrollWrapper.vue'
@@ -162,6 +163,36 @@ const chat = useAgentChat(
 		setSummary: (summary) => {
 			props.job.summary = summary
 		},
+		saveNote: ({ id, title, body }) => {
+			const notes = (props.master.notes ??= [])
+			const cleanId = typeof id === 'string' ? id.trim() : ''
+			const cleanTitle = title.trim().slice(0, 120)
+			const cleanBody = body.slice(0, 8000)
+			let note = cleanId ? notes.find((n) => n.id === cleanId) : undefined
+			note ??= notes.find((n) => (n.title || '').trim() === cleanTitle && cleanTitle !== '')
+			if (note) {
+				note.title = cleanTitle
+				note.body = cleanBody
+				note.updatedAt = Date.now()
+				return note
+			}
+			const fresh = {
+				id: cleanId || `note-${Date.now()}-${Math.floor(Math.random() * 1e9)}`,
+				title: cleanTitle,
+				body: cleanBody,
+				updatedAt: Date.now(),
+			}
+			notes.push(fresh)
+			return fresh
+		},
+		deleteNote: (id) => {
+			const notes = props.master.notes || []
+			const index = notes.findIndex((n) => n.id === id)
+			if (index === -1) return false
+			notes.splice(index, 1)
+			return true
+		},
+		patchNote: (id, search, replace) => patchNoteInList((props.master.notes ??= []), id, search, replace),
 	},
 	activeModel.value,
 	{
@@ -288,15 +319,21 @@ function siblingOf(id: string): { ids: string[]; index: number } | null {
 
 /** Human labels for the agent tool loadout (wisp-pro displayName parity). */
 const TOOL_LABELS: Record<string, string> = {
-	read_resume: 'Read resume',
-	read_jd: 'Read job description',
-	read_manual: 'Read manual',
-	propose_bullet_rewrite: 'Rewrite field',
-	update_title: 'Update title',
-	update_summary: 'Update summary',
-	update_cover_letter: 'Update cover letter',
-	update_letter_field: 'Update letter field',
-	set_visibility: 'Set visibility',
+	read_resume: "Checking out your resume",
+	read_jd: "Sizing up the job post",
+	read_manual: "Peeking at the rulebook",
+	propose_bullet_rewrite: "Jazzing up a bullet",
+	update_title: "Slapping on a fancier title",
+	update_summary: "Sprucing up your summary",
+	update_cover_letter: "Whipping up a cover letter",
+	update_letter_field: "Tweaking the letter",
+	set_visibility: "Flipping some switches",
+	list_notes: "Digging through my notes",
+	read_note: "Oh right, finding that thing",
+	patch_note: "Scribbling in the margins",
+	search_notes: "Ctrl+F-ing my brain",
+	save_notes: "Jotting this down for later",
+	delete_note: "Yeeting this from memory",
 }
 
 function toolLabel(name: string): string {
@@ -674,7 +711,7 @@ function saveEdit(id: string): void {
 									</div>
 								</div>
 							</div>
-							<span v-if="!groupHasContent(group)">
+							<span v-if="!groupHasContent(group) && gi === groups.length - 1">
 								<span
 									v-if="chat.sending.value"
 									class="typing-indicator text-body-subtle"
@@ -688,7 +725,7 @@ function saveEdit(id: string): void {
 								<span v-else class="text-body-subtle">…</span>
 							</span>
 							<span
-								v-else-if="chat.sending.value && !chat.assistantStreaming.value"
+								v-else-if="gi === groups.length - 1 && chat.sending.value && !chat.assistantStreaming.value"
 								class="typing-indicator text-body-subtle"
 								role="status"
 								aria-label="Waiting for reply"

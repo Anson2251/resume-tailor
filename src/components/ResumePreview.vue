@@ -419,7 +419,7 @@ function onViewportWheel(event: WheelEvent): void {
 				</div>
 			</FwbDropdown>
 			<!-- Sections: order, names, visibility (saved per profile) -->
-			<FwbDropdown placement="bottom" content-wrapper-class="w-[19rem] p-4">
+			<FwbDropdown placement="left" content-wrapper-class="w-[19rem] p-4">
 				<template #trigger>
 					<button
 						type="button"

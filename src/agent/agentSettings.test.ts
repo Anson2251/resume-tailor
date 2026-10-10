@@ -100,10 +100,12 @@ it('preinjects the manual name+description index into the core prompt', () => {
 	expect(DEFAULT_SYSTEM_PROMPT).toContain('cover-letter-writer:')
 	expect(DEFAULT_SYSTEM_PROMPT).toContain('resume-tailor-system:')
 	expect(DEFAULT_SYSTEM_PROMPT).toContain('skill-brainstorm:')
+	expect(DEFAULT_SYSTEM_PROMPT).toContain('resume-answer-sheet:')
 })
 
 it('guides manual use per trigger (system questions, letters, stuck users)', () => {
 	expect(DEFAULT_SYSTEM_PROMPT).toContain('resume-tailor-system before answering')
 	expect(DEFAULT_SYSTEM_PROMPT).toContain('cover-letter-writer before drafting')
 	expect(DEFAULT_SYSTEM_PROMPT).toContain('skill-brainstorm when the user is stuck')
+	expect(DEFAULT_SYSTEM_PROMPT).toContain('resume-answer-sheet when the user is confirmed or likely a student')
 })

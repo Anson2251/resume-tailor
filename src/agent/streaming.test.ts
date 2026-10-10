@@ -3,7 +3,7 @@ import { setApiKey } from './keyring'
 import { DEFAULT_MODEL } from './models'
 import { blankResume } from '../data/resume'
 import { blankJob } from '../data/workspace'
-import type { JobMutations } from './tools'
+import type { JobMutations, PatchResult } from './tools'
 import { useAgentChat } from './useAgentChat'
 import { activeConversation } from './conversations'
 import { toolArgsJson, toolResultJson } from './threads'
@@ -131,6 +131,9 @@ function testMutate(seen: { overrides: [string, Record<string, string | boolean>
 		setVisibility: () => {},
 		setTitle: () => {},
 		setSummary: () => {},
+		saveNote: () => null,
+		deleteNote: () => false,
+		patchNote: (): PatchResult => ({ ok: false, reason: 'not_found', matches: 0 }),
 	}
 }
 

@@ -233,6 +233,7 @@ export const blankResume = (): MasterResume => ({
 	education: [blankEducation()],
 	skills: [blankSkillGroup()],
 	customSections: [],
+	notes: [],
 })
 
 export const sampleResume = (): MasterResume => ({
@@ -298,6 +299,7 @@ export const sampleResume = (): MasterResume => ({
 		{ id: uid(), category: 'Tools', items: 'Git, Figma, Playwright, Docker' },
 	],
 	customSections: [],
+	notes: [],
 })
 
 /**

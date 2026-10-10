@@ -1,3 +1,4 @@
+import answerSheetRaw from './manuals/answer-sheet.md?raw'
 import coverLetterRaw from './manuals/cover-letter.md?raw'
 import resumeTailorRaw from './manuals/resume-tailor.md?raw'
 import skillBrainstormRaw from './manuals/skill-brainstorm.md?raw'
@@ -58,7 +59,7 @@ function toManual(raw: string): Manual {
 	return { name: parsed.name, description: parsed.description, body: parsed.body, chars: parsed.body.length }
 }
 
-export const MANUALS: Manual[] = [toManual(coverLetterRaw), toManual(resumeTailorRaw), toManual(skillBrainstormRaw)]
+export const MANUALS: Manual[] = [toManual(coverLetterRaw), toManual(resumeTailorRaw), toManual(skillBrainstormRaw), toManual(answerSheetRaw)]
 
 /**
  * Preinjected index (yaml name + description only): baked into the system

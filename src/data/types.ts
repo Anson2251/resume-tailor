@@ -78,6 +78,14 @@ export interface CustomSection {
 	items: CustomItem[]
 }
 
+/** A freeform notebook note: user-titled markdown, indexed by title. */
+export interface MemoryNote {
+	id: string
+	title: string
+	body: string
+	updatedAt: number
+}
+
 /** The shared content. Visibility and order live on the profile, not here. */
 export interface MasterResume {
 	contact: Contact
@@ -86,6 +94,8 @@ export interface MasterResume {
 	education: EducationItem[]
 	skills: SkillGroup[]
 	customSections: CustomSection[]
+	/** Private notebook for Mira (never exported to PDF): indexed markdown by topic. */
+	notes: MemoryNote[]
 }
 
 /** The resume shape templates consume: master content resolved for a profile. */

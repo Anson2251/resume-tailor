@@ -16,8 +16,13 @@ describe('manual frontmatter', () => {
 })
 
 describe('manual registry', () => {
-	it('registers three manuals with non-empty bodies', () => {
-		expect(MANUALS.map((m) => m.name)).toEqual(['cover-letter-writer', 'resume-tailor-system', 'skill-brainstorm'])
+	it('registers four manuals with non-empty bodies', () => {
+		expect(MANUALS.map((m) => m.name)).toEqual([
+			'cover-letter-writer',
+			'resume-tailor-system',
+			'skill-brainstorm',
+			'resume-answer-sheet',
+		])
 		for (const m of MANUALS) {
 			expect(m.description.length).toBeGreaterThan(20)
 			expect(m.body.length).toBeGreaterThan(100)
@@ -28,7 +33,8 @@ describe('manual registry', () => {
 		expect(MANUAL_INDEX).toContain('cover-letter-writer:')
 		expect(MANUAL_INDEX).toContain('resume-tailor-system:')
 		expect(MANUAL_INDEX).toContain('skill-brainstorm:')
-		expect(MANUAL_INDEX.length).toBeLessThan(2000)
+		expect(MANUAL_INDEX).toContain('resume-answer-sheet:')
+		expect(MANUAL_INDEX.length).toBeLessThan(2500)
 	})
 
 	it('looks up by exact trimmed name only', () => {

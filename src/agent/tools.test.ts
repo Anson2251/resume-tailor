@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { agentToolsFor } from './tools'
+import { agentToolsFor, patchNoteInList } from './tools'
 import type { MasterResume } from '../data/types'
+import type { PatchResult } from './tools'
 
 function masterWith(ids: string[]): MasterResume {
 	return {
@@ -19,6 +20,7 @@ function masterWith(ids: string[]): MasterResume {
 		education: [],
 		skills: [],
 		customSections: [],
+		notes: [],
 	}
 }
 
@@ -30,6 +32,9 @@ function mutate() {
 		setVisibility: vi.fn(),
 		setTitle: vi.fn(),
 		setSummary: vi.fn(),
+		saveNote: vi.fn(() => null),
+		deleteNote: vi.fn(() => false),
+		patchNote: vi.fn((): PatchResult => ({ ok: false, reason: 'not_found', matches: 0 })),
 	}
 }
 
@@ -193,5 +198,102 @@ describe('read_manual', () => {
 		)
 		const res = await tools.find((t) => t.name === 'read_manual')!.execute('m4', { name: 'resume-tailor-system' })
 		expect(res.details).toMatchObject({ manual: 'resume-tailor-system' })
+	})
+})
+
+describe('notebook', () => {
+	it('lists and reads notes by id or title', async () => {
+		const master = masterWith([])
+		master.notes = [
+			{ id: 'n1', title: 'Why I built X', body: 'Background story', updatedAt: 1 },
+			{ id: 'n2', title: 'Learnings', body: 'What I learnt', updatedAt: 2 },
+		]
+		const tools = agentToolsFor({ id: 'j1', view: { experience: [] }, overrides: {} } as never, master, mutate())
+		const list = await tools.find((t) => t.name === 'list_notes')!.execute('n-list', {})
+		expect(JSON.parse((list.content[0] as { text: string }).text)).toMatchObject({ count: 2 })
+		const read = await tools.find((t) => t.name === 'read_note')!.execute('n-read', { key: 'Learnings' })
+		expect(JSON.parse((read.content[0] as { text: string }).text)).toMatchObject({ id: 'n2' })
+		const missing = await tools.find((t) => t.name === 'read_note')!.execute('n-miss', { key: 'nope' })
+		expect(missing.details).toMatchObject({ error: true })
+	})
+
+	it('saves and deletes notes through mutate', async () => {
+		const master = masterWith([])
+		const saved: { id?: string; title: string; body: string }[] = []
+		const m = {
+			...mutate(),
+			saveNote: (note: { id?: string; title: string; body: string }) => {
+				saved.push(note)
+				return { id: 'n9', title: note.title, body: note.body, updatedAt: 0 }
+			},
+			deleteNote: () => true,
+		}
+		const tools = agentToolsFor({ id: 'j1', view: { experience: [] }, overrides: {} } as never, master, m as never)
+		const res = await tools.find((t) => t.name === 'save_note')!.execute('n-save', { title: 'Goals', body: 'Staff engineer' })
+		expect(res.details).toMatchObject({ id: 'n9' })
+		expect(saved).toHaveLength(1)
+		const empty = await tools.find((t) => t.name === 'save_note')!.execute('n-empty', { title: '  ', body: '  ' })
+		expect(empty.details).toMatchObject({ error: true })
+		const del = await tools.find((t) => t.name === 'delete_note')!.execute('n-del', { id: 'n9' })
+		expect(del.details).toMatchObject({ id: 'n9' })
+	})
+
+	it('searches titles and bodies with snippets', async () => {
+		const master = masterWith([])
+		master.notes = [
+			{ id: 'n1', title: 'Why I built X', body: 'A long background story about the Vue migration project', updatedAt: 1 },
+			{ id: 'n2', title: 'Learnings', body: 'Unrelated cooking notes', updatedAt: 2 },
+		]
+		const tools = agentToolsFor({ id: 'j1', view: { experience: [] }, overrides: {} } as never, master, mutate())
+		const search = tools.find((t) => t.name === 'search_notes')!
+		const res = await search.execute('n-search', { query: 'vue migration' })
+		const parsed = JSON.parse((res.content[0] as { text: string }).text)
+		expect(parsed.count).toBe(1)
+		expect(parsed.notes[0]).toMatchObject({ id: 'n1' })
+		expect(parsed.notes[0].snippet).toContain('Vue migration')
+		const titleHit = await search.execute('n-search-title', { query: 'learnings' })
+		expect(JSON.parse((titleHit.content[0] as { text: string }).text).count).toBe(1)
+		const miss = await search.execute('n-search-miss', { query: 'quantum' })
+		expect(JSON.parse((miss.content[0] as { text: string }).text).count).toBe(0)
+		const empty = await search.execute('n-search-empty', { query: '   ' })
+		expect(empty.details).toMatchObject({ error: true })
+	})
+
+	it('patches one exact phrase and refuses zero or multiple matches', () => {
+		const notes = [
+			{ id: 'n1', title: 'Solo', body: 'I built X with Vue in 2024.', updatedAt: 0 },
+			{ id: 'n2', title: 'Dupe', body: 'Vue is great. I love Vue.', updatedAt: 0 },
+		]
+		const solo = patchNoteInList(notes, 'n1', 'with Vue', 'with React')
+		expect(solo.ok).toBe(true)
+		if (solo.ok) expect(solo.note.body).toBe('I built X with React in 2024.')
+		expect(notes[0].body).toBe('I built X with React in 2024.')
+		expect(patchNoteInList(notes, 'n1', 'missing phrase', 'x')).toMatchObject({ ok: false, reason: 'no_match' })
+		const multi = patchNoteInList(notes, 'n2', 'Vue', 'Svelte')
+		expect(multi).toMatchObject({ ok: false, reason: 'multiple', matches: 2 })
+		expect(notes[1].body).toBe('Vue is great. I love Vue.')
+		expect(patchNoteInList(notes, 'nope', 'Vue', 'x')).toMatchObject({ ok: false, reason: 'not_found' })
+		expect(patchNoteInList(notes, 'n1', '', 'x')).toMatchObject({ ok: false, reason: 'no_match' })
+	})
+
+	it('reports patch outcomes through the tool without mutating on refusal', async () => {
+		const master = masterWith([])
+		master.notes = [{ id: 'n1', title: 'Solo', body: 'I built X with Vue in 2024.', updatedAt: 0 }]
+		const tools = agentToolsFor({ id: 'j1', view: { experience: [] }, overrides: {} } as never, master, {
+			...mutate(),
+			patchNote: (id: string, search: string, replace: string) =>
+				patchNoteInList(master.notes, id, search, replace),
+		} as never)
+		const patch = tools.find((t) => t.name === 'patch_note')!
+		const res = await patch.execute('n-patch', { id: 'n1', search: 'with Vue', replace: 'with React' })
+		expect(res.details).toMatchObject({ id: 'n1' })
+		expect(master.notes[0].body).toBe('I built X with React in 2024.')
+		const multi = await patch.execute('n-patch-multi', { id: 'n1', search: ' ', replace: '-' })
+		expect(multi.details).toMatchObject({ error: true })
+		expect((multi.content[0] as { text: string }).text).toContain('Nothing was changed')
+		const badId = await patch.execute('n-patch-id', { id: 'nope', search: 'x', replace: 'y' })
+		expect(badId.details).toMatchObject({ error: true })
+		const emptySearch = await patch.execute('n-patch-empty', { id: 'n1', search: '', replace: 'y' })
+		expect(emptySearch.details).toMatchObject({ error: true })
 	})
 })

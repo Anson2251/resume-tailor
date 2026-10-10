@@ -1,6 +1,6 @@
 import { getChildren, getDefaultLeaf, getParent, type ChatThread } from './threads'
 
-export type PaneView = 'form' | 'preview' | 'letter' | 'agent' | 'jdpdf'
+export type PaneView = 'form' | 'preview' | 'letter' | 'agent' | 'jdpdf' | 'notes'
 
 export type PreviewTab = 'resume' | 'letter'
 

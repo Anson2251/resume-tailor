@@ -2,8 +2,8 @@ import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool } from '@earendil-works/pi-agent-core'
 import { CUSTOM_ITEM_FIELDS, SECTION_FIELDS, isSectionKey, readField } from '../data/resume'
 import { buildPreview } from '../data/workspace'
-import type { ContentItem, Job, MasterResume } from '../data/types'
-import { JD_CONTEXT_CHARS, truncate } from './context'
+import type { ContentItem, Job, MasterResume, MemoryNote } from '../data/types'
+import { JD_CONTEXT_CHARS, NOTE_BODY_CHARS, truncate } from './context'
 import { MANUAL_BODY_CHARS, MANUALS, getManual, manualBodyFor } from './manuals'
 
 export interface JobMutations {
@@ -13,6 +13,34 @@ export interface JobMutations {
 	setVisibility: (section: string, ids: string[]) => void
 	setTitle: (title: string) => void
 	setSummary: (summary: string) => void
+	saveNote: (note: { id?: string; title: string; body: string }) => MemoryNote | null
+	deleteNote: (id: string) => boolean
+	patchNote: (id: string, search: string, replace: string) => PatchResult
+}
+
+/** Outcome of a notebook string patch: exactly-one-match replaces, anything else refuses. */
+export type PatchResult =
+	| { ok: true; note: MemoryNote; beforeChars: number; afterChars: number }
+	| { ok: false; reason: 'not_found' | 'no_match' | 'multiple' | 'too_long'; matches: number }
+
+/**
+ * Exact-phrase patch on one note body. Pure (mutates the passed-in note on
+ * success) so the panel and tests share it: zero or 2+ matches refuse with
+ * the count, so the caller narrows the search string instead of guessing.
+ */
+export function patchNoteInList(notes: MemoryNote[], id: string, search: string, replace: string): PatchResult {
+	const note = notes.find((n) => n.id === id)
+	if (!note) return { ok: false, reason: 'not_found', matches: 0 }
+	if (!search) return { ok: false, reason: 'no_match', matches: 0 }
+	const matches = note.body.split(search).length - 1
+	if (matches === 0) return { ok: false, reason: 'no_match', matches: 0 }
+	if (matches > 1) return { ok: false, reason: 'multiple', matches }
+	const next = note.body.replace(search, replace)
+	if (next.length > 8000) return { ok: false, reason: 'too_long', matches: 1 }
+	const beforeChars = note.body.length
+	note.body = next
+	note.updatedAt = Date.now()
+	return { ok: true, note, beforeChars, afterChars: next.length }
 }
 
 const ok = (text: string, details: Record<string, unknown> = {}) => ({
@@ -357,10 +385,175 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 		},
 	}
 
+	const listNotes: AgentTool = {
+		name: 'list_notes',
+		label: 'List notes',
+		description:
+			'List the private notebook index: note ids, titles, and short previews. Call read_note for the full body of one.',
+		parameters: Type.Object({}),
+		execute: async () => {
+			const notes = master.notes || []
+			return ok(
+				JSON.stringify({
+					count: notes.length,
+					notes: notes.map((n) => ({
+						id: n.id,
+						title: n.title || '(untitled)',
+						preview: truncate(n.body || '', 120),
+						updatedAt: n.updatedAt || 0,
+					})),
+				}),
+				{ count: notes.length },
+			)
+		},
+	}
+
+	const findNote = (key: string): MemoryNote | undefined => {
+		const notes = master.notes || []
+		const clean = (key || '').trim()
+		if (!clean) return undefined
+		return notes.find((n) => n.id === clean) || notes.find((n) => (n.title || '').trim() === clean)
+	}
+
+	const readNote: AgentTool = {
+		name: 'read_note',
+		label: 'Read note',
+		description: 'Read one private notebook note by id or exact title. Use list_notes first to find it.',
+		parameters: Type.Object({ key: Type.String() }),
+		execute: async (_id, params) => {
+			const p = params as { key: string }
+			if (typeof p.key !== 'string' || !p.key.trim()) return err('key (id or title) is required.')
+			const note = findNote(p.key)
+			if (!note) return err(`No note found for "${p.key}". Call list_notes to see titles.`)
+			return ok(
+				JSON.stringify({
+					id: note.id,
+					title: note.title,
+					chars: (note.body || '').length,
+					body: truncate(note.body || '', NOTE_BODY_CHARS),
+				}),
+				{ id: note.id },
+			)
+		},
+	}
+
+	/** ~120-char snippet around the first query hit, for search results. */
+	function snippetFor(body: string, query: string, radius = 60): string {
+		const text = body || ''
+		const idx = text.toLowerCase().indexOf(query.toLowerCase())
+		if (idx === -1) return truncate(text, 120)
+		const start = Math.max(0, idx - radius)
+		const end = Math.min(text.length, idx + query.length + radius)
+		return `${start > 0 ? '…' : ''}${text.slice(start, end).trim()}${end < text.length ? '…' : ''}`
+	}
+
+	const searchNotes: AgentTool = {
+		name: 'search_notes',
+		label: 'Search notes',
+		description:
+			'Full-text search across private notebook titles and bodies. Returns matching notes with snippets — call read_note for the full body of one.',
+		parameters: Type.Object({ query: Type.String() }),
+		execute: async (_id, params) => {
+			const p = params as { query: string }
+			if (typeof p.query !== 'string' || !p.query.trim()) return err('query is required.')
+			const q = p.query.trim().toLowerCase()
+			const hits = (master.notes || []).filter((n) =>
+				`${n.title || ''}\n${n.body || ''}`.toLowerCase().includes(q),
+			)
+			return ok(
+				JSON.stringify({
+					query: p.query.trim(),
+					count: hits.length,
+					notes: hits.slice(0, 10).map((n) => ({
+						id: n.id,
+						title: n.title || '(untitled)',
+						matchedTitle: (n.title || '').toLowerCase().includes(q),
+						snippet: snippetFor(n.body || '', q),
+					})),
+				}),
+				{ count: hits.length },
+			)
+		},
+	}
+
+	const saveNote: AgentTool = {
+		name: 'save_note',
+		label: 'Save note',
+		description:
+			'Save background worth reusing to the private notebook (project why/background, learnings, career goals). Upserts by id, else by exact title match, else creates. Never invent facts — only save what the user told you.',
+		parameters: Type.Object({
+			title: Type.String(),
+			body: Type.String(),
+			id: Type.Optional(Type.String()),
+		}),
+		execute: async (_id, params) => {
+			const p = params as { title: string; body: string; id?: string }
+			if (typeof p.title !== 'string' || typeof p.body !== 'string') return err('title and body are required.')
+			if (!p.title.trim() && !p.body.trim()) return err('Empty note — nothing to save.')
+			if (p.title.length > 120) return err('Title is too long (max 120 chars).')
+			if (p.body.length > 8000) return err('Body is too long (max 8000 chars).')
+			const saved = mutate.saveNote({ id: p.id, title: p.title, body: p.body })
+			if (!saved) return err('Could not save the note.')
+			return ok(`Note saved: "${saved.title || '(untitled)'}".`, { id: saved.id })
+		},
+	}
+
+	const patchNote: AgentTool = {
+		name: 'patch_note',
+		label: 'Patch note',
+		description:
+			'Exact-phrase search-replace inside one private notebook note body. Fails when the search text is absent or matches more than once — then read the note and retry with a longer unique string.',
+		parameters: Type.Object({ id: Type.String(), search: Type.String(), replace: Type.String() }),
+		execute: async (_id, params) => {
+			const p = params as { id: string; search: string; replace: string }
+			if (typeof p.id !== 'string' || !p.id.trim()) return err('id is required (see list_notes).')
+			if (typeof p.search !== 'string' || !p.search) return err('search is required and must be non-empty.')
+			if (typeof p.replace !== 'string') return err('replace is required (use "" to delete the phrase).')
+			if (p.replace.length > 8000) return err('Replacement is too long (max 8000 chars).')
+			const res = mutate.patchNote(p.id.trim(), p.search, p.replace)
+			if (!res.ok) {
+				if (res.reason === 'multiple')
+					return err(
+						`Search text matches ${res.matches} times — retry with a longer unique string. Nothing was changed.`,
+					)
+				if (res.reason === 'no_match')
+					return err('Search text not found in that note. Call read_note to see its exact wording.')
+				if (res.reason === 'too_long')
+					return err('Patched body would exceed 8000 chars. Shorten the replacement or split the edit.')
+				return err(`No note found for "${p.id}". Call list_notes to see ids.`)
+			}
+			return ok(`Patched note "${res.note.title || '(untitled)'}" (${res.beforeChars} → ${res.afterChars} chars).`, {
+				id: res.note.id,
+				beforeChars: res.beforeChars,
+				afterChars: res.afterChars,
+			})
+		},
+	}
+
+	const deleteNote: AgentTool = {
+		name: 'delete_note',
+		label: 'Delete note',
+		description: 'Delete one private notebook note by id. Use list_notes first to find it.',
+		parameters: Type.Object({ id: Type.String() }),
+		execute: async (_id, params) => {
+			const p = params as { id: string }
+			if (typeof p.id !== 'string' || !p.id.trim()) return err('id is required.')
+			const done = mutate.deleteNote(p.id.trim())
+			if (!done) return err(`No note found for "${p.id}".`)
+			return ok('Note deleted.', { id: p.id.trim() })
+		},
+	}
+
 	return [
 		readResume,
 		readJd,
 		readManual,
+		listNotes,
+		readNote,
+		searchNotes,
+		saveNote,
+		patchNote,
+		deleteNote,
 		rewriteField,
 		updateTitle,
 		updateSummary,

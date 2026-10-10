@@ -27,6 +27,7 @@ import type {
 	CustomSection,
 	Job,
 	MasterResume,
+	MemoryNote,
 	OverridePatch,
 	PreviewContact,
 	PreviewResume,
@@ -356,6 +357,28 @@ function normalizeCustomSections(raw: any): CustomSection[] {
 		}))
 }
 
+/** Private notebook: freeform user-titled markdown notes for Mira. */
+function normalizeNotes(raw: any): MemoryNote[] {
+	if (!Array.isArray(raw)) return []
+	const clean: MemoryNote[] = []
+	const seen = new Set<string>()
+	for (const item of raw) {
+		if (!item || typeof item !== 'object') continue
+		const id = typeof item.id === 'string' && item.id && !seen.has(item.id) ? item.id : uid()
+		seen.add(id)
+		const title = typeof item.title === 'string' ? item.title.slice(0, 120) : ''
+		const body = typeof item.body === 'string' ? item.body.slice(0, 8000) : ''
+		if (!title.trim() && !body.trim()) continue
+		clean.push({
+			id,
+			title,
+			body,
+			updatedAt: typeof item.updatedAt === 'number' && Number.isFinite(item.updatedAt) ? item.updatedAt : 0,
+		})
+	}
+	return clean
+}
+
 /** Lift a normalized profile into a Job, preserving v3 fields when present. */
 function toJob(profile: Profile, raw: any): Job {
 	const conversations = normalizeConversations(raw)
@@ -437,6 +460,7 @@ export function normalizeWorkspace(ws: any): Workspace & WorkspaceV3 {
 		)
 	}
 	master.customSections = normalizeCustomSections(masterIn.customSections)
+	master.notes = normalizeNotes(masterIn.notes)
 
 	let profiles: Profile[] = Array.isArray(ws.jobs)
 		? ws.jobs.map((p: any, i: number) => normalizeProfile(master, p, i))
