@@ -288,7 +288,12 @@ async function loadRenderer(): Promise<void> {
 	await win.loadFile(path.join(__dirname, '../../dist/index.html'))
 }
 
-async function boot(): Promise<void> {
+let ipcRegistered = false
+
+/** One-time IPC wiring: ipcMain.handle throws on a second registration. */
+function registerAllIpc(): void {
+	if (ipcRegistered) return
+	ipcRegistered = true
 	registerDbIpc()
 	registerPdfIpc()
 	registerAgentIpc()
@@ -298,20 +303,47 @@ async function boot(): Promise<void> {
 		rendererReady = true
 		maybeRevealMain()
 	})
+}
 
-	await createSplashWindow()
-	createMainWindow()
-	// Theme the caption buttons before first paint from the stored theme.
-	// Touch the backend early so the SQLite/file store is ready for the renderer.
-	void getBackend()
-	peekStoredTheme().then((theme) => {
-		if (theme === 'light' || theme === 'dark') syncTitleBarOverlay(theme)
-	})
+let openingWindows = false
+let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 
-	// Safety net: never leave the user staring at the splash forever.
-	setTimeout(revealMain, 8000)
+/** Repeatable window open: first launch and macOS dock-icon re-open. */
+async function openWindows(): Promise<void> {
+	if (openingWindows) return
+	openingWindows = true
+	try {
+		// Fresh open state — stale flags from a previous close would otherwise
+		// leave the new windows stuck on (or skipping) the splash.
+		splashClosed = false
+		rendererReady = false
+		mainReadyToShow = false
+		if (fallbackTimer !== null) {
+			clearTimeout(fallbackTimer)
+			fallbackTimer = null
+		}
 
-	await loadRenderer()
+		await createSplashWindow()
+		createMainWindow()
+		// Theme the caption buttons before first paint from the stored theme.
+		// Touch the backend early so the SQLite/file store is ready for the renderer.
+		void getBackend()
+		peekStoredTheme().then((theme) => {
+			if (theme === 'light' || theme === 'dark') syncTitleBarOverlay(theme)
+		})
+
+		// Safety net: never leave the user staring at the splash forever.
+		fallbackTimer = setTimeout(revealMain, 8000)
+
+		await loadRenderer()
+	} finally {
+		openingWindows = false
+	}
+}
+
+async function boot(): Promise<void> {
+	registerAllIpc()
+	await openWindows()
 }
 
 // Single instance: focus the existing window instead of opening a second copy.
@@ -340,9 +372,10 @@ if (!app.requestSingleInstanceLock()) {
 
 	app.on('activate', () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
-			boot().catch((err) => {
-				console.error('[electron] boot failed:', err)
-				app.quit()
+			// macOS: closing the window doesn't quit the app, so a dock click
+			// re-opens windows without re-registering IPC (which would throw).
+			openWindows().catch((err) => {
+				console.error('[electron] re-open failed:', err)
 			})
 		} else if (mainWindow && !mainWindow.isVisible()) mainWindow.show()
 	})
