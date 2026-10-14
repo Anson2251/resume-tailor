@@ -126,6 +126,7 @@ function testMutate(seen: { overrides: [string, Record<string, string | boolean>
 		applyOverride: (itemId, patch) => {
 			seen.overrides.push([itemId, patch])
 		},
+		addItem: () => null,
 		setCoverLetter: () => {},
 		setLetterField: () => {},
 		setVisibility: () => {},
@@ -174,6 +175,8 @@ it('streams a real pi-ai request with the keyring key', async () => {
 			'read_resume',
 			'read_jd',
 			'propose_bullet_rewrite',
+			'add_experience_item',
+			'add_project_item',
 			'update_title',
 			'update_summary',
 			'update_cover_letter',

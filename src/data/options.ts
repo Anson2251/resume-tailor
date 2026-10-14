@@ -15,6 +15,34 @@ export const TEMPLATES: TemplateOption[] = [
 /** The body can flow in 1 or 2 columns (per profile). */
 export const COLUMNS: number[] = [1, 2]
 
+/** Paper size for the exported page (per profile; the letter has its own). */
+export type PaperSize = 'a4' | 'letter'
+
+export const DEFAULT_PAPER_SIZE: PaperSize = 'a4'
+
+export const PAPER_SIZE_IDS: PaperSize[] = ['a4', 'letter']
+
+export interface PaperSizeOption {
+	id: PaperSize
+	name: string
+	hint: string
+}
+
+export const PAPER_SIZES: PaperSizeOption[] = [
+	{ id: 'a4', name: 'A4', hint: '210 × 297 mm' },
+	{ id: 'letter', name: 'Letter', hint: '8.5 × 11 in (216 × 279 mm)' },
+]
+
+/** Clamp a raw value to a known paper size, falling back to the default. */
+export function normalizePaperSize(value: unknown): PaperSize {
+	return value === 'letter' ? 'letter' : DEFAULT_PAPER_SIZE
+}
+
+/** Short label for the Style popover trigger (e.g. "A4" or "Letter"). */
+export function paperSizeLabel(value: unknown): string {
+	return (PAPER_SIZES.find((p) => p.id === normalizePaperSize(value)) ?? PAPER_SIZES[0]).name
+}
+
 /** Resume spacing scale (per profile). 1 = normal; <1 compacts, >1 loosens. */
 export const DEFAULT_DENSITY = 1
 export const MIN_DENSITY = 0.7

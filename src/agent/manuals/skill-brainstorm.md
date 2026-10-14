@@ -48,19 +48,19 @@ Ask 3–5 concrete questions, not "tell me more". Pick from the banks below base
 
 For each confirmed fact, propose the smallest fitting home:
 
-| Raw fact | Home |
-|---|---|
-| Sustained role with dates and duties | Experience entry |
-| Built thing with a stack and outcome | Project entry |
-| Course, degree, cert, workshop | Education or custom section |
-| Tool / language / method usable solo | Skills group |
+| Raw fact                                 | Home                                  |
+| ---------------------------------------- | ------------------------------------- |
+| Sustained role with dates and duties     | Experience entry                      |
+| Built thing with a stack and outcome     | Project entry                         |
+| Course, degree, cert, workshop           | Education or custom section           |
+| Tool / language / method usable solo     | Skills group                          |
 | One-off talk, award, language, clearance | Custom section (Awards, Languages, …) |
 
 Tell the user the mapping explicitly ("this becomes a project entry; that becomes a skill line") and what is still missing (dates, metrics, employer names).
 
 ### Step 4: Draft only after confirmation
 
-- Once the user confirms facts, draft concise markdown bullets via `propose_bullet_rewrite` (existing items) or tell them the exact fields to create in the form (new items — you cannot create entries, only rewrite fields).
+- Once the user confirms facts, draft concise markdown bullets via `propose_bullet_rewrite` (existing items) or create the entry directly with `add_experience_item` / `add_project_item` (new experience/project — user-confirmed facts only). For other new items (education, skills, custom sections), tell them the exact fields to create in the form.
 - Mark anything unconfirmed as `[needs your input]` rather than smoothing over it.
 
 ## Output format

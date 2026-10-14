@@ -5,7 +5,7 @@ description: Write a tailored, evidence-driven cover letter for a specific job p
 
 # Cover Letter Writer
 
-A cover letter is a one-page argument that says: *you [specific candidate] are a good fit for this [specific role] because [specific evidence].* It is not a resume in prose. It is not a formality. It is the bridge between a resume and an interview, and it is the only document in an application where the candidate gets to narrate *why* and *how* — not just *what*.
+A cover letter is a one-page argument that says: _you [specific candidate] are a good fit for this [specific role] because [specific evidence]._ It is not a resume in prose. It is not a formality. It is the bridge between a resume and an interview, and it is the only document in an application where the candidate gets to narrate _why_ and _how_ — not just _what_.
 
 Your job is to produce a cover letter that a busy hiring manager will actually finish, that connects the candidate's real experience to the employer's stated needs, and that sounds like a human wrote it on purpose.
 
@@ -37,13 +37,14 @@ Read the posting twice. First for the gist, second for the specifics.
 
 Build an employer wish list — a table works well:
 
-| What they're asking for | Where it appears in the posting |
-|---|---|
-| Attention to detail | "highly detail-oriented individuals" |
-| Customer-facing warmth | "friendly faces," "keep the customer in mind" |
-| Independent work | "minimal supervision" |
+| What they're asking for | Where it appears in the posting               |
+| ----------------------- | --------------------------------------------- |
+| Attention to detail     | "highly detail-oriented individuals"          |
+| Customer-facing warmth  | "friendly faces," "keep the customer in mind" |
+| Independent work        | "minimal supervision"                         |
 
 Pay attention to:
+
 - **Explicit requirements** — "you'll do," "we're looking for"
 - **Implied skills** — a role that says "works with cross-functional teams" implies communication and stakeholder management
 - **Tone and register** — a startup posting might say "move fast"; a university posting might say "collegial." Match it.
@@ -51,14 +52,14 @@ Pay attention to:
 
 ### Step 3: Match experiences to requirements
 
-For each item on the wish list, find the strongest piece of evidence from the candidate's background. Not the most impressive experience — the most *relevant* one.
+For each item on the wish list, find the strongest piece of evidence from the candidate's background. Not the most impressive experience — the most _relevant_ one.
 
-| Job requirement | Evidence that I meet it |
-|---|---|
+| Job requirement     | Evidence that I meet it                          |
+| ------------------- | ------------------------------------------------ |
 | Attention to detail | Citation management across 40+ sources in thesis |
-| Warm and friendly | TA for 25 students per term; strong evals |
-| Minimal supervision | Independent research project |
-| Neat and tidy | Organized departmental journal archive |
+| Warm and friendly   | TA for 25 students per term; strong evals        |
+| Minimal supervision | Independent research project                     |
+| Neat and tidy       | Organized departmental journal archive           |
 
 If evidence is missing for a key requirement, flag it to the user rather than inventing it. Options: draw a partial analogy from another experience, or note the gap and let the user decide how to address it.
 
@@ -72,7 +73,7 @@ Use this structure. Length: one page. Three to four paragraphs. Anything longer 
 - **Hook** — a specific reason for applying that shows research or genuine connection. Not "I am passionate about libraries." Yes: "As a weekly patron of the WPL's main branch, I've seen firsthand how the shelving team shapes the browsing experience."
 - **Thesis** — one sentence stating the fit. "My background in X and Y makes me a strong candidate to contribute to Z."
 
-If you think of the letter like a research paper, the opening is the hypothesis: *candidate X is right for job Y because Z.*
+If you think of the letter like a research paper, the opening is the hypothesis: _candidate X is right for job Y because Z._
 
 #### Body (one to two paragraphs)
 
@@ -106,6 +107,7 @@ Notice the difference from the "telling" version:
 ### Step 5: Review against the posting
 
 Read the draft with the posting open next to it. For each line, ask:
+
 - Does this echo the posting's language or values?
 - Does this demonstrate a skill they asked for?
 - Would a skim-reader (first and last sentence of each paragraph) get the gist?
@@ -119,12 +121,14 @@ If the answer to any is no, revise.
 Both work. Pick whichever fits the candidate's voice and the role.
 
 **Research paper approach:**
+
 - Hypothesis: candidate X is right for job Y because Z
 - Show the correlation between X and Y
 - The "variables" are the candidate's interests, values, skills, experiences
 - Best for analytical roles, academic-adjacent roles, or candidates who think in structured terms
 
 **Creative writing approach:**
+
 - Set the context; create a scene
 - Who are the actors? What actions did the candidate take? What skills did they use? What was the result?
 - Best for storytelling-heavy fields, or when the candidate has a compelling narrative (career change, personal connection to the mission, unusual path)
@@ -132,6 +136,7 @@ Both work. Pick whichever fits the candidate's voice and the role.
 ### Tone
 
 Match the posting. A law firm and a game studio do not want the same voice. But keep these constant across all letters:
+
 - Active voice
 - First person ("I," not "the candidate")
 - No jargon that isn't in the posting
@@ -148,6 +153,7 @@ Users applying to multiple jobs shouldn't write from scratch each time. Instead:
 4. **Mirror the posting's vocabulary** in the opening and closing at minimum.
 
 This keeps quality high while respecting the user's time. Tailoring depth should scale with job priority:
+
 - **High priority** (strong alignment with goals): full rewrite, deep research, custom body
 - **Mid priority** (appealing, partial alignment): Lego approach with 1–2 fresh paragraphs
 - **Low priority** (minimal alignment): reuse template, tweak opening and keywords
@@ -166,9 +172,9 @@ Hooks that don't: "I've always been passionate about..." "Your company is a lead
 Cover letters surface things that are private. Handle them with care.
 
 - **Disclosure is a choice, not a requirement.** Candidates never have to explain gaps, disabilities, or personal history in a cover letter. If the user brings up disclosure, note that accommodations are requested through HR, not in the letter, and point to protected grounds under human rights codes when relevant.
-- **Gaps and career changes.** Treat them as narrative, not apology. A career change letter should explain the *pull* toward the new field, not apologize for leaving the old one. A gap can be addressed briefly if the user wants, but doesn't have to be.
+- **Gaps and career changes.** Treat them as narrative, not apology. A career change letter should explain the _pull_ toward the new field, not apologize for leaving the old one. A gap can be addressed briefly if the user wants, but doesn't have to be.
 - **Overqualification.** If a candidate is "too senior," the letter should name the intent directly — "I am looking to move from X into Y because..." — rather than pretending the experience isn't there.
-- **Cultural fit vs. groupthink.** "Cultural fit" can be a coded way of excluding people. When matching tone, match the *work style* the posting describes (fast-paced, collaborative, autonomous), not demographic vibe.
+- **Cultural fit vs. groupthink.** "Cultural fit" can be a coded way of excluding people. When matching tone, match the _work style_ the posting describes (fast-paced, collaborative, autonomous), not demographic vibe.
 
 If the user shares something vulnerable — a layoff, a health issue, a reentry — acknowledge it briefly, then help them decide whether and how to include it. They own that decision.
 
@@ -215,6 +221,7 @@ Respectfully,
 ```
 
 Alongside the letter, provide a short note to the user (outside the letter itself) covering:
+
 - Which requirements from the posting the letter addresses, and which it doesn't
 - Any gaps where the candidate lacked evidence — so they can decide how to handle them
 - One or two suggestions for tailoring further if they apply to similar roles

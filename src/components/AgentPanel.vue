@@ -37,8 +37,8 @@ import { useAgentChat } from '../agent/useAgentChat'
 import { confirmDialog } from '../data/dialogs'
 import AutoScrollWrapper from './AutoScrollWrapper.vue'
 import StreamMarkdown from './StreamMarkdown.vue'
-import { writeField } from '../data/resume'
-import type { ContentItem, Job, MasterResume } from '../data/types'
+import { writeField, uid } from '../data/resume'
+import type { ContentItem, ExperienceItem, Job, MasterResume, ProjectItem } from '../data/types'
 
 const props = defineProps<{
 	job: Job
@@ -121,7 +121,8 @@ const activeProviderName = computed(
 	() => listProviders().find((p) => p.value === settings.provider)?.name ?? settings.provider,
 )
 
-function findMasterItem(id: string): ContentItem | undefined {	for (const key of ['experience', 'projects', 'education', 'skills'] as const) {
+function findMasterItem(id: string): ContentItem | undefined {
+	for (const key of ['experience', 'projects', 'education', 'skills'] as const) {
 		const found = props.master[key].find((item) => item.id === id)
 		if (found) return found
 	}
@@ -162,6 +163,40 @@ const chat = useAgentChat(
 		},
 		setSummary: (summary) => {
 			props.job.summary = summary
+		},
+		addItem: (section, fields) => {
+			const text = (value: unknown): string => (typeof value === 'string' ? value : '')
+			const id = uid()
+			if (section === 'experience') {
+				const item: ExperienceItem = {
+					id,
+					role: text(fields.role),
+					company: text(fields.company),
+					location: text(fields.location),
+					startDate: text(fields.startDate),
+					endDate: text(fields.endDate),
+					current: fields.current === true,
+					bullets: text(fields.bullets),
+				}
+				props.master.experience.push(item)
+			} else if (section === 'projects') {
+				const item: ProjectItem = {
+					id,
+					name: text(fields.name),
+					link: text(fields.link),
+					tech: text(fields.tech),
+					startDate: text(fields.startDate),
+					endDate: text(fields.endDate),
+					bullets: text(fields.bullets),
+				}
+				props.master.projects.push(item)
+			} else {
+				return null
+			}
+			// Show the new item on the active job, at the end of the section (App addItem parity).
+			const view = props.job.view[section]
+			if (Array.isArray(view) && !view.includes(id)) view.push(id)
+			return id
 		},
 		saveNote: ({ id, title, body }) => {
 			const notes = (props.master.notes ??= [])
@@ -319,21 +354,23 @@ function siblingOf(id: string): { ids: string[]; index: number } | null {
 
 /** Human labels for the agent tool loadout (wisp-pro displayName parity). */
 const TOOL_LABELS: Record<string, string> = {
-	read_resume: "Checking out your resume",
-	read_jd: "Sizing up the job post",
-	read_manual: "Peeking at the rulebook",
-	propose_bullet_rewrite: "Jazzing up a bullet",
-	update_title: "Slapping on a fancier title",
-	update_summary: "Sprucing up your summary",
-	update_cover_letter: "Whipping up a cover letter",
-	update_letter_field: "Tweaking the letter",
-	set_visibility: "Flipping some switches",
-	list_notes: "Digging through my notes",
-	read_note: "Oh right, finding that thing",
-	patch_note: "Scribbling in the margins",
-	search_notes: "Ctrl+F-ing my brain",
-	save_note: "Jotting this down for later",
-	delete_note: "Yeeting this from memory",
+	read_resume: 'Checking out your resume',
+	read_jd: 'Sizing up the job post',
+	read_manual: 'Peeking at the rulebook',
+	propose_bullet_rewrite: 'Jazzing up a bullet',
+	add_experience_item: 'Adding a new role',
+	add_project_item: 'Adding a new project',
+	update_title: 'Slapping on a fancier title',
+	update_summary: 'Sprucing up your summary',
+	update_cover_letter: 'Whipping up a cover letter',
+	update_letter_field: 'Tweaking the letter',
+	set_visibility: 'Flipping some switches',
+	list_notes: 'Digging through my notes',
+	read_note: 'Oh right, finding that thing',
+	patch_note: 'Scribbling in the margins',
+	search_notes: 'Ctrl+F-ing my brain',
+	save_note: 'Jotting this down for later',
+	delete_note: 'Yeeting this from memory',
 }
 
 function toolLabel(name: string): string {
@@ -536,12 +573,11 @@ function saveEdit(id: string): void {
 				{{ isConfigured ? `Add your ${activeProviderName} key to use Mira` : 'Set up Mira to start tailoring' }}
 			</h3>
 			<p v-if="isConfigured" class="max-w-72 text-xs leading-relaxed text-body-subtle">
-				Mira brings the models — you bring the key (BYOK). Keys stay in your OS keychain on desktop,
-				and in this session only on web. Nothing is saved in your workspace.
+				Mira brings the models — you bring the key (BYOK). Keys stay in your OS keychain on desktop, and in this session
+				only on web. Nothing is saved in your workspace.
 			</p>
 			<p v-else class="max-w-72 text-xs leading-relaxed text-body-subtle">
-				Pick a provider and model in Settings, then add its API key. Mira brings the models — you bring
-				the key (BYOK).
+				Pick a provider and model in Settings, then add its API key. Mira brings the models — you bring the key (BYOK).
 			</p>
 			<div class="no-print flex items-center gap-2">
 				<FwbButton size="sm" @click="emit('open-settings')">Open settings</FwbButton>
@@ -551,169 +587,183 @@ function saveEdit(id: string): void {
 			</div>
 		</div>
 		<template v-else>
-		<div class="flex min-h-0 flex-1 flex-col gap-2">
-			<AutoScrollWrapper ref="scroller" class="min-h-0 flex-1">
-				<div class="flex flex-col gap-2">
-					<div
-						v-for="(group, gi) in groups"
-						:key="group.key"
-						class="group flex items-end gap-1"
-						:class="group.kind === 'user' ? 'self-end' : 'w-full'"
-					>
-						<button
-							v-if="group.kind === 'user' && editingId !== group.msgs[0].id"
-							class="no-print mb-1 shrink-0 rounded px-1.5 py-0.5 text-[13px] text-body-subtle opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-neutral-tertiary"
-							title="Edit and resend"
-							:disabled="chat.sending.value"
-							@click="startEdit(group.msgs[0].id)"
-							square
+			<div class="flex min-h-0 flex-1 flex-col gap-2">
+				<AutoScrollWrapper ref="scroller" class="min-h-0 flex-1">
+					<div class="flex flex-col gap-2">
+						<div
+							v-for="(group, gi) in groups"
+							:key="group.key"
+							class="group flex items-end gap-1"
+							:class="group.kind === 'user' ? 'self-end' : 'w-full'"
 						>
-							<Icon size="16"><Edit16Regular /></Icon>
-						</button>
-						<div v-if="group.kind === 'user'" class="min-w-0 rounded-lg bg-brand px-3 py-2 text-sm text-white">
-							<template v-if="editingId === group.msgs[0].id">
-								<FwbTextarea
-									v-model="editDraft"
-									class="mb-1"
-									:rows="3"
-									:disabled="chat.sending.value"
-									@keyup.escape="cancelEdit"
-								/>
-								<div class="no-print flex justify-end gap-1">
-									<button
-										class="inline-flex items-center justify-center rounded-lg px-2 py-0.5 text-xs font-medium text-white transition hover:bg-white/10"
-										@click="cancelEdit"
-									>
-										Cancel
-									</button>
-									<button
-										class="inline-flex items-center justify-center rounded-lg bg-white px-2 py-0.5 text-xs font-medium text-fg-brand transition hover:bg-brand-softer disabled:opacity-60"
-										:disabled="!editDraft.trim() || chat.sending.value"
-										@click="saveEdit(group.msgs[0].id)"
-									>
-										Save & resend
-									</button>
-								</div>
-							</template>
-							<pre v-else class="whitespace-pre-wrap">{{ group.msgs[0].text || '…' }}</pre>
-						</div>
-						<div v-else class="w-full min-w-0 px-1 py-1.5 text-sm text-heading">
-							<div class="flex flex-col gap-1">
-								<div v-for="(msg, mi) in group.msgs" :key="msg.id" class="flex min-w-0 flex-col gap-1.5">
-									<details
-										v-if="msg.reasoning?.trim()"
-										class="rounded-md border border-default bg-neutral-secondary px-2 py-1.5 text-[13px]"
-										:open="chat.sending.value && gi === groups.length - 1 && mi === group.msgs.length - 1"
-									>
-										<summary class="flex cursor-pointer list-none items-center gap-1.5">
-											<span
-												class="inline-flex"
-												:ref="(el) => setBrainEl(msg.id, el)"
-												@mouseenter="brainHoverStart(msg.id)"
-												@mouseleave="brainHoverEnd(msg.id)"
-											>
-												<Icon size="16" aria-hidden="true"><BrainCircuit20Regular /></Icon>
-											</span>
-											<span class="min-w-0 flex-1 truncate font-medium">Thinking</span>
-											<span
-												v-if="chat.sending.value && gi === groups.length - 1 && mi === group.msgs.length - 1"
-												class="shrink-0 rounded-full bg-brand-soft px-1.5 py-0.5 text-[11px] text-fg-brand"
-												>Thinking…</span
-											>
-										</summary>
-										<StreamMarkdown :text="msg.reasoning!" :streaming="chat.sending.value" class="mt-1.5" />
-									</details>
-									<StreamMarkdown v-if="msg.text.trim()" :text="msg.text" :streaming="chat.sending.value" />
-									<div v-if="msg.toolCalls?.length" class="flex flex-col gap-1.5">
+							<button
+								v-if="group.kind === 'user' && editingId !== group.msgs[0].id"
+								class="no-print mb-1 shrink-0 rounded px-1.5 py-0.5 text-[13px] text-body-subtle opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-neutral-tertiary"
+								title="Edit and resend"
+								:disabled="chat.sending.value"
+								@click="startEdit(group.msgs[0].id)"
+								square
+							>
+								<Icon size="16"><Edit16Regular /></Icon>
+							</button>
+							<div v-if="group.kind === 'user'" class="min-w-0 rounded-lg bg-brand px-3 py-2 text-sm text-white">
+								<template v-if="editingId === group.msgs[0].id">
+									<FwbTextarea
+										v-model="editDraft"
+										class="mb-1"
+										:rows="3"
+										:disabled="chat.sending.value"
+										@keyup.escape="cancelEdit"
+									/>
+									<div class="no-print flex justify-end gap-1">
+										<button
+											class="inline-flex items-center justify-center rounded-lg px-2 py-0.5 text-xs font-medium text-white transition hover:bg-white/10"
+											@click="cancelEdit"
+										>
+											Cancel
+										</button>
+										<button
+											class="inline-flex items-center justify-center rounded-lg bg-white px-2 py-0.5 text-xs font-medium text-fg-brand transition hover:bg-brand-softer disabled:opacity-60"
+											:disabled="!editDraft.trim() || chat.sending.value"
+											@click="saveEdit(group.msgs[0].id)"
+										>
+											Save & resend
+										</button>
+									</div>
+								</template>
+								<pre v-else class="whitespace-pre-wrap">{{ group.msgs[0].text || '…' }}</pre>
+							</div>
+							<div v-else class="w-full min-w-0 px-1 py-1.5 text-sm text-heading">
+								<div class="flex flex-col gap-1">
+									<div v-for="(msg, mi) in group.msgs" :key="msg.id" class="flex min-w-0 flex-col gap-1.5">
 										<details
-											v-for="tool in msg.toolCalls"
-											:key="tool.id"
-											class="rounded-md border px-2 py-1.5 text-[13px]"
-											:class="
-												tool.isError
-													? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40'
-													: 'border-emerald-300/60 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'
-											"
+											v-if="msg.reasoning?.trim()"
+											class="rounded-md border border-default bg-neutral-secondary px-2 py-1.5 text-[13px]"
+											:open="chat.sending.value && gi === groups.length - 1 && mi === group.msgs.length - 1"
 										>
 											<summary class="flex cursor-pointer list-none items-center gap-1.5">
-												<Icon size="16" aria-hidden="true"><Toolbox16Regular /></Icon>
-												<span class="min-w-0 flex-1 truncate font-medium">{{ toolLabel(tool.name) }}</span>
 												<span
-													class="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px]"
-													:class="
-														toolStatus(tool) === 'running' || toolStatus(tool) === 'drafting'
-															? 'bg-brand-soft text-fg-brand'
-															: toolStatus(tool) === 'ok'
-																? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200'
-																: toolStatus(tool) === 'interrupted'
-																	? 'bg-neutral-quaternary text-body'
-																	: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200'
-													"
-													><span
-														v-if="toolStatus(tool) === 'running' || toolStatus(tool) === 'drafting'"
-														class="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-current border-t-transparent"
-														aria-hidden="true"
-													></span
-													>{{
-														toolStatus(tool) === 'running'
-															? 'Running…'
-															: toolStatus(tool) === 'drafting'
-																? 'Preparing…'
-																: toolStatus(tool) === 'ok'
-																	? 'OK'
-																	: toolStatus(tool) === 'interrupted'
-																		? 'Interrupted'
-																		: 'Error'
-													}}</span
+													class="inline-flex"
+													:ref="(el) => setBrainEl(msg.id, el)"
+													@mouseenter="brainHoverStart(msg.id)"
+													@mouseleave="brainHoverEnd(msg.id)"
+												>
+													<Icon size="16" aria-hidden="true"><BrainCircuit20Regular /></Icon>
+												</span>
+												<span class="min-w-0 flex-1 truncate font-medium">Thinking</span>
+												<span
+													v-if="chat.sending.value && gi === groups.length - 1 && mi === group.msgs.length - 1"
+													class="shrink-0 rounded-full bg-brand-soft px-1.5 py-0.5 text-[11px] text-fg-brand"
+													>Thinking…</span
 												>
 											</summary>
-											<div v-if="tool.args" class="mt-1.5">
-												<span class="text-xs font-medium text-body-subtle">Args:</span>
+											<StreamMarkdown :text="msg.reasoning!" :streaming="chat.sending.value" class="mt-1.5" />
+										</details>
+										<StreamMarkdown v-if="msg.text.trim()" :text="msg.text" :streaming="chat.sending.value" />
+										<div v-if="msg.toolCalls?.length" class="flex flex-col gap-1.5">
+											<details
+												v-for="tool in msg.toolCalls"
+												:key="tool.id"
+												class="rounded-md border px-2 py-1.5 text-[13px]"
+												:class="
+													tool.isError
+														? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40'
+														: 'border-emerald-300/60 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'
+												"
+											>
+												<summary class="flex cursor-pointer list-none items-center gap-1.5">
+													<Icon size="16" aria-hidden="true"><Toolbox16Regular /></Icon>
+													<span class="min-w-0 flex-1 truncate font-medium">{{ toolLabel(tool.name) }}</span>
+													<span
+														class="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px]"
+														:class="
+															toolStatus(tool) === 'running' || toolStatus(tool) === 'drafting'
+																? 'bg-brand-soft text-fg-brand'
+																: toolStatus(tool) === 'ok'
+																	? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200'
+																	: toolStatus(tool) === 'interrupted'
+																		? 'bg-neutral-quaternary text-body'
+																		: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200'
+														"
+														><span
+															v-if="toolStatus(tool) === 'running' || toolStatus(tool) === 'drafting'"
+															class="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-current border-t-transparent"
+															aria-hidden="true"
+														></span
+														>{{
+															toolStatus(tool) === 'running'
+																? 'Running…'
+																: toolStatus(tool) === 'drafting'
+																	? 'Preparing…'
+																	: toolStatus(tool) === 'ok'
+																		? 'OK'
+																		: toolStatus(tool) === 'interrupted'
+																			? 'Interrupted'
+																			: 'Error'
+														}}</span
+													>
+												</summary>
+												<div v-if="tool.args" class="mt-1.5">
+													<span class="text-xs font-medium text-body-subtle">Args:</span>
+													<JsonTreeView
+														v-if="toolArgsJson(tool.args)"
+														:json="toolArgsJson(tool.args)!"
+														rootKey="args"
+														:maxDepth="2"
+														:colorScheme="isDarkTree ? 'dark' : 'light'"
+														class="mt-1 max-h-48 overflow-y-auto rounded bg-black/5 p-2 text-xs dark:bg-white/5"
+													/>
+													<code v-else class="break-all text-xs text-body-subtle">{{ tool.args }}</code>
+												</div>
 												<JsonTreeView
-													v-if="toolArgsJson(tool.args)"
-													:json="toolArgsJson(tool.args)!"
-													rootKey="args"
+													v-if="toolResultJson(tool.result)"
+													:json="toolResultJson(tool.result)!"
+													:rootKey="tool.name"
 													:maxDepth="2"
 													:colorScheme="isDarkTree ? 'dark' : 'light'"
-													class="mt-1 max-h-48 overflow-y-auto rounded bg-black/5 p-2 text-xs dark:bg-white/5"
+													class="mt-1.5 max-h-48 overflow-y-auto rounded bg-black/5 p-2 text-xs dark:bg-white/5"
 												/>
-												<code v-else class="break-all text-xs text-body-subtle">{{ tool.args }}</code>
-											</div>
-											<JsonTreeView
-												v-if="toolResultJson(tool.result)"
-												:json="toolResultJson(tool.result)!"
-												:rootKey="tool.name"
-												:maxDepth="2"
-												:colorScheme="isDarkTree ? 'dark' : 'light'"
-												class="mt-1.5 max-h-48 overflow-y-auto rounded bg-black/5 p-2 text-xs dark:bg-white/5"
-											/>
-											<pre
-												v-else-if="tool.result"
-												class="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/5 p-2 text-xs dark:bg-white/5"
-												>{{ tool.result }}</pre>
-											<p v-else-if="tool.status === 'running'" class="mt-1.5 text-xs text-body-subtle">
-												{{ chat.sending.value ? 'Running…' : 'Interrupted before a result arrived.' }}
-											</p>
-											<p v-else-if="tool.status === 'drafting'" class="mt-1.5 text-xs text-body-subtle">
-												{{
-													chat.sending.value ? 'Composing the call arguments…' : 'Interrupted before the call was sent.'
-												}}
-											</p>
-											<button
-												v-if="tool.name === 'update_cover_letter' || tool.name === 'update_letter_field'"
-												type="button"
-												class="no-print mt-1.5 rounded px-1.5 py-0.5 text-xs font-medium text-fg-brand hover:bg-brand-softer"
-												@click="emit('open-letter')"
-											>
-												Review in Cover letter pane →
-											</button>
-										</details>
+												<pre
+													v-else-if="tool.result"
+													class="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded bg-black/5 p-2 text-xs dark:bg-white/5"
+													>{{ tool.result }}</pre>
+												<p v-else-if="tool.status === 'running'" class="mt-1.5 text-xs text-body-subtle">
+													{{ chat.sending.value ? 'Running…' : 'Interrupted before a result arrived.' }}
+												</p>
+												<p v-else-if="tool.status === 'drafting'" class="mt-1.5 text-xs text-body-subtle">
+													{{
+														chat.sending.value
+															? 'Composing the call arguments…'
+															: 'Interrupted before the call was sent.'
+													}}
+												</p>
+												<button
+													v-if="tool.name === 'update_cover_letter' || tool.name === 'update_letter_field'"
+													type="button"
+													class="no-print mt-1.5 rounded px-1.5 py-0.5 text-xs font-medium text-fg-brand hover:bg-brand-softer"
+													@click="emit('open-letter')"
+												>
+													Review in Cover letter pane →
+												</button>
+											</details>
+										</div>
 									</div>
 								</div>
-							</div>
-							<span v-if="!groupHasContent(group) && gi === groups.length - 1">
+								<span v-if="!groupHasContent(group) && gi === groups.length - 1">
+									<span
+										v-if="chat.sending.value"
+										class="typing-indicator text-body-subtle"
+										role="status"
+										aria-label="Waiting for reply"
+									>
+										<span class="typing-dot"></span>
+										<span class="typing-dot"></span>
+										<span class="typing-dot"></span>
+									</span>
+									<span v-else class="text-body-subtle">…</span>
+								</span>
 								<span
-									v-if="chat.sending.value"
+									v-else-if="gi === groups.length - 1 && chat.sending.value && !chat.assistantStreaming.value"
 									class="typing-indicator text-body-subtle"
 									role="status"
 									aria-label="Waiting for reply"
@@ -722,199 +772,188 @@ function saveEdit(id: string): void {
 									<span class="typing-dot"></span>
 									<span class="typing-dot"></span>
 								</span>
-								<span v-else class="text-body-subtle">…</span>
-							</span>
-							<span
-								v-else-if="gi === groups.length - 1 && chat.sending.value && !chat.assistantStreaming.value"
-								class="typing-indicator text-body-subtle"
-								role="status"
-								aria-label="Waiting for reply"
-							>
-								<span class="typing-dot"></span>
-								<span class="typing-dot"></span>
-								<span class="typing-dot"></span>
-							</span>
-							<div
-								class="no-print mt-1 flex items-center gap-1 text-[13px] text-body-subtle opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"
-							>
-								<template v-if="siblingOf(group.msgs[0].id) && siblingOf(group.msgs[0].id)!.ids.length > 1">
-									<button
-										class="rounded px-1.5 py-0.5 hover:bg-black/10 dark:hover:bg-white/10"
-										title="Previous version"
-										:disabled="chat.sending.value"
-										@click="cycleAt(group.msgs[0].id, -1)"
-										square
-									>
-										<Icon size="16"><ChevronLeft16Regular /></Icon>
-									</button>
-									<span class="tabular-nums"
-										>{{ siblingOf(group.msgs[0].id)!.index + 1 }}/{{ siblingOf(group.msgs[0].id)!.ids.length }}</span
-									>
-									<button
-										class="rounded px-1.5 py-0.5 hover:bg-black/10 dark:hover:bg-white/10"
-										title="Next version"
-										:disabled="chat.sending.value"
-										@click="cycleAt(group.msgs[0].id, 1)"
-										square
-									>
-										<Icon size="16"><ChevronRight16Regular /></Icon>
-									</button>
-									<span class="mx-0.5">·</span>
-								</template>
-								<button
-									v-if="groupHasContent(group)"
-									class="rounded px-1.5 py-0.5 hover:bg-neutral-tertiary"
-									title="Regenerate this reply"
-									:disabled="chat.sending.value"
-									@click="void chat.regenerate(group.msgs[0].id)"
-									square
+								<div
+									class="no-print mt-1 flex items-center gap-1 text-[13px] text-body-subtle opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"
 								>
-									<Icon size="16"><ArrowClockwise16Regular /></Icon>
-								</button>
+									<template v-if="siblingOf(group.msgs[0].id) && siblingOf(group.msgs[0].id)!.ids.length > 1">
+										<button
+											class="rounded px-1.5 py-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+											title="Previous version"
+											:disabled="chat.sending.value"
+											@click="cycleAt(group.msgs[0].id, -1)"
+											square
+										>
+											<Icon size="16"><ChevronLeft16Regular /></Icon>
+										</button>
+										<span class="tabular-nums"
+											>{{ siblingOf(group.msgs[0].id)!.index + 1 }}/{{ siblingOf(group.msgs[0].id)!.ids.length }}</span
+										>
+										<button
+											class="rounded px-1.5 py-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+											title="Next version"
+											:disabled="chat.sending.value"
+											@click="cycleAt(group.msgs[0].id, 1)"
+											square
+										>
+											<Icon size="16"><ChevronRight16Regular /></Icon>
+										</button>
+										<span class="mx-0.5">·</span>
+									</template>
+									<button
+										v-if="groupHasContent(group)"
+										class="rounded px-1.5 py-0.5 hover:bg-neutral-tertiary"
+										title="Regenerate this reply"
+										:disabled="chat.sending.value"
+										@click="void chat.regenerate(group.msgs[0].id)"
+										square
+									>
+										<Icon size="16"><ArrowClockwise16Regular /></Icon>
+									</button>
+								</div>
 							</div>
 						</div>
+						<p v-if="!chat.messages.value.length" class="text-sm text-body-subtle">
+							Ask to tailor a bullet, draft the cover letter, or critique the resume against the JD.
+						</p>
 					</div>
-					<p v-if="!chat.messages.value.length" class="text-sm text-body-subtle">
-						Ask to tailor a bullet, draft the cover letter, or critique the resume against the JD.
-					</p>
-				</div>
-			</AutoScrollWrapper>
+				</AutoScrollWrapper>
 
-			<div v-if="chat.error.value" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs">
-				{{ chat.error.value }}
-				<button
-					class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading"
-					@click="emit('open-settings')"
-				>
-					Open settings
-				</button>
-			</div>
-
-			<div class="no-print flex items-center justify-between gap-1 text-xs text-body-subtle">
-				<FwbDropdown close-inside placement="top">
-					<template #trigger>
-						<button
-							class="inline-flex max-w-52 items-center gap-1 truncate rounded-lg px-2 py-1 text-xs font-medium text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading"
-							:title="`Session: ${currentTitle}`"
-						>
-							<span class="inline-flex min-w-0 items-center gap-1 truncate"
-								><Icon size="16"><ChatMultiple16Regular /></Icon><span class="truncate">{{ currentTitle }}</span></span
-							>
-							<Icon size="16" class="shrink-0"><ChevronDown16Regular /></Icon>
-						</button>
-					</template>
-					<div class="flex max-h-64 min-w-64 flex-col gap-1 overflow-y-auto p-1">
-						<button
-							type="button"
-							class="inline-flex w-full items-center justify-start gap-1 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading"
-							:disabled="chat.sending.value"
-							@click="newSession"
-						>
-							<span class="inline-flex min-w-0 flex-1 items-center gap-1 truncate"
-								><Icon size="16"><Add16Regular /></Icon>New session</span
-							>
-						</button>
-						<div
-							v-for="s in sessions"
-							:key="s.id"
-							class="flex w-full items-center gap-1 rounded-lg px-2 py-1.5 text-left text-[13px] text-body transition hover:bg-neutral-tertiary"
-							:class="{ 'bg-neutral-tertiary': s.active }"
-							:title="s.title"
-						>
-							<span
-								v-if="renamingId === s.id"
-								class="flex min-w-0 flex-1 items-center gap-1"
-								@click.stop
-								@mousedown.stop
-							>
-								<FwbInput
-									v-model="renameDraft"
-									size="sm"
-									wrapper-class="min-w-0 flex-1"
-									:placeholder="s.title"
-									maxlength="120"
-									autofocus
-									@keyup.enter="commitRenameOnEnter($event, s.id)"
-									@keyup.escape="renamingId = null"
-									@blur="commitRename(s.id)"
-								/>
-							</span>
-							<template v-else>
-								<button
-									type="button"
-									class="min-w-0 flex-1 flex-col items-start! truncate text-left!"
-									@click="selectSession(s.id)"
-								>
-									<span class="inline-flex items-center gap-1"
-										><Icon v-if="s.active" size="16" class="shrink-0"><Checkmark16Regular /></Icon>{{ s.title }}</span
-									>
-									<span class="block truncate text-[11px] text-body-subtle">
-										{{ s.count }} msgs<span v-if="relativeTime(s.updatedAt)"> · {{ relativeTime(s.updatedAt) }}</span>
-									</span>
-								</button>
-								<span class="flex shrink-0 gap-0.5">
-									<button
-										type="button"
-										class="rounded px-1 text-body-subtle hover:text-heading"
-										title="Rename session"
-										@click.stop="startRename(s.id)"
-										square
-									>
-										<Icon size="16"><Edit16Regular /></Icon>
-									</button>
-									<button
-										type="button"
-										class="rounded px-1 text-body-subtle hover:text-danger"
-										title="Delete session"
-										:disabled="chat.sending.value"
-										@click.stop="deleteSession(s.id)"
-										square
-									>
-										<Icon size="16"><Dismiss16Regular /></Icon>
-									</button>
-								</span>
-							</template>
-						</div>
-					</div>
-				</FwbDropdown>
-				<span v-if="thinkingPillLabel || isConfigured">
-					<span v-if="thinkingPillLabel" :title="`${thinkingPillLabel}`"
-						>{{ thinkingPillLabel.split(' ').pop()?.toLocaleUpperCase() }} ·
-					</span>
-					<span v-if="isConfigured" :class="thinkingPillLabel ? '' : 'ml-auto'">{{ activeModelLabel }}</span>
-				</span>
-				<span v-else class="ml-auto">No model configured — open settings to choose one.</span>
-				<div>
-					<FwbButton v-if="chat.sending.value" color="alternative" class="shrink-0 self-end" @click="chat.stop()">
-						Stop
-					</FwbButton>
-					<FwbButton
-						v-else
-						color="default"
-						square
-						size="md"
-						class="shrink-0 self-end"
-						title="Send"
-						aria-label="Send message"
-						:disabled="!input.trim()"
-						@click="send"
+				<div v-if="chat.error.value" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs">
+					{{ chat.error.value }}
+					<button
+						class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading"
+						@click="emit('open-settings')"
 					>
-						<Icon size="16"><Send16Regular /></Icon>
-					</FwbButton>
+						Open settings
+					</button>
+				</div>
+
+				<div class="no-print flex items-center justify-between gap-1 text-xs text-body-subtle">
+					<FwbDropdown close-inside placement="top">
+						<template #trigger>
+							<button
+								class="inline-flex max-w-52 items-center gap-1 truncate rounded-lg px-2 py-1 text-xs font-medium text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading"
+								:title="`Session: ${currentTitle}`"
+							>
+								<span class="inline-flex min-w-0 items-center gap-1 truncate"
+									><Icon size="16"><ChatMultiple16Regular /></Icon
+									><span class="truncate">{{ currentTitle }}</span></span
+								>
+								<Icon size="16" class="shrink-0"><ChevronDown16Regular /></Icon>
+							</button>
+						</template>
+						<div class="flex max-h-64 min-w-64 flex-col gap-1 overflow-y-auto p-1">
+							<button
+								type="button"
+								class="inline-flex w-full items-center justify-start gap-1 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-body-subtle transition hover:bg-neutral-tertiary hover:text-heading"
+								:disabled="chat.sending.value"
+								@click="newSession"
+							>
+								<span class="inline-flex min-w-0 flex-1 items-center gap-1 truncate"
+									><Icon size="16"><Add16Regular /></Icon>New session</span
+								>
+							</button>
+							<div
+								v-for="s in sessions"
+								:key="s.id"
+								class="flex w-full items-center gap-1 rounded-lg px-2 py-1.5 text-left text-[13px] text-body transition hover:bg-neutral-tertiary"
+								:class="{ 'bg-neutral-tertiary': s.active }"
+								:title="s.title"
+							>
+								<span
+									v-if="renamingId === s.id"
+									class="flex min-w-0 flex-1 items-center gap-1"
+									@click.stop
+									@mousedown.stop
+								>
+									<FwbInput
+										v-model="renameDraft"
+										size="sm"
+										wrapper-class="min-w-0 flex-1"
+										:placeholder="s.title"
+										maxlength="120"
+										autofocus
+										@keyup.enter="commitRenameOnEnter($event, s.id)"
+										@keyup.escape="renamingId = null"
+										@blur="commitRename(s.id)"
+									/>
+								</span>
+								<template v-else>
+									<button
+										type="button"
+										class="min-w-0 flex-1 flex-col items-start! truncate text-left!"
+										@click="selectSession(s.id)"
+									>
+										<span class="inline-flex items-center gap-1"
+											><Icon v-if="s.active" size="16" class="shrink-0"><Checkmark16Regular /></Icon>{{ s.title }}</span
+										>
+										<span class="block truncate text-[11px] text-body-subtle">
+											{{ s.count }} msgs<span v-if="relativeTime(s.updatedAt)"> · {{ relativeTime(s.updatedAt) }}</span>
+										</span>
+									</button>
+									<span class="flex shrink-0 gap-0.5">
+										<button
+											type="button"
+											class="rounded px-1 text-body-subtle hover:text-heading"
+											title="Rename session"
+											@click.stop="startRename(s.id)"
+											square
+										>
+											<Icon size="16"><Edit16Regular /></Icon>
+										</button>
+										<button
+											type="button"
+											class="rounded px-1 text-body-subtle hover:text-danger"
+											title="Delete session"
+											:disabled="chat.sending.value"
+											@click.stop="deleteSession(s.id)"
+											square
+										>
+											<Icon size="16"><Dismiss16Regular /></Icon>
+										</button>
+									</span>
+								</template>
+							</div>
+						</div>
+					</FwbDropdown>
+					<span v-if="thinkingPillLabel || isConfigured">
+						<span v-if="thinkingPillLabel" :title="`${thinkingPillLabel}`"
+							>{{ thinkingPillLabel.split(' ').pop()?.toLocaleUpperCase() }} ·
+						</span>
+						<span v-if="isConfigured" :class="thinkingPillLabel ? '' : 'ml-auto'">{{ activeModelLabel }}</span>
+					</span>
+					<span v-else class="ml-auto">No model configured — open settings to choose one.</span>
+					<div>
+						<FwbButton v-if="chat.sending.value" color="alternative" class="shrink-0 self-end" @click="chat.stop()">
+							Stop
+						</FwbButton>
+						<FwbButton
+							v-else
+							color="default"
+							square
+							size="md"
+							class="shrink-0 self-end"
+							title="Send"
+							aria-label="Send message"
+							:disabled="!input.trim()"
+							@click="send"
+						>
+							<Icon size="16"><Send16Regular /></Icon>
+						</FwbButton>
+					</div>
+				</div>
+
+				<div class="no-print flex gap-2">
+					<FwbTextarea
+						v-model="input"
+						:rows="2"
+						wrapper-class="min-w-0 flex-1"
+						placeholder="Ask the agent… (Enter to send)"
+						:disabled="chat.sending.value"
+						@keyup.enter.exact.prevent="sendOnEnter"
+					/>
 				</div>
 			</div>
-
-			<div class="no-print flex gap-2">
-				<FwbTextarea
-					v-model="input"
-					:rows="2"
-					wrapper-class="min-w-0 flex-1"
-					placeholder="Ask the agent… (Enter to send)"
-					:disabled="chat.sending.value"
-					@keyup.enter.exact.prevent="sendOnEnter"
-				/>
-			</div>
-		</div>
 		</template>
 	</div>
 </template>

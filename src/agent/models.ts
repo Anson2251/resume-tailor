@@ -139,6 +139,40 @@ export function modelsForProvider(provider: string, includeDisabled = false): Mo
 	return all.filter((m) => enabled.has(modelKey(provider, m.id)))
 }
 
+export interface EnabledModelOption extends ModelChoice {
+	providerName: string
+}
+
+/**
+ * Picker order for the default-model list: provider name, then label, then
+ * id. The first entry doubles as the automatic default (see pickDefaultModel).
+ */
+export function sortEnabledModels<T extends EnabledModelOption>(list: T[]): T[] {
+	return [...list].sort(
+		(a, b) =>
+			a.providerName.localeCompare(b.providerName) || a.label.localeCompare(b.label) || a.id.localeCompare(b.id),
+	)
+}
+
+/**
+ * Default-model rule for the Model tab: keep the stored default while it is
+ * still enabled, otherwise fall back to the first sorted enabled model.
+ * Returns null when nothing is enabled (the tab then instructs the user to
+ * enable a model under Providers).
+ */
+export function pickDefaultModel<T extends EnabledModelOption>(
+	sortedEnabled: readonly T[],
+	provider: string,
+	id: string,
+): T | null {
+	if (!sortedEnabled.length) return null
+	if (provider && id) {
+		const current = sortedEnabled.find((m) => m.provider === provider && m.id === id)
+		if (current) return current
+	}
+	return sortedEnabled[0] ?? null
+}
+
 /**
  * Runtime model lookup: registry first, then custom models on builtin
  * providers (cloned from a same-provider template so streaming works).

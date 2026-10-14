@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MANUALS, MANUAL_BODY_CHARS, MANUAL_INDEX, getManual, manualBodyFor, parseManual } from './manuals'
+import { MANUALS, MANUAL_INDEX, getManual, parseManual } from './manuals'
 
 describe('manual frontmatter', () => {
 	it('parses name, description and body', () => {
@@ -41,14 +41,5 @@ describe('manual registry', () => {
 		expect(getManual('  cover-letter-writer  ')?.name).toBe('cover-letter-writer')
 		expect(getManual('nope')).toBeUndefined()
 		expect(getManual('')).toBeUndefined()
-	})
-
-	it('truncates long bodies over budget', () => {
-		const long = getManual('cover-letter-writer')!
-		const { body, truncated } = manualBodyFor(long, 100)
-		expect(truncated).toBe(true)
-		expect(body.length).toBeLessThanOrEqual(101)
-		const { truncated: small } = manualBodyFor(long, MANUAL_BODY_CHARS * 10)
-		expect(small).toBe(false)
 	})
 })

@@ -5,7 +5,7 @@ description: How the Resume Tailor app itself works (Master vs job views, overri
 
 # Resume Tailor System
 
-Resume Tailor keeps **one shared Master resume** plus **one profile per job application**. Each job profile is a tailored *view* over the Master — never a copy. This manual tells you the mechanics so you can answer software questions truthfully and never fight the model.
+Resume Tailor keeps **one shared Master resume** plus **one profile per job application**. Each job profile is a tailored _view_ over the Master — never a copy. This manual tells you the mechanics so you can answer software questions truthfully and never fight the model.
 
 ## Core model
 
@@ -17,7 +17,7 @@ Resume Tailor keeps **one shared Master resume** plus **one profile per job appl
 
 - Editing a field on a **job** saves a per-job **override** for that item+field. The Master wording is untouched; other jobs are unaffected.
 - Editing the same field on **Master** rewrites the shared wording for every job (except jobs carrying an override for that field, which keep theirs).
-- Editing a job override **back to the Master wording drops the override** automatically. Users can also revert one override ("Use master") or all ("Reset").
+- Editing a job override **back to the Master wording drops the override** automatically. Users can also revert one override ("Use master") or all ("Reset") — or push a tailored override back into the shared Master ("Apply to master", which then drops the redundant override).
 - Removing an item deletes it from the Master and from every job's view and overrides. There are no dangling ids.
 
 ## Views and sections
@@ -28,10 +28,11 @@ Resume Tailor keeps **one shared Master resume** plus **one profile per job appl
 
 ## What Mira can change (tools)
 
-- `read_resume` — resolved tailored resume for the active job. `read_jd` — attached JD text (or `attached:false`).
+- `read_resume` — resolved tailored resume for the active job. `read_jd` — attached JD text (or `attached:false`). `read_resume` shows only shown items by default; pass `includeHidden:true` to also see hidden Master items (e.g. to suggest unhiding relevant ones with `set_visibility`).
 - `list_notes` / `read_note` — private notebook index + one note body (user-titled markdown: project why/background, learnings, goals). `search_notes(query)` full-text searches both. Titles are also listed in your job context — check them before asking the user to repeat background.
 - `save_note(title, body, id?)` — persist reusable background the user told you (upsert by id, else exact title). Only save what they said, never invented. Notes are visible and editable by the user in the Notebook pane — if one contradicts the resume, letter, or JD, ask which is right. `patch_note(id, search, replace)` edits one exact phrase in place; it refuses on zero or multiple matches, so narrow the search string instead of guessing. `delete_note(id)` removes one.
-- `propose_bullet_rewrite(itemId, field, value)` — the only field writer. Allowed on Master too (refines shared wording). Needs valid ids from `read_resume` first.
+- `propose_bullet_rewrite(itemId, field, value)` — field writer for existing items. Allowed on Master too (refines shared wording). Needs valid ids from `read_resume` first.
+- `add_experience_item(role, company, location?, startDate?, endDate?, current?, bullets?)` / `add_project_item(name, link?, tech?, startDate?, endDate?, bullets?)` — create one new entry from facts the user gave you (role+company, or name, required). Allowed on Master too: saves to the shared Master and shows on the active job. Never invent the facts — ask first, add only after they confirm.
 - `update_title`, `update_summary` — job headline/summary. **Refuse on Master** with guidance to switch to a job.
 - `update_cover_letter(text)` — letter **body** (markdown). `update_letter_field(field, value)` — structured fields: recipientTitle, recipientAddress, jobTitle, postingNumber, showReLine, signoff, dateMode, dateCustom, credentialLine. **Refuse on Master.**
 - `set_visibility(section, ids)` — replace the shown-id list for one section. Hiding **more than half** of the shown items refuses with `needsConfirm` — explain why first, let the user confirm in the UI.

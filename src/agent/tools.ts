@@ -1,13 +1,15 @@
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool } from '@earendil-works/pi-agent-core'
 import { CUSTOM_ITEM_FIELDS, SECTION_FIELDS, isSectionKey, readField } from '../data/resume'
-import { buildPreview } from '../data/workspace'
+import { applyOverrides, buildPreview } from '../data/workspace'
 import type { ContentItem, Job, MasterResume, MemoryNote } from '../data/types'
 import { JD_CONTEXT_CHARS, NOTE_BODY_CHARS, truncate } from './context'
-import { MANUAL_BODY_CHARS, MANUALS, getManual, manualBodyFor } from './manuals'
+import { MANUALS, getManual } from './manuals'
 
 export interface JobMutations {
 	applyOverride: (itemId: string, patch: Record<string, string | boolean>) => void
+	/** Append a new Master item (experience/projects) and show it on the active job. Returns the new id, or null when rejected. */
+	addItem: (section: 'experience' | 'projects', fields: Record<string, string | boolean>) => string | null
 	setCoverLetter: (text: string) => void
 	setLetterField: (field: string, value: string | boolean) => void
 	setVisibility: (section: string, ids: string[]) => void
@@ -103,14 +105,33 @@ function fieldAllowed(itemId: string, field: string, master: MasterResume): { se
  * and return `needsConfirm` for the UI confirm modal.
  */
 export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutations): AgentTool[] {
+	/** Master items of one section that are hidden on this job (overrides applied). */
+	const hiddenItems = (section: string, sections: Record<string, unknown>): ContentItem[] => {
+		const shown = new Set((sections[section] as ContentItem[] | undefined)?.map((item) => item.id) ?? [])
+		const all: ContentItem[] = (() => {
+			if (section === 'experience') return master.experience
+			if (section === 'projects') return master.projects
+			if (section === 'education') return master.education
+			if (section === 'skills') return master.skills
+			return master.customSections.find((s) => s.id === section)?.items ?? []
+		})()
+		return applyOverrides(
+			all.filter((item) => !shown.has(item.id)),
+			job.overrides,
+		)
+	}
+
 	const readResume: AgentTool = {
 		name: 'read_resume',
 		label: 'Read resume',
 		description:
-			'Read the full tailored resume for the active job: title, summary, and every shown item with its id and fields. Pass section (experience|projects|education|skills or a custom section id) to narrow it.',
-		parameters: Type.Object({ section: Type.Optional(Type.String()) }),
+			'Read the full tailored resume for the active job: title, summary, and every shown item with its id and fields. Pass section (experience|projects|education|skills or a custom section id) to narrow it. Pass includeHidden:true to also see Master items hidden on this job (overrides applied) — e.g. to suggest unhiding relevant ones with set_visibility.',
+		parameters: Type.Object({
+			section: Type.Optional(Type.String()),
+			includeHidden: Type.Optional(Type.Boolean()),
+		}),
 		execute: async (_id, params) => {
-			const p = params as { section?: string }
+			const p = params as { section?: string; includeHidden?: boolean }
 			try {
 				const preview = buildPreview(master, job)
 				const sections: Record<string, unknown> = {
@@ -135,6 +156,7 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 					if (!(p.section in sections)) return err(`Unknown section "${p.section}".`)
 					payload.section = p.section
 					payload.items = sections[p.section]
+					if (p.includeHidden === true) payload.hidden = hiddenItems(p.section, sections)
 				} else {
 					payload.shownCounts = {
 						experience: preview.experience.length,
@@ -143,6 +165,14 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 						skills: preview.skills.length,
 					}
 					payload.sections = sections
+					if (p.includeHidden === true) {
+						const hidden: Record<string, unknown> = {}
+						for (const key of Object.keys(sections)) hidden[key] = hiddenItems(key, sections)
+						payload.hiddenCounts = Object.fromEntries(
+							Object.entries(hidden).map(([key, items]) => [key, (items as unknown[]).length]),
+						)
+						payload.hidden = hidden
+					}
 				}
 				return ok(JSON.stringify(payload), {})
 			} catch (e) {
@@ -219,6 +249,118 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 					after: p.value,
 				},
 			)
+		},
+	}
+
+	/** Short text fields (role, company, dates…) share one cap; bullets get the rewrite-sized budget. */
+	const SHORT_FIELD_CHARS = 160
+	const BULLETS_CHARS = 8000
+
+	const asText = (value: unknown): string => (typeof value === 'string' ? value : '')
+
+	function cleanShort(value: unknown, label: string): string | { error: string } {
+		const text = asText(value).trim()
+		if (text.length > SHORT_FIELD_CHARS) return { error: `"${label}" is too long (max ${SHORT_FIELD_CHARS} chars).` }
+		return text
+	}
+
+	const addExperienceItem: AgentTool = {
+		name: 'add_experience_item',
+		label: 'Add experience',
+		description:
+			'Add one new experience entry to the Master resume (shown on the active job). Only add facts the user gave you — never invent employers, dates, metrics, or outcomes. Ask the user to supply the true facts first and only call this after they confirm.',
+		parameters: Type.Object({
+			role: Type.String(),
+			company: Type.String(),
+			location: Type.Optional(Type.String()),
+			startDate: Type.Optional(Type.String()),
+			endDate: Type.Optional(Type.String()),
+			current: Type.Optional(Type.Boolean()),
+			bullets: Type.Optional(Type.String()),
+		}),
+		execute: async (_id, params) => {
+			const p = params as {
+				role: unknown
+				company: unknown
+				location?: unknown
+				startDate?: unknown
+				endDate?: unknown
+				current?: unknown
+				bullets?: unknown
+			}
+			const role = asText(p.role).trim()
+			const company = asText(p.company).trim()
+			if (!role) return err('role is required — only add experience the user told you about.')
+			if (!company) return err('company is required — only add experience the user told you about.')
+			const fields: Record<string, string | boolean> = { role, company }
+			for (const [key, label] of [
+				['location', 'location'],
+				['startDate', 'startDate'],
+				['endDate', 'endDate'],
+			] as const) {
+				const cleaned = cleanShort(p[key], label)
+				if (typeof cleaned !== 'string') return err(cleaned.error)
+				if (cleaned) fields[key] = cleaned
+			}
+			const bullets = asText(p.bullets)
+			if (bullets.length > BULLETS_CHARS)
+				return err(`bullets are too long (max ${BULLETS_CHARS} chars). Keep them concise.`)
+			if (bullets.trim()) fields.bullets = bullets
+			if (p.current === true) fields.current = true
+			const id = mutate.addItem('experience', fields)
+			if (!id) return err('Could not add the experience entry.')
+			return ok(`Experience added: "${role}" at "${company}" (id=${id}). Saved to Master and shown on this job.`, {
+				id,
+				section: 'experience',
+			})
+		},
+	}
+
+	const addProjectItem: AgentTool = {
+		name: 'add_project_item',
+		label: 'Add project',
+		description:
+			'Add one new project entry to the Master resume (shown on the active job). Only add facts the user gave you — never invent names, tech, dates, or outcomes. Ask the user to supply the true facts first and only call this after they confirm.',
+		parameters: Type.Object({
+			name: Type.String(),
+			link: Type.Optional(Type.String()),
+			tech: Type.Optional(Type.String()),
+			startDate: Type.Optional(Type.String()),
+			endDate: Type.Optional(Type.String()),
+			bullets: Type.Optional(Type.String()),
+		}),
+		execute: async (_id, params) => {
+			const p = params as {
+				name: unknown
+				link?: unknown
+				tech?: unknown
+				startDate?: unknown
+				endDate?: unknown
+				bullets?: unknown
+			}
+			const name = asText(p.name).trim()
+			if (!name) return err('name is required — only add projects the user told you about.')
+			const fields: Record<string, string | boolean> = { name }
+			for (const [key, label] of [
+				['link', 'link'],
+				['tech', 'tech'],
+				['startDate', 'startDate'],
+				['endDate', 'endDate'],
+			] as const) {
+				const cleaned = cleanShort(p[key], label)
+				if (typeof cleaned !== 'string') return err(cleaned.error)
+				if (cleaned) fields[key] = cleaned
+			}
+			const bullets = asText(p.bullets)
+			if (bullets.length > BULLETS_CHARS)
+				return err(`bullets are too long (max ${BULLETS_CHARS} chars). Keep them concise.`)
+			if (bullets.trim()) fields.bullets = bullets
+			const id = mutate.addItem('projects', fields)
+			if (!id) return err('Could not add the project entry.')
+			return ok(`Project added: "${name}" (id=${id}). Saved to Master and shown on this job.`, {
+				id,
+				section: 'projects',
+			})
 		},
 	}
 
@@ -371,14 +513,12 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 			if (!manual) {
 				return err(`Unknown manual "${p.name}". Available: ${MANUALS.map((m) => m.name).join(', ')}.`)
 			}
-			const { body, truncated } = manualBodyFor(manual, MANUAL_BODY_CHARS)
 			return ok(
 				JSON.stringify({
 					name: manual.name,
 					description: manual.description,
 					chars: manual.chars,
-					truncated,
-					body,
+					body: manual.body,
 				}),
 				{ manual: manual.name },
 			)
@@ -457,9 +597,7 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 			const p = params as { query: string }
 			if (typeof p.query !== 'string' || !p.query.trim()) return err('query is required.')
 			const q = p.query.trim().toLowerCase()
-			const hits = (master.notes || []).filter((n) =>
-				`${n.title || ''}\n${n.body || ''}`.toLowerCase().includes(q),
-			)
+			const hits = (master.notes || []).filter((n) => `${n.title || ''}\n${n.body || ''}`.toLowerCase().includes(q))
 			return ok(
 				JSON.stringify({
 					query: p.query.trim(),
@@ -555,6 +693,8 @@ export function agentToolsFor(job: Job, master: MasterResume, mutate: JobMutatio
 		patchNote,
 		deleteNote,
 		rewriteField,
+		addExperienceItem,
+		addProjectItem,
 		updateTitle,
 		updateSummary,
 		updateCoverLetter,

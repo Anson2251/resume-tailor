@@ -20,14 +20,26 @@ export function notifyRendererReady(): void {
 }
 
 /**
- * Native PDF export (Electron only): renders the resume page via
- * webContents.printToPDF after a save dialog. Resolves to the export result,
- * or null outside Electron.
+ * Native PDF export (Electron only): renders the active document (resume or
+ * cover letter) via webContents.printToPDF after a save dialog. Resolves to
+ * the export result, or null outside Electron.
  */
-export async function exportPdfFile(filename: string): Promise<PdfExportResult | null> {
+export async function exportPdfFile(
+	filename: string,
+	pageSize?: string,
+	title?: string,
+	author?: string,
+	subject?: string,
+): Promise<PdfExportResult | null> {
 	if (!isElectron() || typeof window.electronAPI?.exportPdf !== 'function') return null
 	try {
-		return await window.electronAPI.exportPdf(filename)
+		return await window.electronAPI.exportPdf(
+			filename,
+			pageSize === 'letter' ? 'Letter' : 'A4',
+			title ?? '',
+			author ?? '',
+			subject ?? '',
+		)
 	} catch {
 		return { ok: false, error: 'export failed' }
 	}

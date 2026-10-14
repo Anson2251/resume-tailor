@@ -7,6 +7,7 @@ import {
 	ArrowDown16Regular,
 	ArrowUndo16Regular,
 	ArrowUp16Regular,
+	ArrowUpload16Regular,
 	Dismiss16Regular,
 	ReOrderDotsVertical16Regular,
 } from '../data/icons'
@@ -44,6 +45,7 @@ const emit = defineEmits<{
 	add: []
 	remove: [id: string]
 	reset: [id: string]
+	apply: [id: string]
 }>()
 
 // Slot items stay untyped: each section renders different fields off the same
@@ -263,6 +265,12 @@ function onDragEnd(): void {
 							@click="emit('reset', row.item.id)"
 						>
 							<Icon size="13"><ArrowUndo16Regular /></Icon> Use master
+						</button>
+						<button
+							class="inline-flex items-center gap-0.5 font-medium underline hover:text-amber-800 dark:hover:text-amber-200"
+							@click="emit('apply', row.item.id)"
+						>
+							<Icon size="13"><ArrowUpload16Regular /></Icon> Apply to master
 						</button>
 					</p>
 				</div>

@@ -21,11 +21,13 @@ import {
 	listProviders,
 	modelLabel,
 	modelsForProvider,
+	pickDefaultModel,
 	removeCustomModel,
 	removeCustomProvider,
 	resolveModel,
 	resolveThinkingLevel,
 	setModelEnabled,
+	sortEnabledModels,
 	thinkingLevelsFor,
 } from '../agent/models'
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
@@ -351,15 +353,32 @@ function handleRemoveProvider(): void {
 // --- Dedicated Model page: pick the default agent model ---
 
 const allEnabledModels = computed<ModelOption[]>(() =>
-	providerList.value.flatMap((p) =>
-		modelsForProvider(p.value).map((m) => ({
-			provider: p.value,
-			providerName: p.name,
-			id: m.id,
-			label: m.label,
-		})),
+	sortEnabledModels(
+		providerList.value.flatMap((p) =>
+			modelsForProvider(p.value).map((m) => ({
+				provider: p.value,
+				providerName: p.name,
+				id: m.id,
+				label: m.label,
+			})),
+		),
 	),
 )
+
+/**
+ * Auto-default: the first sorted enabled model wins unless the stored
+ * default is still enabled. Reacts to inventory changes only — an explicit
+ * Clear stays cleared until the user enables or disables something.
+ */
+function ensureDefaultModel(): void {
+	const next = pickDefaultModel(allEnabledModels.value, settings.provider, settings.modelId)
+	if (next && (next.provider !== settings.provider || next.id !== settings.modelId)) {
+		settings.provider = next.provider
+		settings.modelId = next.id
+	}
+}
+
+watch(allEnabledModels, ensureDefaultModel, { immediate: true })
 
 const defaultOption = ref<ModelOption | null>(null)
 
@@ -377,7 +396,7 @@ function syncDefaultOption(): void {
 	}
 }
 
-watch(() => [settings.provider, settings.modelId], syncDefaultOption)
+watch(() => [settings.provider, settings.modelId], syncDefaultOption, { immediate: true })
 
 function onSelectDefault(option: Record<string, unknown>): void {
 	const provider = typeof option.provider === 'string' ? option.provider : ''
@@ -394,6 +413,8 @@ function onDefaultCleared(value: Record<string, unknown> | null): void {
 function resetModel(): void {
 	settings.provider = DEFAULT_AGENT_SETTINGS.provider
 	settings.modelId = DEFAULT_AGENT_SETTINGS.modelId
+	// The built-in default may not be enabled — fall back per the tab rule.
+	ensureDefaultModel()
 }
 
 function clearModel(): void {
@@ -614,12 +635,12 @@ function onKeydown(event: KeyboardEvent): void {
 									type="button"
 									role="option"
 									:aria-selected="selectedProviderId === provider.value"
-								class="flex min-w-48 items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition lg:min-w-0"
-								:class="
-									selectedProviderId === provider.value
-										? 'border-brand-subtle bg-brand-softer font-semibold'
-										: 'border-transparent hover:bg-neutral-tertiary'
-								"
+									class="flex min-w-48 items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition lg:min-w-0"
+									:class="
+										selectedProviderId === provider.value
+											? 'border-brand-subtle bg-brand-softer font-semibold'
+											: 'border-transparent hover:bg-neutral-tertiary'
+									"
 									@click="selectProvider(provider.value)"
 								>
 									<span class="min-w-0 flex-1">
@@ -809,10 +830,20 @@ function onKeydown(event: KeyboardEvent): void {
 								</FwbTooltip>
 							</div>
 							<div class="mt-4 flex flex-col gap-3">
-								<p v-if="!allEnabledModels.length" class="text-xs text-amber-600 dark:text-amber-400">
-									No models enabled yet — enable models under Providers first.
-								</p>
+								<div
+									v-if="!allEnabledModels.length"
+									class="flex flex-col gap-2 rounded-lg bg-amber-50 p-3 dark:bg-amber-950/40"
+								>
+									<p class="text-xs text-amber-700 dark:text-amber-300">
+										No models enabled yet — the agent can't run without one. Go to Providers, pick a provider, and
+										toggle on at least one model. The first one (sorted) becomes your default automatically.
+									</p>
+									<div>
+										<FwbButton size="sm" @click="setActiveSection('providers')">Go to Providers</FwbButton>
+									</div>
+								</div>
 								<FwbAutocomplete
+									v-if="allEnabledModels.length"
 									v-model="defaultOption"
 									label="Model"
 									placeholder="Search models…"
@@ -832,7 +863,10 @@ function onKeydown(event: KeyboardEvent): void {
 									</template>
 								</FwbAutocomplete>
 							</div>
-							<div class="mt-4 flex items-center justify-between gap-3 border-t border-default pt-4">
+							<div
+								v-if="allEnabledModels.length"
+								class="mt-4 flex items-center justify-between gap-3 border-t border-default pt-4"
+							>
 								<FwbBadge :type="isModelConfigured ? 'green' : 'yellow'">
 									{{ configuredLabel }}
 								</FwbBadge>
@@ -844,7 +878,7 @@ function onKeydown(event: KeyboardEvent): void {
 								</div>
 							</div>
 						</FwbCard>
-						<FwbCard class="p-5">
+						<FwbCard class="p-5" v-if="allEnabledModels.length">
 							<div class="flex items-center gap-2">
 								<h3 class="text-sm font-semibold text-heading">Reasoning effort</h3>
 								<FwbTooltip placement="right">

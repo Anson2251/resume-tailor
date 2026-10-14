@@ -86,7 +86,8 @@ export function coverLetterBlock(job: Job): string {
 /** Index-only notebook block: titles go into every prompt, bodies stay behind read_note. */
 export function notebookBlock(master: MasterResume): string {
 	const notes = master?.notes || []
-	if (!notes.length) return 'Notebook: empty — no private notes yet. If the user shares background worth reusing, save it with save_note.'
+	if (!notes.length)
+		return 'Notebook: empty — no private notes yet. If the user shares background worth reusing, save it with save_note.'
 	const titles = notes.map((n) => n.title?.trim() || '(untitled)').slice(0, 30)
 	const extra = notes.length > 30 ? ` (+${notes.length - 30} more)` : ''
 	return [
@@ -99,7 +100,7 @@ export function notebookBlock(master: MasterResume): string {
 export function buildJobContext(job: Job, master: MasterResume): string {
 	const scope =
 		job.kind === 'master'
-			? '## Scope: MASTER profile (shared canonical content). Coach freely and refine wording with propose_bullet_rewrite — title/summary/visibility/letter tools refuse on Master. Ask the user to switch to (or create) a job profile for tailoring.'
+			? '## Scope: MASTER profile (shared canonical content). Coach freely and edit shared content (wording and entries) — title/summary/visibility/letter tools refuse on Master. Ask the user to switch to (or create) a job profile for tailoring.'
 			: null
 	return [
 		`## Active job: ${job.name || '(untitled)'}`,

@@ -96,9 +96,12 @@ function dateOf(ts: number): string {
 			</div>
 			<FwbButton size="sm" @click="createNote">New note</FwbButton>
 		</div>
-		<div v-if="!notes.length" class="rounded-lg border border-dashed border-neutral-300 p-4 text-center text-sm text-body-subtle">
-			No notes yet. Jot down why you built a project, its background, or what you learnt — Mira will reuse it for
-			cover letters and tailoring.
+		<div
+			v-if="!notes.length"
+			class="rounded-lg border border-dashed border-neutral-300 p-4 text-center text-sm text-body-subtle"
+		>
+			No notes yet. Jot down why you built a project, its background, or what you learnt — Mira will reuse it for cover
+			letters and tailoring.
 		</div>
 		<div v-else class="grid min-h-0 flex-1 gap-3 lg:grid-cols-[220px_1fr]">
 			<ul class="max-h-48 space-y-1 overflow-y-auto lg:max-h-none">
@@ -115,14 +118,21 @@ function dateOf(ts: number): string {
 					>
 						<div class="flex items-center justify-between gap-2">
 							<span class="truncate text-[13px] font-medium text-heading">{{ note.title || 'Untitled note' }}</span>
-							<span v-if="note.updatedAt" class="shrink-0 text-[11px] text-body-subtle">{{ dateOf(note.updatedAt) }}</span>
+							<span v-if="note.updatedAt" class="shrink-0 text-[11px] text-body-subtle">{{
+								dateOf(note.updatedAt)
+							}}</span>
 						</div>
 						<p class="mt-0.5 truncate text-xs text-body-subtle">{{ previewOf(note.body) }}</p>
 					</button>
 				</li>
 			</ul>
 			<div v-if="selected" class="flex min-h-0 flex-col gap-2">
-				<FwbInput v-model="draftTitle" placeholder="Note title (e.g. Why I built X)" maxlength="120" @change="saveDraft" />
+				<FwbInput
+					v-model="draftTitle"
+					placeholder="Note title (e.g. Why I built X)"
+					maxlength="120"
+					@change="saveDraft"
+				/>
 				<FwbTextarea
 					v-model="draftBody"
 					placeholder="Background, motivation, what you learnt… markdown welcome"
@@ -131,7 +141,9 @@ function dateOf(ts: number): string {
 					@blur="saveDraft"
 				/>
 				<div class="flex items-center justify-between">
-					<p class="text-[11px] text-body-subtle">Autosaves on edit. Mira reads titles automatically, bodies on demand.</p>
+					<p class="text-[11px] text-body-subtle">
+						Autosaves on edit. Mira reads titles automatically, bodies on demand.
+					</p>
 					<FwbButton size="xs" color="red" outline @click="removeNote(selected.id)">Delete</FwbButton>
 				</div>
 			</div>

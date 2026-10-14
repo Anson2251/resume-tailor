@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { agentToolsFor, patchNoteInList } from './tools'
+import { getManual } from './manuals'
 import type { MasterResume } from '../data/types'
 import type { PatchResult } from './tools'
 
@@ -27,6 +28,7 @@ function masterWith(ids: string[]): MasterResume {
 function mutate() {
 	return {
 		applyOverride: vi.fn(),
+		addItem: vi.fn(() => 'new-id'),
 		setCoverLetter: vi.fn(),
 		setLetterField: vi.fn(),
 		setVisibility: vi.fn(),
@@ -62,6 +64,63 @@ describe('hybrid guard', () => {
 		const res = await vis.execute('call-2', { section: 'experience', ids: ['e1'] })
 		expect(m.setVisibility).not.toHaveBeenCalled()
 		expect(res.details).toMatchObject({ needsConfirm: true })
+	})
+
+	it('adds experience and project entries through dedicated tools', async () => {
+		const m = mutate()
+		const tools = agentToolsFor(
+			{ id: 'j1', view: { experience: [], projects: [] }, overrides: {} } as never,
+			masterWith([]),
+			m,
+		)
+		const exp = await tools
+			.find((t) => t.name === 'add_experience_item')!
+			.execute('c-add-1', { role: 'Engineer', company: 'Acme', bullets: '- shipped X' })
+		expect(m.addItem).toHaveBeenCalledWith('experience', { role: 'Engineer', company: 'Acme', bullets: '- shipped X' })
+		expect(exp.details).toMatchObject({ id: 'new-id', section: 'experience' })
+		const proj = await tools
+			.find((t) => t.name === 'add_project_item')!
+			.execute('c-add-2', { name: 'Sidecar', tech: 'Vue' })
+		expect(m.addItem).toHaveBeenCalledWith('projects', { name: 'Sidecar', tech: 'Vue' })
+		expect(proj.details).toMatchObject({ id: 'new-id', section: 'projects' })
+	})
+
+	it('rejects invented-or-empty adds without mutating', async () => {
+		const m = mutate()
+		const tools = agentToolsFor(
+			{ id: 'j1', view: { experience: [], projects: [] }, overrides: {} } as never,
+			masterWith([]),
+			m,
+		)
+		const exp = tools.find((t) => t.name === 'add_experience_item')!
+		for (const params of [{ role: '', company: 'Acme' }, { role: 'Engineer', company: '  ' }, {}]) {
+			const res = await exp.execute('c-add-bad', params)
+			expect(res.details).toMatchObject({ error: true })
+		}
+		const proj = tools.find((t) => t.name === 'add_project_item')!
+		const badProj = await proj.execute('c-add-bad-2', { name: '   ' })
+		expect(badProj.details).toMatchObject({ error: true })
+		const tooLong = await exp.execute('c-add-bad-3', {
+			role: 'Engineer',
+			company: 'Acme',
+			bullets: 'x'.repeat(8001),
+		})
+		expect(tooLong.details).toMatchObject({ error: true })
+		expect(m.addItem).not.toHaveBeenCalled()
+	})
+
+	it('allows adds on master (shared content)', async () => {
+		const m = mutate()
+		const tools = agentToolsFor(
+			{ id: 'm1', kind: 'master', view: { experience: [] }, overrides: {} } as never,
+			masterWith([]),
+			m,
+		)
+		const res = await tools
+			.find((t) => t.name === 'add_experience_item')!
+			.execute('c-add-m', { role: 'Engineer', company: 'Acme' })
+		expect(m.addItem).toHaveBeenCalled()
+		expect(res.details).toMatchObject({ id: 'new-id' })
 	})
 
 	it('rejects unknown item ids and fields without mutating', async () => {
@@ -122,7 +181,8 @@ describe('hybrid guard', () => {
 		expect(bad.details).toMatchObject({ error: true })
 	})
 
-	it('refuses job tailoring on master but allows field rewrites', async () => {		const m = mutate()
+	it('refuses job tailoring on master but allows field rewrites', async () => {
+		const m = mutate()
 		const tools = agentToolsFor(
 			{
 				id: 'm1',
@@ -163,6 +223,53 @@ describe('hybrid guard', () => {
 	})
 })
 
+describe('read_resume hidden items', () => {
+	function masterWithHidden(): MasterResume {
+		const master = masterWith(['e1', 'e2'])
+		master.projects.push({
+			id: 'p1',
+			name: 'Sidecar',
+			link: '',
+			tech: 'Vue',
+			startDate: '',
+			endDate: '',
+			bullets: '- built things',
+		})
+		return master
+	}
+
+	it('shows only shown items by default', async () => {
+		const tools = agentToolsFor(
+			{ id: 'j1', view: { experience: ['e1'], projects: [] }, overrides: {} } as never,
+			masterWithHidden(),
+			mutate(),
+		)
+		const parsed = JSON.parse(
+			((await tools.find((t) => t.name === 'read_resume')!.execute('r1', {})).content[0] as { text: string }).text,
+		)
+		expect(parsed.sections.experience.map((i: { id: string }) => i.id)).toEqual(['e1'])
+		expect(parsed).not.toHaveProperty('hidden')
+	})
+
+	it('exposes hidden items with includeHidden', async () => {
+		const tools = agentToolsFor(
+			{ id: 'j1', view: { experience: ['e1'], projects: [] }, overrides: {} } as never,
+			masterWithHidden(),
+			mutate(),
+		)
+		const read = tools.find((t) => t.name === 'read_resume')!
+		const full = JSON.parse(((await read.execute('r2', { includeHidden: true })).content[0] as { text: string }).text)
+		expect(full.hidden.experience.map((i: { id: string }) => i.id)).toEqual(['e2'])
+		expect(full.hidden.projects.map((i: { id: string }) => i.id)).toEqual(['p1'])
+		expect(full.hiddenCounts).toMatchObject({ experience: 1, projects: 1 })
+		const scoped = JSON.parse(
+			((await read.execute('r3', { section: 'projects', includeHidden: true })).content[0] as { text: string }).text,
+		)
+		expect(scoped.items).toEqual([])
+		expect(scoped.hidden.map((i: { id: string }) => i.id)).toEqual(['p1'])
+	})
+})
+
 describe('read_manual', () => {
 	it('reads a manual by exact name', async () => {
 		const tools = agentToolsFor(
@@ -175,13 +282,23 @@ describe('read_manual', () => {
 		expect(JSON.parse((res.content[0] as { text: string }).text)).toMatchObject({ name: 'skill-brainstorm' })
 	})
 
-	it('rejects unknown and empty names without mutating', async () => {
-		const m = mutate()
+	it('reads the full body with no truncation budget', async () => {
 		const tools = agentToolsFor(
 			{ id: 'j1', view: { experience: [] }, overrides: {} } as never,
 			masterWith([]),
-			m,
+			mutate(),
 		)
+		// resume-answer-sheet exceeds the old 12000-char budget — it must still arrive whole.
+		const res = await tools.find((t) => t.name === 'read_manual')!.execute('m-full', { name: 'resume-answer-sheet' })
+		const parsed = JSON.parse((res.content[0] as { text: string }).text)
+		expect(parsed.body.length).toBeGreaterThan(12000)
+		expect(parsed).not.toHaveProperty('truncated')
+		expect(parsed.body).toBe(getManual('resume-answer-sheet')?.body)
+	})
+
+	it('rejects unknown and empty names without mutating', async () => {
+		const m = mutate()
+		const tools = agentToolsFor({ id: 'j1', view: { experience: [] }, overrides: {} } as never, masterWith([]), m)
 		const read = tools.find((t) => t.name === 'read_manual')!
 		const bad = await read.execute('m2', { name: 'nope' })
 		expect(bad.details).toMatchObject({ error: true })
@@ -229,7 +346,9 @@ describe('notebook', () => {
 			deleteNote: () => true,
 		}
 		const tools = agentToolsFor({ id: 'j1', view: { experience: [] }, overrides: {} } as never, master, m as never)
-		const res = await tools.find((t) => t.name === 'save_note')!.execute('n-save', { title: 'Goals', body: 'Staff engineer' })
+		const res = await tools
+			.find((t) => t.name === 'save_note')!
+			.execute('n-save', { title: 'Goals', body: 'Staff engineer' })
 		expect(res.details).toMatchObject({ id: 'n9' })
 		expect(saved).toHaveLength(1)
 		const empty = await tools.find((t) => t.name === 'save_note')!.execute('n-empty', { title: '  ', body: '  ' })
@@ -241,7 +360,12 @@ describe('notebook', () => {
 	it('searches titles and bodies with snippets', async () => {
 		const master = masterWith([])
 		master.notes = [
-			{ id: 'n1', title: 'Why I built X', body: 'A long background story about the Vue migration project', updatedAt: 1 },
+			{
+				id: 'n1',
+				title: 'Why I built X',
+				body: 'A long background story about the Vue migration project',
+				updatedAt: 1,
+			},
 			{ id: 'n2', title: 'Learnings', body: 'Unrelated cooking notes', updatedAt: 2 },
 		]
 		const tools = agentToolsFor({ id: 'j1', view: { experience: [] }, overrides: {} } as never, master, mutate())
@@ -281,8 +405,7 @@ describe('notebook', () => {
 		master.notes = [{ id: 'n1', title: 'Solo', body: 'I built X with Vue in 2024.', updatedAt: 0 }]
 		const tools = agentToolsFor({ id: 'j1', view: { experience: [] }, overrides: {} } as never, master, {
 			...mutate(),
-			patchNote: (id: string, search: string, replace: string) =>
-				patchNoteInList(master.notes, id, search, replace),
+			patchNote: (id: string, search: string, replace: string) => patchNoteInList(master.notes, id, search, replace),
 		} as never)
 		const patch = tools.find((t) => t.name === 'patch_note')!
 		const res = await patch.execute('n-patch', { id: 'n1', search: 'with Vue', replace: 'with React' })

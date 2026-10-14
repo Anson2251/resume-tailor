@@ -4,6 +4,8 @@
  * boundary and normalized into these shapes by `workspace.ts`.
  */
 
+import type { PaperSize } from './options'
+
 export type ThemeName = 'light' | 'dark'
 
 export type SectionKey = 'experience' | 'projects' | 'education' | 'skills'
@@ -139,6 +141,8 @@ export interface Profile {
 	accent: string
 	columns: 1 | 2
 	density: number
+	/** Page size for resume export (A4 default). */
+	paperSize: PaperSize
 	/** Null means "use the template's font". */
 	font: string | null
 	title: string
@@ -183,6 +187,8 @@ export interface Job extends Profile {
 	letterAccent: string
 	letterFont: string | null
 	letterDensity: number
+	/** Page size for cover-letter export (independent from the resume). */
+	letterPaperSize: PaperSize
 	jdSource: { filename: string; pageCount: number; extractedAt: string; pdfRefId: string } | null
 	conversations: Conversation[]
 	activeConversationId: string | null

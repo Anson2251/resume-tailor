@@ -42,8 +42,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 		ipcRenderer.on('resume-tailor:fullscreen-changed', listener)
 		return () => ipcRenderer.removeListener('resume-tailor:fullscreen-changed', listener)
 	},
-	// Renders the resume page to a PDF file (save dialog + printToPDF in main).
-	exportPdf: (filename: string) => ipcRenderer.invoke('resume-tailor:export-pdf', filename),
+	// Renders the active document (resume or cover letter) to a PDF file (save dialog + printToPDF in main).
+	exportPdf: (filename: string, pageSize: string, title?: string, author?: string, subject?: string) =>
+		ipcRenderer.invoke('resume-tailor:export-pdf', filename, pageSize, title, author, subject),
 	revealInFolder: (filePath: string) => ipcRenderer.send('resume-tailor:reveal-in-folder', filePath),
 	// Opens a URL in the system browser (validated as http(s) in main).
 	openExternal: (url: string) => ipcRenderer.invoke('resume-tailor:open-external', url),

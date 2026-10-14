@@ -11,8 +11,10 @@ import {
 	ACCENTS,
 	COLUMNS,
 	FONTS,
+	PAPER_SIZES,
 	TEMPLATES,
 	fontStack,
+	paperSizeLabel,
 	MAX_DENSITY,
 	MIN_DENSITY,
 	normalizeDensity,
@@ -27,6 +29,7 @@ import {
 	Checkmark16Regular,
 	Color16Regular,
 	Dismiss16Regular,
+	Document16Regular,
 	AlignSpaceAroundHorizontal20Regular,
 	List16Regular,
 	PaintBrush16Regular,
@@ -47,6 +50,7 @@ const accent = defineModel<string>('accent', { default: '#4f46e5' })
 const font = defineModel<string>('font', { default: 'sans' })
 const columns = defineModel<number>('columns', { default: 1 })
 const density = defineModel<number>('density', { default: 1 })
+const paperSize = defineModel<string>('paperSize', { default: 'a4' })
 const sections = defineModel<SectionEntry[]>('sections', { default: () => blankSections() })
 
 const emit = defineEmits<{
@@ -58,6 +62,8 @@ const emit = defineEmits<{
 const isCustomSection = (id: string): boolean => !SECTION_IDS.includes(id)
 
 const templateOptions = computed(() => TEMPLATES.map((t) => ({ value: t.id, name: `${t.name} — ${t.hint}` })))
+const paperLabel = computed(() => paperSizeLabel(paperSize.value))
+const paperHint = computed(() => PAPER_SIZES.find((p) => p.id === paperSize.value)?.hint ?? '')
 
 const activeComponent = computed(() => {
 	switch (template.value) {
@@ -172,7 +178,8 @@ function onSectionDragEnd(): void {
 	dropSectionTarget.value = null
 }
 
-// Zoom only affects on-screen display; printing is always full-size A4.
+// Zoom only affects on-screen display; printing is always full-size
+// (A4 or Letter, per the Style panel paper size).
 // The CSS `zoom` property leaks into print, so we force it back to 1 while
 // printing (belt-and-suspenders next to the `zoom: 1 !important` print rule
 // in style.css, which covers the print-preview render itself).
@@ -306,7 +313,7 @@ function onViewportWheel(event: WheelEvent): void {
 							<span class="h-3.5 w-3.5 rounded-full ring-1 ring-slate-900/15" :style="{ backgroundColor: accent }" />
 							<span v-if="template && font && columns">
 								· {{ template[0].toUpperCase() + template.slice(1) }} · {{ font[0].toUpperCase() + font.slice(1) }} ·
-								{{ columns }} Col(s) · {{ densityPercent }}
+								{{ columns }} Col(s) · {{ paperLabel }} · {{ densityPercent }}
 							</span>
 						</div>
 					</button>
@@ -319,6 +326,33 @@ function onViewportWheel(event: WheelEvent): void {
 						</p>
 						<!-- Template switcher -->
 						<FwbSelect v-model="template" aria-label="Resume template" :options="templateOptions" />
+					</div>
+
+					<div>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
+							<Icon size="18"><Document16Regular /></Icon> Paper size
+						</p>
+						<!-- Paper size -->
+						<div
+							class="grid grid-cols-2 items-center gap-1 rounded-lg border border-default bg-neutral-primary p-1 shadow-sm"
+							role="group"
+							aria-label="Paper size"
+						>
+							<button
+								v-for="p in PAPER_SIZES"
+								:key="p.id"
+								:title="`${p.name} (${p.hint})`"
+								class="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition select-none"
+								:class="
+									paperSize === p.id ? 'font-semibold text-white shadow-sm' : 'text-body-subtle hover:text-heading'
+								"
+								:style="paperSize === p.id ? { backgroundColor: accent } : null"
+								@click="paperSize = p.id"
+							>
+								{{ p.name }}
+							</button>
+						</div>
+						<p class="mt-1 text-[11px] text-body-subtle">{{ paperHint }}</p>
 					</div>
 
 					<div>
@@ -573,6 +607,7 @@ function onViewportWheel(event: WheelEvent): void {
 		>
 			<div
 				class="resume-page overflow-hidden rounded-sm ring-1 ring-slate-900/10"
+				:class="{ 'paper-letter': paperSize === 'letter' }"
 				:style="{ zoom: printZoom, '--sp': density }"
 			>
 				<component

@@ -21,7 +21,13 @@ export interface ElectronAPI {
 	/** Unified store: settings/workspace docs plus JD PDF blobs (SQLite). */
 	db: ElectronDb
 	notifyReady: () => void
-	exportPdf: (filename: string) => Promise<PdfExportResult | null>
+	exportPdf: (
+		filename: string,
+		pageSize?: string,
+		title?: string,
+		author?: string,
+		subject?: string,
+	) => Promise<PdfExportResult | null>
 	revealInFolder: (filePath: string) => void
 	openExternal: (url: string) => Promise<boolean>
 	onFullscreenChanged: (callback: (fullscreen: boolean) => void) => () => void

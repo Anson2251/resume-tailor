@@ -9,10 +9,12 @@ import {
 	modelLabel,
 	models,
 	modelsForProvider,
+	pickDefaultModel,
 	removeCustomModel,
 	removeCustomProvider,
 	resolveThinkingLevel,
 	setModelEnabled,
+	sortEnabledModels,
 	thinkingLevelsFor,
 } from './models'
 import { hydrateProviderSettings } from './providerSettings'
@@ -116,4 +118,20 @@ it('lists adjustable levels in slider order for a thinking model', () => {
 	// Stored max is unsupported there: clamp down to the nearest supported.
 	expect(resolveThinkingLevel('openai', 'gpt-5', 'max')).toBe('high')
 	expect(resolveThinkingLevel('openai', 'gpt-5', 'off')).toBe('off')
+})
+
+it('sorts enabled models by provider, label, id and defaults to the first', () => {
+	const unsorted = [
+		{ provider: 'openai', providerName: 'OpenAI', id: 'gpt-5', label: 'GPT-5' },
+		{ provider: 'anthropic', providerName: 'Anthropic', id: 'claude-sonnet-4-5', label: 'Sonnet' },
+		{ provider: 'anthropic', providerName: 'Anthropic', id: 'claude-opus-4-6', label: 'Opus' },
+	]
+	const sorted = sortEnabledModels(unsorted)
+	expect(sorted.map((m) => m.id)).toEqual(['claude-opus-4-6', 'claude-sonnet-4-5', 'gpt-5'])
+	// Stored default wins while still enabled.
+	expect(pickDefaultModel(sorted, 'openai', 'gpt-5')?.id).toBe('gpt-5')
+	// Unknown, empty, or disabled stored defaults fall back to the first sorted.
+	expect(pickDefaultModel(sorted, 'anthropic', 'no-such-model')?.id).toBe('claude-opus-4-6')
+	expect(pickDefaultModel(sorted, '', '')?.id).toBe('claude-opus-4-6')
+	expect(pickDefaultModel([], 'openai', 'gpt-5')).toBeNull()
 })

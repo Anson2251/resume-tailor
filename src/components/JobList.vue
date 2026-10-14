@@ -14,7 +14,7 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(e: 'create', payload: { company: string; role: string; file: File | null }): void
 	(e: 'duplicate', id: string): void
-	(e: 'rename', id: string): void
+	(e: 'update', payload: { id: string; name: string; company: string; role: string }): void
 	(e: 'remove', id: string): void
 	(e: 'clear-overrides'): void
 }>()
@@ -44,6 +44,13 @@ const role = ref('')
 const file = ref<File | File[] | null>(null)
 const fileError = ref('')
 
+const showEdit = ref(false)
+const editId = ref('')
+const editIsMaster = ref(false)
+const editName = ref('')
+const editCompany = ref('')
+const editRole = ref('')
+
 watch(file, (picked) => {
 	const f = Array.isArray(picked) ? picked[0] : picked
 	fileError.value = ''
@@ -60,6 +67,26 @@ function submitNew(): void {
 	role.value = ''
 	file.value = null
 	showNew.value = false
+}
+
+/** Open the edit dialog seeded from the job (master has no company/role). */
+function openEdit(job: Job): void {
+	editId.value = job.id
+	editIsMaster.value = job.kind === 'master'
+	editName.value = job.name
+	editCompany.value = job.company
+	editRole.value = job.jobTitleTarget
+	showEdit.value = true
+}
+
+function submitEdit(): void {
+	emit('update', {
+		id: editId.value,
+		name: editName.value.trim(),
+		company: editCompany.value.trim(),
+		role: editRole.value.trim(),
+	})
+	showEdit.value = false
 }
 
 function rowClass(active: boolean): string {
@@ -95,7 +122,7 @@ function rowClass(active: boolean): string {
 					</span>
 				</span>
 				<span class="hidden shrink-0 group-hover:flex">
-					<FwbButton outline size="xs" square title="Rename" @click.stop="emit('rename', masterJob.id)">
+					<FwbButton outline size="xs" square title="Edit" @click.stop="openEdit(masterJob)">
 						<Icon size="16"><Edit16Regular /></Icon>
 					</FwbButton>
 				</span>
@@ -130,7 +157,7 @@ function rowClass(active: boolean): string {
 						<FwbButton outline size="xs" square title="Duplicate job" @click.stop="emit('duplicate', job.id)">
 							<Icon size="16"><Copy16Regular /></Icon>
 						</FwbButton>
-						<FwbButton outline size="xs" square title="Rename" @click.stop="emit('rename', job.id)">
+						<FwbButton outline size="xs" square title="Edit job" @click.stop="openEdit(job)">
 							<Icon size="16"><Edit16Regular /></Icon>
 						</FwbButton>
 						<FwbButton color="red" outline size="xs" square title="Delete job" @click.stop="emit('remove', job.id)">
@@ -177,6 +204,32 @@ function rowClass(active: boolean): string {
 				<div class="flex justify-end gap-2">
 					<FwbButton color="alternative" @click="showNew = false">Cancel</FwbButton>
 					<FwbButton @click="submitNew">Create job</FwbButton>
+				</div>
+			</template>
+		</FwbModal>
+
+		<FwbModal v-if="showEdit" size="md" @close="showEdit = false">
+			<template #header>
+				<h3 class="text-base font-semibold">{{ editIsMaster ? 'Edit master' : 'Edit job' }}</h3>
+			</template>
+			<template #body>
+				<div class="flex flex-col gap-4">
+					<template v-if="!editIsMaster">
+						<FwbInput v-model="editCompany" label="Company" placeholder="Acme Inc." />
+						<FwbInput v-model="editRole" label="Role" placeholder="Frontend Engineer" />
+					</template>
+					<div>
+						<FwbInput v-model="editName" label="Name" placeholder="Frontend Engineer" />
+						<p class="mt-1 text-xs text-body-subtle">
+							{{ editIsMaster ? 'The master label.' : 'Labels this job when company or role is blank.' }}
+						</p>
+					</div>
+				</div>
+			</template>
+			<template #footer>
+				<div class="flex justify-end gap-2">
+					<FwbButton color="alternative" @click="showEdit = false">Cancel</FwbButton>
+					<FwbButton @click="submitEdit">Save</FwbButton>
 				</div>
 			</template>
 		</FwbModal>

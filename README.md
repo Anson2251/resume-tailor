@@ -68,18 +68,17 @@ No accounts, no duplicated content — and your workspace stays local except for
 - **Import / Export buttons** — move your workspace (master + all profiles) between browsers as a minified JSON file. Import also accepts older single-resume files, which are migrated into a profile, and asks before replacing your current content.
 - **Light / dark workspace** toggle in the top bar (persisted, follows the OS setting until you pick one) — the resume page itself always stays light so the printout never changes. The GitHub icon next to it links to the repo.
 
-
 ## Fair use
 
-> [!important] 
+> [!important]
 > Resume Tailor helps you present your real experience in the best light for each role — not to invent a different one. By using this software you agree:
-> 
+>
 > 1. **Everything you export is true** — real employers, dates, degrees, skills, and outcomes you can defend in an interview.
 > 2. **You won't fabricate through this tool** — no invented experience, inflated metrics, or implied expertise you don't hold, including stuffing a posting's vocabulary into skills you lack. This covers asking Mira to generate such content as well as typing it in yourself.
 > 3. **You understand why** — a job won with invented lines is a job you are not suited for and will struggle in, and each such offer is one a genuinely suitable candidate loses. Employers who discover dishonesty rescind offers and terminate hires.
 > 4. **The sample workspace (Bob Smith) is placeholder data** — replace it with your own history before applying anywhere.
 > 5. **Check your institution's GenAI policy first.** Many universities and employers restrict AI use in applications. If yours bans it, do not use Mira's agent features. Where AI use is allowed, use it fairly: Mira can advise and speed up tailoring, but it can also hallucinate — verify every suggestion against your real history, keep your own ideas central, and never let it write claims you can't personally vouch for. You own every line you submit.
-> 
+>
 > Mira is designed to ask for evidence rather than guess, and to flag gaps you don't yet meet — please don't work around that. This statement governs use of the app; the code itself remains under the MIT license, free to copy, modify, and distribute. Your data stays on your device — nothing is sent anywhere except to the AI provider you configure, when you use the agent.
 
 ## Run it
@@ -218,9 +217,10 @@ The app keeps a single workspace, persisted as `{ version, master, jobs, activeJ
   - `overrides: { [itemId]: { field: value, … } }` — copy-on-write per-item field overrides (e.g. rewritten bullets). Applied on top of the master item when rendering.
   - `title` / `summary` — the tailoring fields for that target role.
   - `company` / `jobTitleTarget` / `jobDescription` / `jobUrl` / `jdSource` — the attached posting (JD text is readonly, replaced only by re-attaching the PDF; bytes live outside the workspace JSON).
-  - `letter: { recipientTitle, recipientAddress, jobTitle, postingNumber, showReLine, body, signoff, dateMode, dateCustom, credentialLine }` — the structured cover letter, plus independent `letterTemplate` / `letterAccent` / `letterFont` / `letterDensity` styling.
+  - `letter: { recipientTitle, recipientAddress, jobTitle, postingNumber, showReLine, body, signoff, dateMode, dateCustom, credentialLine }` — the structured cover letter, plus independent `letterTemplate` / `letterAccent` / `letterFont` / `letterDensity` / `letterPaperSize` styling.
   - `conversations: Conversation[]` + `activeConversationId` — Mira's per-job chat threads (branched, retryable).
   - `template` / `accent` / `font` — presentation, saved per job. `font` is `null` by default, meaning “use the template's font”; pick a font in the Style popover to pin one explicitly.
+  - `paperSize` — `a4` (210 × 297 mm) or `letter` (8.5 × 11 in), saved per job; the cover letter has its own `letterPaperSize`.
   - `columns` — `1` (single column) or `2` (body flows across two columns).
   - `sections` — ordered `[{ id, title, visible, direction }]` over `summary`, the four repeatable sections, and any user-created sections (appended after the built-ins). `title` is a per-job heading override (empty = template default, or the master name for custom sections); `visible` hides the whole section on that job; `direction` is `col` (vertical stack) or `row` (two-column grid of entries).
 
@@ -239,7 +239,7 @@ Older saves (`{ resume, template, accent }` and v2 `{ profiles, activeProfileId 
 - Long-form fields (summary, achievements, highlights, details) are **markdown** — the old “one line = one bullet” convention is gone; write `- ` for bullets. Skill inputs are still **comma-separated**. Markdown is rendered by `MarkdownText.vue` with `{ html: false, linkify: true, breaks: true }`: `html: false` escapes raw HTML, `linkify` auto-links bare URLs, and `breaks` keeps single newlines readable so content written before markdown still reads well.
 - Per-template markdown styling lives in `style.css` under `.md` (and `.md-dot` for the Minimal template's accent dots); it is unlayered so it overrides Tailwind Preflight, which strips list styles. The rhythm is deliberately tight: **no margins inside `.md` by default**, with a small gap only between _adjacent top-level blocks_ (`0.4em`) and between list items (`0.2em`). That keeps a single paragraph/list exactly as tight as plain text, and keeps “loose” markdown lists (items separated by blank lines, which markdown-it wraps in `<p>`) from ballooning — so the sample still fits one A4 page in all three templates.
 - The **1/2 column** toggle is plain CSS multi-column (`.resume-columns`: `column-count: 2`) on each template's body wrapper — the sections/entries flow across the columns rather than a fixed sidebar. Entries (`.avoid-break`) don't split mid-item and headings use `break-after: avoid`, so a heading never ends up stranded at the bottom of a column. All the spacing that must survive a break — between sections (`pt-*` on each `<section>`) and between entries (`.entry-stack` / `-sm` / `-xs`) — is **padding, not margin**: margins are truncated when a box starts a new column/page fragment, which would otherwise leave a heading or an entry flush against the top of column 2 or page 2.
-- PDF export is print-based: no extra dependencies, crisp vector text, and the `@page` rule targets A4 with zero margins. The print stylesheet flattens the app chrome so only the 210mm resume page lands on the sheet.
+- PDF export is print-based: crisp vector text, and the `@page` rule targets A4 with zero margins. The print stylesheet flattens the app chrome so only the 210mm resume page lands on the sheet. In the desktop app the PDF's Title metadata is stamped as `Resume - Name` / `Cover letter - Name` (printToPDF leaves it blank otherwise; the bare document kind is used when the master name is empty), with the contact name as Author and `Kind - Company - Role` as Subject.
 - A job's _view_ only stores ids and item content lives once in the master; _overrides_ store only the fields that differ. Removing an item drops it from the master and from every job's view and overrides, so no dangling ids are saved.
 - On a tailoring job, edits are copy-on-write, so changing an item there won't update the shared content. To change the shared wording, switch to the **Master** job (or reset the override first).
 - Custom layouts are intentionally out of scope for now — to add one, create a new component in `src/components/templates/` and register it in `ResumePreview.vue` + the `TEMPLATES` list in `data/options.ts`. Templates receive `columns` (1 or 2) and apply the `.resume-columns` helper class to their body wrapper; the multi-column CSS lives in `style.css`. They also receive a resolved `font` id and apply it via `fontStack(font)` (from `data/options.ts`).

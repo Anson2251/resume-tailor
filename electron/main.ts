@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electro
 import type { IpcMainInvokeEvent } from 'electron'
 import * as path from 'node:path'
 import * as fs from 'node:fs/promises'
+import { PDFDocument } from 'pdf-lib'
 import { getBackend, peekStoredTheme, registerDbIpc } from './db'
 
 const DEV_URL = process.env.ELECTRON_DEV_URL || 'http://localhost:5173'
@@ -29,7 +30,14 @@ interface PdfExportResult {
 // ---------------------------------------------------------------------------
 let lastPdfDir: string | null = null
 
-async function exportPdf(event: IpcMainInvokeEvent, filename: unknown): Promise<PdfExportResult> {
+async function exportPdf(
+	event: IpcMainInvokeEvent,
+	filename: unknown,
+	pageSize: unknown,
+	title: unknown,
+	author: unknown,
+	subject: unknown,
+): Promise<PdfExportResult> {
 	const win = BrowserWindow.fromWebContents(event.sender) || mainWindow
 	if (!win || win.isDestroyed()) return { ok: false, error: 'no-window' }
 	// Never trust the renderer with a path: keep only a file name.
@@ -41,23 +49,54 @@ async function exportPdf(event: IpcMainInvokeEvent, filename: unknown): Promise<
 					.slice(0, 120) || 'resume.pdf'
 			: 'resume.pdf'
 	const withExt = safeName.toLowerCase().endsWith('.pdf') ? safeName : `${safeName}.pdf`
+	const isCoverLetter = withExt.toLowerCase().includes('cover') || withExt.toLowerCase().includes('letter')
 	try {
 		const { canceled, filePath } = await dialog.showSaveDialog(win, {
-			title: 'Export resume as PDF',
+			title: isCoverLetter ? 'Export cover letter as PDF' : 'Export resume as PDF',
 			defaultPath: path.join(lastPdfDir || app.getPath('documents'), withExt),
 			filters: [{ name: 'PDF documents', extensions: ['pdf'] }],
 		})
 		if (canceled || !filePath) return { ok: true, canceled: true }
 		lastPdfDir = path.dirname(filePath)
 		// Matches the "Save as PDF, margins None" flow of the web app:
-		// CSS @page (A4, margin 0) wins, backgrounds (accent colors) kept.
+		// CSS @page (margin 0) wins, backgrounds (accent colors) kept.
 		const data = await win.webContents.printToPDF({
 			preferCSSPageSize: true,
-			pageSize: 'A4',
+			pageSize: pageSize === 'Letter' ? 'Letter' : 'A4',
 			margins: { top: 0, bottom: 0, left: 0, right: 0 },
 			printBackground: true,
 		})
-		await fs.writeFile(filePath, data)
+		// printToPDF leaves the document metadata blank, so after the user
+		// picks a path we stamp title/author/subject via pdf-lib before
+		// writing the file — readers and ATS parsers pick these up.
+		const clean = (v: unknown): string =>
+			typeof v === 'string'
+				? v
+						.replace(/\.pdf$/i, '')
+						.trim()
+						.slice(0, 200)
+				: ''
+		const docTitle = clean(title) || withExt.replace(/\.pdf$/i, '')
+		const docAuthor = clean(author)
+		const docSubject = clean(subject)
+		let bytes: Uint8Array = data
+		try {
+			const pdf = await PDFDocument.load(data)
+			pdf.setTitle(docTitle)
+			if (docAuthor) pdf.setAuthor(docAuthor)
+			if (docSubject) pdf.setSubject(docSubject)
+			// Generic, unbranded, and accurate: Chromium rendered the HTML and Skia
+			// wrote the bytes, so this matches any Chrome "Save as PDF" and carries
+			// no "Resume Tailor" trace for a recruiter to see in document info.
+			pdf.setCreator('Chromium')
+			pdf.setProducer('Skia/PDF')
+			pdf.setCreationDate(new Date())
+			pdf.setModificationDate(new Date())
+			bytes = await pdf.save()
+		} catch (err) {
+			console.error('[pdf] metadata stamp failed, exporting as-is:', err)
+		}
+		await fs.writeFile(filePath, bytes)
 		return { ok: true, path: filePath }
 	} catch (err) {
 		console.error('[pdf] export failed:', err)
@@ -66,7 +105,11 @@ async function exportPdf(event: IpcMainInvokeEvent, filename: unknown): Promise<
 }
 
 function registerPdfIpc(): void {
-	ipcMain.handle('resume-tailor:export-pdf', (event, filename: unknown) => exportPdf(event, filename))
+	ipcMain.handle(
+		'resume-tailor:export-pdf',
+		(event, filename: unknown, pageSize: unknown, title: unknown, author: unknown, subject: unknown) =>
+			exportPdf(event, filename, pageSize, title, author, subject),
+	)
 	ipcMain.on('resume-tailor:reveal-in-folder', (_event, filePath: unknown) => {
 		if (typeof filePath === 'string' && filePath) shell.showItemInFolder(filePath)
 	})

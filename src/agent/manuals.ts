@@ -10,9 +10,6 @@ export interface Manual {
 	chars: number
 }
 
-/** Per-read body budget so one manual can't eat the context window. */
-export const MANUAL_BODY_CHARS = 12000
-
 interface Frontmatter {
 	name: string
 	description: string
@@ -59,7 +56,12 @@ function toManual(raw: string): Manual {
 	return { name: parsed.name, description: parsed.description, body: parsed.body, chars: parsed.body.length }
 }
 
-export const MANUALS: Manual[] = [toManual(coverLetterRaw), toManual(resumeTailorRaw), toManual(skillBrainstormRaw), toManual(answerSheetRaw)]
+export const MANUALS: Manual[] = [
+	toManual(coverLetterRaw),
+	toManual(resumeTailorRaw),
+	toManual(skillBrainstormRaw),
+	toManual(answerSheetRaw),
+]
 
 /**
  * Preinjected index (yaml name + description only): baked into the system
@@ -73,10 +75,4 @@ export function getManual(name: string): Manual | undefined {
 	const clean = (name || '').trim()
 	if (!clean) return undefined
 	return MANUALS.find((m) => m.name === clean)
-}
-
-/** Body slice for one tool read; sets truncated when over budget. */
-export function manualBodyFor(manual: Manual, maxChars: number = MANUAL_BODY_CHARS): { body: string; truncated: boolean } {
-	if (manual.body.length <= maxChars) return { body: manual.body, truncated: false }
-	return { body: `${manual.body.slice(0, maxChars).trimEnd()}…`, truncated: true }
 }

@@ -1,4 +1,4 @@
-import { ACCENTS, FONT_IDS, TEMPLATES, normalizeDensity } from './options'
+import { ACCENTS, FONT_IDS, TEMPLATES, normalizeDensity, normalizePaperSize } from './options'
 import { blankLetter, defaultCredentialLine, normalizeLetter } from './letter'
 import {
 	blankConversation,
@@ -63,6 +63,7 @@ export interface BlankProfileOptions {
 	columns?: number
 	density?: number | string
 	font?: string | null
+	paperSize?: string
 	title?: string
 	summary?: string
 	sections?: SectionEntry[]
@@ -76,6 +77,7 @@ export function blankProfile(name: string, master: MasterResume, opts: BlankProf
 		columns = 1,
 		density = 1,
 		font = null,
+		paperSize = 'a4',
 		title = '',
 		summary = '',
 		sections = null,
@@ -92,6 +94,7 @@ export function blankProfile(name: string, master: MasterResume, opts: BlankProf
 		density: normalizeDensity(density),
 		// null means "use the template's font".
 		font: typeof font === 'string' && FONT_IDS.includes(font) ? font : null,
+		paperSize: normalizePaperSize(paperSize),
 		title,
 		summary,
 		// Per-profile section layout: order, custom headings, visibility.
@@ -125,6 +128,7 @@ export function blankJob(name: string, master: MasterResume, opts: BlankJobOptio
 		letterAccent: profile.accent,
 		letterFont: profile.font,
 		letterDensity: profile.density,
+		letterPaperSize: profile.paperSize,
 		jdSource: null,
 		conversations: [first],
 		activeConversationId: first.id,
@@ -300,6 +304,7 @@ function normalizeProfile(master: MasterResume, profile: any, index: number): Pr
 		columns: profile?.columns === 2 ? 2 : 1,
 		density: normalizeDensity(profile?.density),
 		font: typeof profile?.font === 'string' && FONT_IDS.includes(profile.font) ? profile.font : null,
+		paperSize: normalizePaperSize(profile?.paperSize),
 		title: typeof profile?.title === 'string' ? profile.title : '',
 		summary: typeof profile?.summary === 'string' ? profile.summary : '',
 		sections: normalizeSections(profile?.sections, master),
@@ -406,6 +411,7 @@ function toJob(profile: Profile, raw: any): Job {
 		letterAccent: typeof raw?.letterAccent === 'string' && raw.letterAccent ? raw.letterAccent : profile.accent,
 		letterFont: typeof raw?.letterFont === 'string' && FONT_IDS.includes(raw.letterFont) ? raw.letterFont : null,
 		letterDensity: normalizeDensity(raw?.letterDensity ?? profile.density),
+		letterPaperSize: normalizePaperSize(raw?.letterPaperSize ?? profile.paperSize),
 		jdSource:
 			isMaster || !(raw?.jdSource && typeof raw.jdSource === 'object' && typeof raw.jdSource.pdfRefId === 'string')
 				? null

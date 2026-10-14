@@ -112,6 +112,32 @@ function resetOverrides(id: string): void {
 	if (props.editMaster) return
 	if (props.profile.overrides) delete props.profile.overrides[id]
 }
+
+/**
+ * Push this profile's tailored override back into the shared Master, then
+ * drop the override (it now matches Master, so it follows it again).
+ */
+function applyToMaster(id: string): void {
+	if (props.editMaster) return
+	const patch = props.profile.overrides?.[id]
+	if (!patch) return
+	const item = findMasterItem(id)
+	if (!item) return
+	for (const [field, value] of Object.entries(patch)) writeField(item, field, value)
+	delete props.profile.overrides[id]
+}
+
+function findMasterItem(id: string): ContentItem | undefined {
+	for (const key of ['experience', 'projects', 'education', 'skills'] as const) {
+		const found = master.value[key].find((item) => item.id === id)
+		if (found) return found
+	}
+	for (const section of master.value.customSections || []) {
+		const found = (section.items || []).find((item) => item.id === id)
+		if (found) return found
+	}
+	return undefined
+}
 </script>
 
 <template>
@@ -214,6 +240,7 @@ function resetOverrides(id: string): void {
 				@add="add('experience')"
 				@remove="remove('experience', $event)"
 				@reset="resetOverrides"
+				@apply="applyToMaster"
 			>
 				<template #heading="{ item, index }">
 					{{
@@ -279,6 +306,7 @@ function resetOverrides(id: string): void {
 				@add="add('projects')"
 				@remove="remove('projects', $event)"
 				@reset="resetOverrides"
+				@apply="applyToMaster"
 			>
 				<template #heading="{ item, index }">{{ item.name || `Project ${index + 1}` }}</template>
 				<template #fields="{ item }">
@@ -330,6 +358,7 @@ function resetOverrides(id: string): void {
 				@add="add('education')"
 				@remove="remove('education', $event)"
 				@reset="resetOverrides"
+				@apply="applyToMaster"
 			>
 				<template #heading="{ item, index }">
 					{{ item.school || `School ${index + 1}` }}{{ item.degree ? ` · ${item.degree}` : '' }}
@@ -384,6 +413,7 @@ function resetOverrides(id: string): void {
 				@add="add('skills')"
 				@remove="remove('skills', $event)"
 				@reset="resetOverrides"
+				@apply="applyToMaster"
 			>
 				<template #heading="{ item, index }">{{ item.category || `Skill group ${index + 1}` }}</template>
 				<template #fields="{ item }">
@@ -416,6 +446,7 @@ function resetOverrides(id: string): void {
 				@add="add(sid)"
 				@remove="remove(sid, $event)"
 				@reset="resetOverrides"
+				@apply="applyToMaster"
 			>
 				<template #heading="{ item, index }">{{ item.heading || `Item ${index + 1}` }}</template>
 				<template #fields="{ item }">

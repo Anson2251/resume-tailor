@@ -54,6 +54,12 @@
 	--sp: 1;
 }
 
+/* US Letter (8.5 × 11 in = 216 × 279 mm), chosen in the Style panel. */
+.resume-page.paper-letter {
+	width: 216mm;
+	min-height: 279mm;
+}
+
 /* ---------- Electron title bar ---------- */
 /* The native title text is hidden (main process) so it doesn't duplicate the
    app header. The header keeps a top strip that houses the OS controls
@@ -203,6 +209,11 @@ body[data-electron-platform='darwin'][data-electron-fullscreen='true'] #topbar #
 		/* Keep accent colors even if "Background graphics" is unchecked */
 		-webkit-print-color-adjust: exact !important;
 		print-color-adjust: exact !important;
+	}
+
+	.resume-page.paper-letter {
+		width: 216mm !important;
+		min-height: 279mm !important;
 	}
 
 	/* Small blocks (header, summary, skill groups) stay whole — never split. */

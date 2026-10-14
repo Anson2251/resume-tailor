@@ -87,5 +87,8 @@
 		"vue-markdown-render": "^2.3.1",
 		"vue-tsc": "^3.3.11",
 		"wait-on": "^9.1.0"
+	},
+	"dependencies": {
+		"pdf-lib": "^1.17.1"
 	}
 }

@@ -30,7 +30,7 @@ import SettingsPage from './components/SettingsPage.vue'
 import { confirmDialog, notifyDialog, promptDialog } from './data/dialogs'
 import { hydrateAgentSettings, useAgentSettings, useAgentSettingsMutable } from './agent/agentSettings'
 import { hydrateProviderSettings, loadProviderSettings } from './agent/providerSettings'
-import { ACCENTS, templateFont } from './data/options'
+import { ACCENTS, normalizePaperSize, templateFont } from './data/options'
 import { SECTION_FACTORY, appendMasterItem, blankCustomItem, isSectionKey, uid } from './data/resume'
 import { blankJob, blankWorkspace, buildPreview, cloneJob, migrate, sampleWorkspace } from './data/workspace'
 import { resolvePaneViews, syncPreviewTabs, type PaneView, type PreviewTab } from './agent/panes'
@@ -270,6 +270,13 @@ const density = computed({
 		if (activeProfile.value) activeProfile.value.density = value
 	},
 })
+// Page size for resume export, saved per profile (the letter has its own).
+const paperSize = computed({
+	get: (): string => activeProfile.value?.paperSize ?? 'a4',
+	set: (value: string) => {
+		if (activeProfile.value) activeProfile.value.paperSize = normalizePaperSize(value)
+	},
+})
 // Section order / custom names / visibility are saved per profile.
 const sections = computed({
 	get: () => activeProfile.value?.sections ?? [],
@@ -389,13 +396,14 @@ function clearAll(): void {
 function createJob(payload: { company: string; role: string; file: File | null }) {
 	const name = payload.role || payload.company || `Job ${workspace.jobs.length}`
 	// A new job starts with all master content shown, and the current
-	// title/summary/template/accent/sections as its starting point.
+	// title/summary/template/accent/paper/sections as its starting point.
 	const job = blankJob(name, workspace.master, {
 		template: template.value,
 		accent: accent.value,
 		font: activeProfile.value.font,
 		columns: columns.value,
 		density: density.value,
+		paperSize: paperSize.value,
 		title: activeProfile.value.title,
 		summary: activeProfile.value.summary,
 		sections: JSON.parse(JSON.stringify(activeProfile.value.sections ?? [])),
@@ -437,18 +445,17 @@ function duplicateJob(id: string) {
 	}
 }
 
-function renameJob(id: string): void {
-	const job = workspace.jobs.find((j) => j.id === id)
+function updateJob(payload: { id: string; name: string; company: string; role: string }): void {
+	const job = workspace.jobs.find((j) => j.id === payload.id)
 	if (!job) return
-	void promptDialog({
-		title: job.kind === 'master' ? 'Rename' : 'Rename job',
-		label: '',
-		initial: job.name,
-		maxLength: 120,
-		confirmLabel: 'Rename',
-	}).then((name) => {
-		if (name) job.name = name
-	})
+	// Master carries shared content only — no company/role to edit.
+	if (job.kind === 'master') {
+		if (payload.name) job.name = payload.name
+		return
+	}
+	if (payload.name) job.name = payload.name
+	job.company = payload.company
+	job.jobTitleTarget = payload.role
 }
 
 interface UndoSnapshot {
@@ -740,23 +747,61 @@ function visibleDocs(): ExportDoc[] {
 
 const exportChoiceOpen = ref(false)
 
-function slugName(): string {
-	return (workspace.master.contact.fullName || 'resume').trim().replace(/\s+/g, '-').toLowerCase() || 'resume'
+/** Default save names: fixed per document kind (the save dialog lets the user rename). */
+const EXPORT_FILENAMES: Record<ExportDoc, string> = {
+	resume: 'resume.pdf',
+	letter: 'cover-letter.pdf',
+}
+
+/**
+ * `@page` can't read per-document state, so the export flow injects a one-off
+ * `@page` rule matching the exported document's paper size (removed after
+ * printing). The static A4 rule in style.css stays as the fallback.
+ */
+function applyExportPageSize(doc: ExportDoc): void {
+	const size =
+		doc === 'letter'
+			? normalizePaperSize(activeJob.value?.letterPaperSize)
+			: normalizePaperSize(activeJob.value?.paperSize)
+	let el = document.getElementById('rt-page-size')
+	if (!el) {
+		el = document.createElement('style')
+		el.id = 'rt-page-size'
+		document.head.appendChild(el)
+	}
+	el.textContent = `@page { size: ${size === 'letter' ? 'Letter' : 'A4'}; margin: 0; }`
+}
+
+function clearExportPageSize(): void {
+	document.getElementById('rt-page-size')?.remove()
 }
 
 /** Print only the chosen document (print CSS filters on body[data-print-doc]). */
 function doExport(doc: ExportDoc): void {
 	exportChoiceOpen.value = false
-	const name = slugName()
+	const filename = EXPORT_FILENAMES[doc]
 	document.body.dataset.printDoc = doc
+	applyExportPageSize(doc)
+	const author = workspace.master.contact.fullName.trim()
+	const docLabel = doc === 'letter' ? 'Cover letter' : 'Resume'
+	// Title metadata: "Resume - Bob Smith" / "Cover letter - Bob Smith". The web
+	// flow leans on document.title during print; Electron stamps it via pdf-lib
+	// in main. Falls back to the bare document kind when the name is blank.
+	const title = author ? `${docLabel} - ${author}` : docLabel
 	if (isElectron()) {
-		void exportPdfNative(doc === 'letter' ? `${name}-cover-letter.pdf` : `${name}.pdf`).finally(() => {
+		// Desktop export goes straight to the native save dialog (main
+		// defaults it to resume.pdf / cover-letter.pdf).
+		// Subject metadata: "Resume - Acme - Frontend Engineer".
+		const subject = [docLabel, activeJob.value?.company, activeJob.value?.jobTitleTarget].filter(Boolean).join(' - ')
+		const cleanup = (): void => {
 			delete document.body.dataset.printDoc
-		})
+			clearExportPageSize()
+		}
+		void exportPdfNative(filename, doc, title, author, subject).finally(cleanup)
 		return
 	}
 	const prevTitle = document.title
-	document.title = doc === 'letter' ? `${name}-cover-letter` : name
+	document.title = title
 	window.print()
 	document.title = prevTitle
 	// afterprint (registered on mount) clears the dataset for the web flow.
@@ -765,11 +810,23 @@ function doExport(doc: ExportDoc): void {
 const exportingPdf = ref(false)
 
 // Native export (Electron): save dialog + webContents.printToPDF, no print dialog.
-async function exportPdfNative(filename: string): Promise<void> {
+async function exportPdfNative(
+	filename: string,
+	doc: ExportDoc,
+	title?: string,
+	author?: string,
+	subject?: string,
+): Promise<void> {
 	if (exportingPdf.value) return
 	exportingPdf.value = true
 	try {
-		const result = await exportPdfFile(filename)
+		const result = await exportPdfFile(
+			filename,
+			doc === 'letter' ? (activeJob.value?.letterPaperSize ?? 'a4') : (activeJob.value?.paperSize ?? 'a4'),
+			title,
+			author,
+			subject,
+		)
 		if (!result) return // fell back — should not happen when isElectron()
 		if (result.canceled) return
 		if (result.ok && result.path) {
@@ -808,6 +865,7 @@ onMounted(async () => {
 	restoreLayoutPrefs()
 	window.addEventListener('afterprint', () => {
 		delete document.body.dataset.printDoc
+		clearExportPageSize()
 	})
 	try {
 		await restore()
@@ -842,10 +900,10 @@ onMounted(async () => {
 		>
 			<div class="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3">
 				<div class="mr-auto">
-    				<div class="flex flex-row" id="title-row">
-                        <ResumeStackIconSmall :size="28" aria-hidden="true" />
-    					<h1 class="text-lg font-extrabold tracking-tight pl-2">Resume Tailor</h1>
-                    </div>
+					<div class="flex flex-row" id="title-row">
+						<ResumeStackIconSmall :size="28" aria-hidden="true" />
+						<h1 class="text-lg font-extrabold tracking-tight pl-2">Resume Tailor</h1>
+					</div>
 					<p class="text-xs text-body-subtle">One master resume — a tailored view per job.</p>
 				</div>
 
@@ -967,8 +1025,9 @@ onMounted(async () => {
 		<FormNav :profile="activeProfile" :master="workspace.master" :accent="accent" />
 
 		<!-- Main: job rail + two panes (Form / Preview / Agent / JD PDF) -->
-		<main class="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-6 lg:min-h-0 lg:flex-row"
-		:class="{ 'gap-6': !railCollapsed }"
+		<main
+			class="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-6 lg:min-h-0 lg:flex-row"
+			:class="{ 'gap-6': !railCollapsed }"
 		>
 			<!-- Slim expand strip when the profile rail is hidden (desktop) -->
 			<div v-if="railCollapsed" class="no-print hidden shrink-0 lg:flex lg:flex-col lg:items-center lg:pt-1">
@@ -1014,7 +1073,7 @@ onMounted(async () => {
 					:master="workspace.master"
 					@create="createJob"
 					@duplicate="duplicateJob"
-					@rename="renameJob"
+					@update="updateJob"
 					@remove="removeJob"
 					@clear-overrides="clearOverrides"
 				/>
@@ -1040,211 +1099,211 @@ onMounted(async () => {
 									title="Switch left pane view"
 								>
 									{{ PANE_LABELS[paneA] }} ▾
-							</button>
-						</template>
-						<div class="flex min-w-32 flex-col gap-1 p-1">
+								</button>
+							</template>
+							<div class="flex min-w-32 flex-col gap-1 p-1">
+								<button
+									v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf', 'notes'] as PaneView[]"
+									:key="view"
+									type="button"
+									class="inline-flex w-full items-center justify-start gap-1.5 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-body transition hover:bg-neutral-tertiary"
+									:class="{ 'bg-neutral-tertiary': paneA === view }"
+									@click="setPane('a', view)"
+								>
+									{{ PANE_LABELS[view] }}
+								</button>
+							</div>
+						</FwbDropdown>
+					</div>
+					<div v-if="paneA === 'form'" class="no-print lg:min-h-0 lg:overflow-y-auto">
+						<ResumeForm
+							v-model="workspace.master"
+							:profile="activeProfile"
+							:edit-master="isMaster"
+							@add="addItem"
+							@remove="removeItem"
+						/>
+						<p class="sticky bottom-0 mt-3 pt-2 pb-1 text-center text-xs text-body-subtle backdrop-blur-md">
+							Show toggles, order, and section layout save per job. Edits on
+							<strong class="font-semibold">master</strong> change shared content; elsewhere they're customizations.
+							Auto-saves in this browser — Import / Export moves it. PDF: print → “Save as PDF”, margins None.
+						</p>
+					</div>
+					<div v-else-if="paneA === 'preview'" class="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+						<div class="no-print mb-2 flex gap-1">
 							<button
-								v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf', 'notes'] as PaneView[]"
-								:key="view"
-								type="button"
-								class="inline-flex w-full items-center justify-start gap-1.5 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-body transition hover:bg-neutral-tertiary"
-								:class="{ 'bg-neutral-tertiary': paneA === view }"
-								@click="setPane('a', view)"
+								class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
+								:class="
+									previewTabA === 'resume'
+										? 'bg-brand text-white shadow-sm'
+										: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
+								"
+								@click="setPreviewTab('a', 'resume')"
 							>
-								{{ PANE_LABELS[view] }}
+								Resume
+							</button>
+							<button
+								class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
+								:class="
+									previewTabA === 'letter'
+										? 'bg-brand text-white shadow-sm'
+										: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
+								"
+								@click="setPreviewTab('a', 'letter')"
+							>
+								Cover letter
 							</button>
 						</div>
-					</FwbDropdown>
-				</div>
-				<div v-if="paneA === 'form'" class="no-print lg:min-h-0 lg:overflow-y-auto">
-					<ResumeForm
-						v-model="workspace.master"
-						:profile="activeProfile"
-						:edit-master="isMaster"
-						@add="addItem"
-						@remove="removeItem"
-					/>
-					<p class="sticky bottom-0 mt-3 pt-2 pb-1 text-center text-xs text-body-subtle backdrop-blur-md">
-						Show toggles, order, and section layout save per job. Edits on
-						<strong class="font-semibold">master</strong> change shared content; elsewhere they're customizations.
-						Auto-saves in this browser — Import / Export moves it. PDF: print → “Save as PDF”, margins None.
-					</p>
-				</div>
-				<div v-else-if="paneA === 'preview'" class="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-					<div class="no-print mb-2 flex gap-1">
-						<button
-							class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
-							:class="
-								previewTabA === 'resume'
-									? 'bg-brand text-white shadow-sm'
-									: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
-							"
-							@click="setPreviewTab('a', 'resume')"
-						>
-							Resume
-						</button>
-						<button
-							class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
-							:class="
-								previewTabA === 'letter'
-									? 'bg-brand text-white shadow-sm'
-									: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
-							"
-							@click="setPreviewTab('a', 'letter')"
-						>
-							Cover letter
-						</button>
+						<ResumePreview
+							v-if="previewTabA === 'resume'"
+							:resume="previewResume"
+							v-model:template="template"
+							v-model:accent="accent"
+							v-model:font="font"
+							v-model:columns="columns"
+							v-model:density="density"
+							v-model:paperSize="paperSize"
+							v-model:sections="sections"
+							@add-section="createSection"
+							@delete-section="removeSection"
+						/>
+						<LetterPreview v-else :job="activeJob" :contact="workspace.master.contact" />
 					</div>
-					<ResumePreview
-						v-if="previewTabA === 'resume'"
-						:resume="previewResume"
-						v-model:template="template"
-						v-model:accent="accent"
-						v-model:font="font"
-						v-model:columns="columns"
-						v-model:density="density"
-						v-model:sections="sections"
-						@add-section="createSection"
-						@delete-section="removeSection"
+					<AgentPanel
+						v-else-if="paneA === 'agent'"
+						class="no-print"
+						:key="`${activeJob.id}-${agentKey}`"
+						:job="activeJob"
+						:master="workspace.master"
+						@open-settings="settingsOpen = true"
+						@open-jd="setPane('a', 'jdpdf')"
+						@open-letter="revealLetter('a')"
 					/>
-					<LetterPreview v-else :job="activeJob" :contact="workspace.master.contact" />
+					<div v-else-if="paneA === 'letter'" class="no-print lg:min-h-0 lg:overflow-y-auto">
+						<CoverLetterForm :job="activeJob" :master="workspace.master" />
+					</div>
+					<div v-else-if="paneA === 'notes'" class="no-print lg:min-h-0 lg:overflow-y-auto">
+						<NotebookPanel v-model="workspace.master" />
+					</div>
+					<JDViewer v-else class="no-print" :key="activeJob.id" :job="activeJob" />
 				</div>
-				<AgentPanel
-					v-else-if="paneA === 'agent'"
-					class="no-print"
-					:key="`${activeJob.id}-${agentKey}`"
-					:job="activeJob"
-					:master="workspace.master"
-					@open-settings="settingsOpen = true"
-					@open-jd="setPane('a', 'jdpdf')"
-					@open-letter="revealLetter('a')"
-				/>
-				<div v-else-if="paneA === 'letter'" class="no-print lg:min-h-0 lg:overflow-y-auto">
-					<CoverLetterForm :job="activeJob" :master="workspace.master" />
-				</div>
-				<div v-else-if="paneA === 'notes'" class="no-print lg:min-h-0 lg:overflow-y-auto">
-					<NotebookPanel v-model="workspace.master" />
-				</div>
-				<JDViewer v-else class="no-print" :key="activeJob.id" :job="activeJob" />
-			</div>
 
-			<!-- Draggable divider (desktop only; panes stack on mobile) -->
-			<div
-				role="separator"
-				aria-orientation="vertical"
-				aria-label="Resize panes"
-				:title="`Split ${Math.round(splitPct)} / ${Math.round(100 - splitPct)} — drag to resize, double-click to reset`"
-				tabindex="0"
-				class="no-print hidden shrink-0 cursor-col-resize touch-none items-stretch justify-center self-stretch px-1.5 outline-none lg:flex"
-				:class="draggingSplit ? 'is-dragging' : ''"
-				@pointerdown="startSplitDrag"
-				@dblclick="resetSplit"
-				@keydown.left.prevent="nudgeSplit(-2)"
-				@keydown.right.prevent="nudgeSplit(2)"
-				@keydown.home.prevent="splitPct = 50"
-			>
+				<!-- Draggable divider (desktop only; panes stack on mobile) -->
 				<div
-					class="w-1 rounded-full transition-colors"
-					:class="draggingSplit ? 'bg-brand' : 'bg-neutral-quaternary hover:bg-brand/60'"
-				/>
-			</div>
+					role="separator"
+					aria-orientation="vertical"
+					aria-label="Resize panes"
+					:title="`Split ${Math.round(splitPct)} / ${Math.round(100 - splitPct)} — drag to resize, double-click to reset`"
+					tabindex="0"
+					class="no-print hidden shrink-0 cursor-col-resize touch-none items-stretch justify-center self-stretch px-1.5 outline-none lg:flex"
+					:class="draggingSplit ? 'is-dragging' : ''"
+					@pointerdown="startSplitDrag"
+					@dblclick="resetSplit"
+					@keydown.left.prevent="nudgeSplit(-2)"
+					@keydown.right.prevent="nudgeSplit(2)"
+					@keydown.home.prevent="splitPct = 50"
+				>
+					<div
+						class="w-1 rounded-full transition-colors"
+						:class="draggingSplit ? 'bg-brand' : 'bg-neutral-quaternary hover:bg-brand/60'"
+					/>
+				</div>
 
-			<div
-				class="pane-col min-w-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden lg:pl-2"
-			>
-				<div class="no-print mb-2 flex items-center gap-2">
-					<FwbDropdown close-inside placement="bottom">
-						<template #trigger>
+				<div class="pane-col min-w-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden lg:pl-2">
+					<div class="no-print mb-2 flex items-center gap-2">
+						<FwbDropdown close-inside placement="bottom">
+							<template #trigger>
+								<button
+									type="button"
+									class="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-medium text-body-subtle transition select-none hover:bg-neutral-tertiary hover:text-heading"
+									title="Switch right pane view"
+								>
+									{{ PANE_LABELS[paneB] }} ▾
+								</button>
+							</template>
+							<div class="flex min-w-32 flex-col gap-1 p-1">
+								<button
+									v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf', 'notes'] as PaneView[]"
+									:key="view"
+									type="button"
+									class="inline-flex w-full items-center justify-start gap-1.5 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-body transition hover:bg-neutral-tertiary"
+									:class="{ 'bg-neutral-tertiary': paneB === view }"
+									@click="setPane('b', view)"
+								>
+									{{ PANE_LABELS[view] }}
+								</button>
+							</div>
+						</FwbDropdown>
+					</div>
+					<div v-if="paneB === 'form'" class="no-print lg:min-h-0 lg:overflow-y-auto">
+						<ResumeForm
+							v-model="workspace.master"
+							:profile="activeProfile"
+							:edit-master="isMaster"
+							@add="addItem"
+							@remove="removeItem"
+						/>
+					</div>
+					<div v-else-if="paneB === 'preview'" class="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+						<div class="no-print mb-2 flex gap-1">
 							<button
-								type="button"
-								class="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-medium text-body-subtle transition select-none hover:bg-neutral-tertiary hover:text-heading"
-								title="Switch right pane view"
+								class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
+								:class="
+									previewTabB === 'resume'
+										? 'bg-brand text-white shadow-sm'
+										: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
+								"
+								@click="setPreviewTab('b', 'resume')"
 							>
-								{{ PANE_LABELS[paneB] }} ▾
+								Resume
 							</button>
-						</template>
-						<div class="flex min-w-32 flex-col gap-1 p-1">
 							<button
-								v-for="view in ['form', 'preview', 'letter', 'agent', 'jdpdf', 'notes'] as PaneView[]"
-								:key="view"
-								type="button"
-								class="inline-flex w-full items-center justify-start gap-1.5 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-body transition hover:bg-neutral-tertiary"
-								:class="{ 'bg-neutral-tertiary': paneB === view }"
-								@click="setPane('b', view)"
+								class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
+								:class="
+									previewTabB === 'letter'
+										? 'bg-brand text-white shadow-sm'
+										: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
+								"
+								@click="setPreviewTab('b', 'letter')"
 							>
-								{{ PANE_LABELS[view] }}
+								Cover letter
 							</button>
 						</div>
-					</FwbDropdown>
-				</div>
-				<div v-if="paneB === 'form'" class="no-print lg:min-h-0 lg:overflow-y-auto">
-					<ResumeForm
-						v-model="workspace.master"
-						:profile="activeProfile"
-						:edit-master="isMaster"
-						@add="addItem"
-						@remove="removeItem"
-					/>
-				</div>
-				<div v-else-if="paneB === 'preview'" class="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-					<div class="no-print mb-2 flex gap-1">
-						<button
-							class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
-							:class="
-								previewTabB === 'resume'
-									? 'bg-brand text-white shadow-sm'
-									: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
-							"
-							@click="setPreviewTab('b', 'resume')"
-						>
-							Resume
-						</button>
-						<button
-							class="rounded-lg px-3 py-1.5 text-[13px] font-medium transition"
-							:class="
-								previewTabB === 'letter'
-									? 'bg-brand text-white shadow-sm'
-									: 'text-body-subtle hover:bg-neutral-tertiary hover:text-heading'
-							"
-							@click="setPreviewTab('b', 'letter')"
-						>
-							Cover letter
-						</button>
+						<ResumePreview
+							v-if="previewTabB === 'resume'"
+							:resume="previewResume"
+							v-model:template="template"
+							v-model:accent="accent"
+							v-model:font="font"
+							v-model:columns="columns"
+							v-model:density="density"
+							v-model:paperSize="paperSize"
+							v-model:sections="sections"
+							@add-section="createSection"
+							@delete-section="removeSection"
+						/>
+						<LetterPreview v-else :job="activeJob" :contact="workspace.master.contact" />
 					</div>
-					<ResumePreview
-						v-if="previewTabB === 'resume'"
-						:resume="previewResume"
-						v-model:template="template"
-						v-model:accent="accent"
-						v-model:font="font"
-						v-model:columns="columns"
-						v-model:density="density"
-						v-model:sections="sections"
-						@add-section="createSection"
-						@delete-section="removeSection"
+					<AgentPanel
+						v-else-if="paneB === 'agent'"
+						class="no-print"
+						:key="`${activeJob.id}-${agentKey}`"
+						:job="activeJob"
+						:master="workspace.master"
+						@open-settings="settingsOpen = true"
+						@open-jd="setPane('b', 'jdpdf')"
+						@open-letter="revealLetter('b')"
 					/>
-					<LetterPreview v-else :job="activeJob" :contact="workspace.master.contact" />
+					<div v-else-if="paneB === 'letter'" class="no-print lg:min-h-0 lg:overflow-y-auto">
+						<CoverLetterForm :job="activeJob" :master="workspace.master" />
+					</div>
+					<div v-else-if="paneB === 'notes'" class="no-print lg:min-h-0 lg:overflow-y-auto">
+						<NotebookPanel v-model="workspace.master" />
+					</div>
+					<JDViewer v-else class="no-print" :key="activeJob.id" :job="activeJob" />
 				</div>
-				<AgentPanel
-					v-else-if="paneB === 'agent'"
-					class="no-print"
-					:key="`${activeJob.id}-${agentKey}`"
-					:job="activeJob"
-					:master="workspace.master"
-					@open-settings="settingsOpen = true"
-					@open-jd="setPane('b', 'jdpdf')"
-					@open-letter="revealLetter('b')"
-				/>
-				<div v-else-if="paneB === 'letter'" class="no-print lg:min-h-0 lg:overflow-y-auto">
-					<CoverLetterForm :job="activeJob" :master="workspace.master" />
-				</div>
-				<div v-else-if="paneB === 'notes'" class="no-print lg:min-h-0 lg:overflow-y-auto">
-					<NotebookPanel v-model="workspace.master" />
-				</div>
-				<JDViewer v-else class="no-print" :key="activeJob.id" :job="activeJob" />
 			</div>
-		</div>
-	</main>
+		</main>
 
 		<div
 			v-if="undoSnapshot"

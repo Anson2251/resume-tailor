@@ -8,17 +8,21 @@ import MinimalLetterTemplate from './templates/letters/MinimalLetterTemplate.vue
 import {
 	ACCENTS,
 	FONTS,
+	PAPER_SIZES,
 	TEMPLATES,
 	fontStack,
+	paperSizeLabel,
 	MAX_DENSITY,
 	MIN_DENSITY,
 	normalizeDensity,
+	normalizePaperSize,
 	templateFont,
 } from '../data/options'
 import type { Contact, Job } from '../data/types'
 import {
 	Checkmark16Regular,
 	Color16Regular,
+	Document16Regular,
 	PaintBrush16Regular,
 	Shapes16Regular,
 	TextFont16Regular,
@@ -58,6 +62,12 @@ const density = computed({
 		props.job.letterDensity = normalizeDensity(v)
 	},
 })
+const paperSize = computed({
+	get: (): string => normalizePaperSize(props.job.letterPaperSize),
+	set: (v: string) => {
+		props.job.letterPaperSize = normalizePaperSize(v)
+	},
+})
 
 const activeComponent = computed(() => {
 	switch (template.value) {
@@ -71,6 +81,8 @@ const activeComponent = computed(() => {
 })
 
 const densityPercent = computed(() => `${Math.round((density.value ?? 1) * 100)}%`)
+const paperLabel = computed(() => paperSizeLabel(paperSize.value))
+const paperHint = computed(() => PAPER_SIZES.find((p) => p.id === paperSize.value)?.hint ?? '')
 
 function setDensity(value: number): void {
 	density.value = normalizeDensity(value)
@@ -192,7 +204,7 @@ onBeforeUnmount(() => {
 							<span class="h-3.5 w-3.5 rounded-full ring-1 ring-slate-900/15" :style="{ backgroundColor: accent }" />
 							<span v-if="template && font">
 								· {{ template[0].toUpperCase() + template.slice(1) }} · {{ font[0].toUpperCase() + font.slice(1) }} ·
-								{{ densityPercent }}
+								{{ paperLabel }} · {{ densityPercent }}
 							</span>
 						</div>
 					</button>
@@ -204,6 +216,32 @@ onBeforeUnmount(() => {
 							<Icon size="18"><Shapes16Regular /></Icon> Templates
 						</p>
 						<FwbSelect v-model="template" aria-label="Cover letter template" :options="templateOptions" />
+					</div>
+
+					<div>
+						<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-body-subtle uppercase">
+							<Icon size="18"><Document16Regular /></Icon> Paper size
+						</p>
+						<div
+							class="grid grid-cols-2 items-center gap-1 rounded-lg border border-default bg-neutral-primary p-1 shadow-sm"
+							role="group"
+							aria-label="Letter paper size"
+						>
+							<button
+								v-for="p in PAPER_SIZES"
+								:key="p.id"
+								:title="`${p.name} (${p.hint})`"
+								class="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition select-none"
+								:class="
+									paperSize === p.id ? 'font-semibold text-white shadow-sm' : 'text-body-subtle hover:text-heading'
+								"
+								:style="paperSize === p.id ? { backgroundColor: accent } : null"
+								@click="paperSize = p.id"
+							>
+								{{ p.name }}
+							</button>
+						</div>
+						<p class="mt-1 text-[11px] text-body-subtle">{{ paperHint }}</p>
 					</div>
 
 					<div>
@@ -318,6 +356,7 @@ onBeforeUnmount(() => {
 		>
 			<div
 				class="resume-page letter-page overflow-hidden rounded-sm shadow-xl ring-1 ring-slate-900/10 dark:shadow-2xl dark:shadow-black/60 dark:ring-white/15"
+				:class="{ 'paper-letter': paperSize === 'letter' }"
 				:style="{ zoom: printZoom, '--sp': density }"
 			>
 				<component :is="activeComponent" :letter="job.letter" :contact="contact" :accent="accent" :font="font" />
