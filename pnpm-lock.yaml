@@ -7,47 +7,13 @@ settings:
 importers:
 
   .:
-    dependencies:
+    devDependencies:
       '@earendil-works/pi-agent-core':
         specifier: ^0.87.1
         version: 0.87.1(ws@8.21.3)
       '@earendil-works/pi-ai':
         specifier: ^0.87.1
         version: 0.87.1(ws@8.21.3)
-      fflate:
-        specifier: ^0.8.3
-        version: 0.8.3
-      flowbite:
-        specifier: ^4.0.2
-        version: 4.0.2
-      flowbite-vue:
-        specifier: ^0.4.0
-        version: 0.4.0(axios@1.20.0)(magic-string@1.4.2)(postcss@8.5.28)(rolldown@1.2.7)(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))(vue@3.5.42(typescript@5.9.3))
-      json-tree-view-vue3:
-        specifier: ^2.0.0
-        version: 2.0.0(vue@3.5.42(typescript@5.9.3))
-      localforage:
-        specifier: ^1.10.0
-        version: 1.10.0
-      remark-gfm:
-        specifier: ^4.0.1
-        version: 4.0.1
-      remark-parse:
-        specifier: ^11.0.0
-        version: 11.0.0
-      unified:
-        specifier: ^11.0.5
-        version: 11.0.5
-      unpdf:
-        specifier: ^1.8.1
-        version: 1.8.1(@napi-rs/canvas@0.1.80)
-      vue:
-        specifier: ^3.5.42
-        version: 3.5.42(typescript@5.9.3)
-      vue-markdown-render:
-        specifier: ^2.3.1
-        version: 2.3.1(vue@3.5.42(typescript@5.9.3))
-    devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -75,21 +41,54 @@ importers:
       electron-builder:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
+      flowbite:
+        specifier: ^4.0.2
+        version: 4.0.2
+      flowbite-vue:
+        specifier: ^0.4.0
+        version: 0.4.0(axios@1.20.0)(magic-string@1.4.2)(postcss@8.5.28)(rolldown@1.2.7)(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))(vue@3.5.42(typescript@5.9.3))
+      json-tree-view-vue3:
+        specifier: ^2.0.0
+        version: 2.0.0(vue@3.5.42(typescript@5.9.3))
+      localforage:
+        specifier: ^1.10.0
+        version: 1.10.0
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
+      remark-gfm:
+        specifier: ^4.0.1
+        version: 4.0.1
+      remark-parse:
+        specifier: ^11.0.0
+        version: 11.0.0
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      unified:
+        specifier: ^11.0.5
+        version: 11.0.5
+      unpdf:
+        specifier: ^1.8.1
+        version: 1.8.1(@napi-rs/canvas@0.1.80)
       vite:
         specifier: ^8.2.2
         version: 8.2.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)
       vitest:
         specifier: ^5.0.1
         version: 5.0.1(@types/node@26.6.2)(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
+      vue:
+        specifier: ^3.5.42
+        version: 3.5.42(typescript@5.9.3)
+      vue-markdown-render:
+        specifier: ^2.3.1
+        version: 2.3.1(vue@3.5.42(typescript@5.9.3))
       vue-tsc:
         specifier: ^3.3.11
         version: 3.3.11(typescript@5.9.3)
