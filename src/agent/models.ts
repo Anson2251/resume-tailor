@@ -1,5 +1,5 @@
 import { builtinModels } from '@earendil-works/pi-ai/providers/all'
-import { createProvider } from '@earendil-works/pi-ai'
+import { createProvider, getSupportedThinkingLevels } from '@earendil-works/pi-ai'
 import { envApiKeyAuth, openAICompletionsApi } from '@earendil-works/pi-ai/compat'
 import type { Api, Model } from '@earendil-works/pi-ai'
 import type { StreamFn, ThinkingLevel } from '@earendil-works/pi-agent-core'
@@ -81,6 +81,35 @@ export function refreshCustomProviders(): void {
 }
 
 refreshCustomProviders()
+
+/** Whether a provider has at least one enabled model. */
+export function providerHasEnabledModels(provider: string): boolean {
+	return modelsForProvider(provider).length > 0
+}
+
+/**
+ * Canonical provider order for the Providers list: providers with at least
+ * one enabled model first, then the rest — alphabetical by display name
+ * within each group.
+ */
+export function sortProvidersByEnabled<T extends { value: string; name: string }>(list: T[]): T[] {
+	return [...list].sort(
+		(a, b) =>
+			Number(providerHasEnabledModels(b.value)) - Number(providerHasEnabledModels(a.value)) ||
+			a.name.localeCompare(b.name),
+	)
+}
+
+/**
+ * Canonical model order for a provider's model list: enabled models first,
+ * then the rest — alphabetical by label within each group.
+ */
+export function sortModelsByEnabled<T extends { id: string; label: string }>(provider: string, list: T[]): T[] {
+	return [...list].sort(
+		(a, b) =>
+			Number(isModelEnabled(provider, b.id)) - Number(isModelEnabled(provider, a.id)) || a.label.localeCompare(b.label),
+	)
+}
 
 /** All providers: builtins plus user-defined ones. */
 export function listProviders(): { value: string; name: string; custom: boolean }[] {
@@ -299,34 +328,73 @@ export const streamFn: StreamFn = (model, ctx, opts) => models.streamSimple(mode
 /** Reasoning-effort stops in slider order. `off` is always available. */
 export const THINKING_LEVELS: readonly ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 
+/** Fallback "on" level for toggle-style models (provider-default effort). */
+export const THINKING_TOGGLE_ON_LEVEL: ThinkingLevel = 'medium'
+
 /**
- * Adjustable reasoning levels for one model: `off` plus every level the
- * model's `thinkingLevelMap` maps to a native value. Unknown models (or maps
- * with nothing adjustable, e.g. `{"off": null}`) yield `['off']` — the UI
- * hides the slider then.
+ * What reasoning UI a model needs:
+ * - `hidden`: no reasoning support — unknown model, `reasoning: false`, or a
+ *   map that disables every level. The UI shows no control.
+ * - `toggle`: think on/off only — `reasoning` models without a multi-level
+ *   map (provider-default effort, e.g. Claude Sonnet 4.5, o3, Gemini flash)
+ *   or with a single mapped level (e.g. Opus 4.6 max-only).
+ * - `slider`: two or more explicitly mapped levels (e.g. GPT-5).
  */
-export function thinkingLevelsFor(provider: string, id: string): ThinkingLevel[] {
-	if (!provider || !id) return ['off']
-	const map = resolveModel(provider, id)?.thinkingLevelMap as Partial<Record<ThinkingLevel, string | null>> | undefined
-	if (!map) return ['off']
-	const out: ThinkingLevel[] = ['off']
-	for (const level of THINKING_LEVELS) {
-		if (level === 'off') continue
-		if (typeof map[level] === 'string' && (map[level] as string).length > 0) out.push(level)
-	}
-	return out
+export type ThinkingControl =
+	{ kind: 'hidden' } | { kind: 'toggle'; onLevel: ThinkingLevel } | { kind: 'slider'; levels: ThinkingLevel[] }
+
+export function thinkingControlFor(provider: string, id: string): ThinkingControl {
+	if (!provider || !id) return { kind: 'hidden' }
+	const model = resolveModel(provider, id)
+	if (!model || !model.reasoning) return { kind: 'hidden' }
+	// Explicitly mapped levels decide the UI kind; pi-ai's own supported list
+	// (getSupportedThinkingLevels) is the source of truth for what the wire
+	// accepts — missing map keys fall back to provider defaults.
+	const explicit = THINKING_LEVELS.filter((level) => {
+		if (level === 'off') return false
+		const mapped = model.thinkingLevelMap?.[level]
+		return typeof mapped === 'string' && mapped.length > 0
+	})
+	if (explicit.length >= 2) return { kind: 'slider', levels: ['off', ...explicit] }
+	const single = explicit[0]
+	if (single) return { kind: 'toggle', onLevel: single }
+	const supported = getSupportedThinkingLevels(model).filter((level) => level !== 'off')
+	if (!supported.length) return { kind: 'hidden' }
+	const onLevel = supported.includes('medium') ? THINKING_TOGGLE_ON_LEVEL : supported[0]
+	if (!onLevel) return { kind: 'hidden' }
+	return { kind: 'toggle', onLevel }
 }
 
 /**
- * Clamp a stored level to what the model supports: the highest supported
- * level at or below the stored one, else `off` (never silently upgrade —
- * higher reasoning costs more). Unknown models yield `off`; the agent can't
- * run them anyway until they resolve.
+ * Adjustable reasoning levels for one model, in slider order. Toggle-style
+ * models yield `['off', onLevel]`; models with nothing adjustable yield
+ * `['off']` — the UI hides the control then.
+ */
+export function thinkingLevelsFor(provider: string, id: string): ThinkingLevel[] {
+	const control = thinkingControlFor(provider, id)
+	if (control.kind === 'slider') return control.levels
+	if (control.kind === 'toggle') return ['off', control.onLevel]
+	return ['off']
+}
+
+/**
+ * Clamp a stored level to what the model supports. Slider models resolve to
+ * the highest supported level at or below the stored one, else `off` (never
+ * silently upgrade — higher reasoning costs more). Toggle models keep the
+ * on/off intent: anything but `off` becomes the toggle's on-level, so
+ * switching models never silently turns thinking off. Unsupported models
+ * yield `off`.
  */
 export function resolveThinkingLevel(provider: string, id: string, stored: ThinkingLevel): ThinkingLevel {
 	if (!provider || !id) return stored
-	const supported = new Set(thinkingLevelsFor(provider, id))
-	if (supported.size <= 1) return 'off'
+	const control = thinkingControlFor(provider, id)
+	if (control.kind === 'hidden') return 'off'
+	if (control.kind === 'toggle') {
+		if (stored === 'off') return 'off'
+		if (!(THINKING_LEVELS as readonly string[]).includes(stored)) return 'off'
+		return control.onLevel
+	}
+	const supported = new Set(control.levels)
 	if (supported.has(stored)) return stored
 	const order = THINKING_LEVELS as readonly ThinkingLevel[]
 	let idx = order.indexOf(stored)

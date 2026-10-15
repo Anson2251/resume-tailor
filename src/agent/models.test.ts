@@ -6,6 +6,7 @@ import {
 	addCustomProvider,
 	findModelChoice,
 	isModelEnabled,
+	listProviders,
 	modelLabel,
 	models,
 	modelsForProvider,
@@ -15,6 +16,10 @@ import {
 	resolveThinkingLevel,
 	setModelEnabled,
 	sortEnabledModels,
+	providerHasEnabledModels,
+	sortModelsByEnabled,
+	sortProvidersByEnabled,
+	thinkingControlFor,
 	thinkingLevelsFor,
 } from './models'
 import { hydrateProviderSettings } from './providerSettings'
@@ -96,20 +101,38 @@ it('falls back to provider/id for unknown models', () => {
 	expect(modelLabel('anthropic', 'no-such-model')).toBe('anthropic/no-such-model')
 })
 
-it('offers only off for models without adjustable reasoning', () => {
+it('hides reasoning for unknown models and models without reasoning', () => {
+	expect(thinkingControlFor('anthropic', 'no-such-model')).toEqual({ kind: 'hidden' })
+	expect(thinkingControlFor('', '')).toEqual({ kind: 'hidden' })
 	expect(thinkingLevelsFor('anthropic', 'no-such-model')).toEqual(['off'])
 	expect(thinkingLevelsFor('', '')).toEqual(['off'])
-	// The default model has no thinking map in the catalog.
-	expect(thinkingLevelsFor(DEFAULT_MODEL.provider, DEFAULT_MODEL.id)).toEqual(['off'])
+	expect(resolveThinkingLevel('anthropic', 'no-such-model', 'high')).toBe('off')
 })
 
-it('clamps a stored thinking level down to supported levels, never up', () => {
-	expect(resolveThinkingLevel('anthropic', 'no-such-model', 'high')).toBe('off')
-	// A hypothetical wide-open model is out of reach here; exercise the clamp
-	// path through a model that only supports max: anything lower stays, and
-	// stored highs resolve through the same rule.
+it('offers a think toggle for reasoning models without a multi-level map', () => {
+	// The default model (Claude Sonnet 4.5) has reasoning but no level map:
+	// provider-default effort, so a switch instead of a slider.
+	expect(thinkingControlFor(DEFAULT_MODEL.provider, DEFAULT_MODEL.id)).toEqual({
+		kind: 'toggle',
+		onLevel: 'medium',
+	})
+	expect(thinkingLevelsFor(DEFAULT_MODEL.provider, DEFAULT_MODEL.id)).toEqual(['off', 'medium'])
+})
+
+it('offers a think toggle for single-level-map models', () => {
+	// Opus 4.6 maps max only.
+	expect(thinkingControlFor('anthropic', 'claude-opus-4-6')).toEqual({ kind: 'toggle', onLevel: 'max' })
+})
+
+it('keeps the on/off intent on toggle models instead of clamping to off', () => {
 	expect(resolveThinkingLevel('anthropic', 'claude-opus-4-6', 'max')).toBe('max')
-	expect(resolveThinkingLevel('anthropic', 'claude-opus-4-6', 'medium')).toBe('off')
+	// A stored effort has no meaning on a switch: any non-off level keeps
+	// thinking on at the toggle level, so model switches never silently
+	// disable it.
+	expect(resolveThinkingLevel('anthropic', 'claude-opus-4-6', 'medium')).toBe('max')
+	expect(resolveThinkingLevel('anthropic', 'claude-opus-4-6', 'off')).toBe('off')
+	expect(resolveThinkingLevel(DEFAULT_MODEL.provider, DEFAULT_MODEL.id, 'high')).toBe('medium')
+	expect(resolveThinkingLevel(DEFAULT_MODEL.provider, DEFAULT_MODEL.id, 'off')).toBe('off')
 })
 
 it('lists adjustable levels in slider order for a thinking model', () => {
@@ -118,6 +141,44 @@ it('lists adjustable levels in slider order for a thinking model', () => {
 	// Stored max is unsupported there: clamp down to the nearest supported.
 	expect(resolveThinkingLevel('openai', 'gpt-5', 'max')).toBe('high')
 	expect(resolveThinkingLevel('openai', 'gpt-5', 'off')).toBe('off')
+})
+
+it('sorts providers with enabled models first, alphabetical within each group', () => {
+	// Nothing enabled: one alphabetical group.
+	hydrateProviderSettings({ customProviders: [], customModels: {}, enabledModels: [] })
+	const plain = sortProvidersByEnabled(listProviders())
+	const plainNames = plain.map((p) => p.name)
+	expect(plainNames).toEqual([...plainNames].sort((a, b) => a.localeCompare(b)))
+	hydrateProviderSettings({
+		customProviders: [],
+		customModels: {},
+		enabledModels: ['openai/gpt-5', 'anthropic/claude-sonnet-4-5'],
+	})
+	const sorted = sortProvidersByEnabled(listProviders())
+	expect(providerHasEnabledModels('openai')).toBe(true)
+	expect(providerHasEnabledModels('anthropic')).toBe(true)
+	const firstWithout = sorted.findIndex((p) => !providerHasEnabledModels(p.value))
+	expect(firstWithout).toBe(2)
+	expect(
+		sorted
+			.slice(0, 2)
+			.map((p) => p.value)
+			.sort(),
+	).toEqual(['anthropic', 'openai'])
+	for (const group of [sorted.slice(0, firstWithout), sorted.slice(firstWithout)]) {
+		const names = group.map((p) => p.name)
+		expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+	}
+})
+
+it('sorts a provider\u2019s models with enabled first, alphabetical within each group', () => {
+	hydrateProviderSettings({ customProviders: [], customModels: {}, enabledModels: ['openai/gpt-5'] })
+	const sorted = sortModelsByEnabled('openai', modelsForProvider('openai', true))
+	expect(sorted[0]?.id).toBe('gpt-5')
+	const rest = sorted.slice(1)
+	expect(rest.some((m) => isModelEnabled('openai', m.id))).toBe(false)
+	const labels = rest.map((m) => m.label)
+	expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)))
 })
 
 it('sorts enabled models by provider, label, id and defaults to the first', () => {

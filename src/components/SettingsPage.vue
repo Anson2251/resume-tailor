@@ -28,6 +28,9 @@ import {
 	resolveThinkingLevel,
 	setModelEnabled,
 	sortEnabledModels,
+	sortModelsByEnabled,
+	sortProvidersByEnabled,
+	thinkingControlFor,
 	thinkingLevelsFor,
 } from '../agent/models'
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
@@ -145,7 +148,10 @@ watch(() => [settings.provider, settings.modelId, settings.thinkingLevel], sched
 // Configures keys and model inventories. Picking the default model lives on
 // the dedicated Model page instead.
 
-const providerList = computed(() => listProviders())
+// Providers with enabled models first, then the rest — alphabetical within each group.
+const providerList = computed(() => sortProvidersByEnabled(listProviders()))
+
+const enabledModelCount = (providerId: string): number => modelsForProvider(providerId).length
 
 /** Free-text filter narrowing the provider list (matches name, id). */
 const providerFilter = ref('')
@@ -163,11 +169,14 @@ const detailProvider = computed(
 )
 
 const detailModels = computed(() =>
-	modelsForProvider(detailProvider.value.value, true).map((m) => ({
-		...m,
-		custom: isCustomModel(detailProvider.value.value, m.id),
-		enabled: isModelEnabled(detailProvider.value.value, m.id),
-	})),
+	sortModelsByEnabled(
+		detailProvider.value.value,
+		modelsForProvider(detailProvider.value.value, true).map((m) => ({
+			...m,
+			custom: isCustomModel(detailProvider.value.value, m.id),
+			enabled: isModelEnabled(detailProvider.value.value, m.id),
+		})),
+	),
 )
 
 /** Free-text filter narrowing the selected provider's model list (matches label, id). */
@@ -204,6 +213,16 @@ const keyInputs = ref<Record<string, string>>({})
 const hasKeys = ref<Record<string, boolean>>({})
 const keyBusy = ref<Record<string, boolean>>({})
 const keyMsgs = ref<Record<string, string>>({})
+/** Per-provider key editing: a stored key collapses to a Reconfigure button until clicked. */
+const keyEditing = ref<Record<string, boolean>>({})
+
+const showKeyForm = (provider: string): boolean => !hasKeys.value[provider] || !!keyEditing.value[provider]
+
+function startKeyEdit(provider: string): void {
+	keyInputs.value[provider] = ''
+	keyMsgs.value[provider] = ''
+	keyEditing.value[provider] = true
+}
 
 async function refreshKeys(): Promise<void> {
 	await Promise.all(
@@ -232,6 +251,7 @@ async function saveKey(provider: string): Promise<void> {
 		await setApiKey(provider, value)
 		keyInputs.value[provider] = ''
 		hasKeys.value[provider] = true
+		keyEditing.value[provider] = false
 		keyMsgs.value[provider] = 'Saved.'
 	} catch {
 		keyMsgs.value[provider] = 'Save failed.'
@@ -245,6 +265,7 @@ async function removeKey(provider: string): Promise<void> {
 	try {
 		await deleteApiKey(provider)
 		hasKeys.value[provider] = false
+		keyEditing.value[provider] = false
 		keyMsgs.value[provider] = 'Deleted.'
 	} finally {
 		keyBusy.value[provider] = false
@@ -422,11 +443,14 @@ function clearModel(): void {
 	settings.modelId = ''
 }
 
-// --- Reasoning effort slider (pi-ai thinking levels, per-model support) ---
+// --- Reasoning control: effort slider or think on/off switch, per model ---
+
+const thinkingControl = computed(() => thinkingControlFor(settings.provider, settings.modelId))
 
 const supportedThinking = computed<ThinkingLevel[]>(() => thinkingLevelsFor(settings.provider, settings.modelId))
 
 const thinkingLabel = computed(() => {
+	if (thinkingControl.value.kind === 'toggle') return settings.thinkingLevel === 'off' ? 'Off' : 'On'
 	const level = settings.thinkingLevel
 	return level.charAt(0).toUpperCase() + level.slice(1)
 })
@@ -438,6 +462,13 @@ const thinkingNativeHint = computed(() => {
 		string | null | undefined
 	return typeof mapped === 'string' && mapped.length > 0 ? mapped : ''
 })
+
+const thinkingOn = computed(() => settings.thinkingLevel !== 'off')
+
+function setThinkingOn(on: boolean): void {
+	const control = thinkingControl.value
+	settings.thinkingLevel = on && control.kind === 'toggle' ? control.onLevel : 'off'
+}
 
 const thinkingIndex = computed(() => Math.max(0, supportedThinking.value.indexOf(settings.thinkingLevel)))
 
@@ -648,15 +679,26 @@ function onKeydown(event: KeyboardEvent): void {
 											{{ provider.name }}
 										</span>
 										<span class="block truncate text-xs text-body-subtle">
-											{{ modelsForProvider(provider.value).length }}/{{
+											{{ enabledModelCount(provider.value) }}/{{
 												modelsForProvider(provider.value, true).length
 											}}
 											enabled{{ hasKeys[provider.value] ? ' · key stored' : '' }}
 										</span>
 									</span>
-									<FwbBadge v-if="settings.provider === provider.value && isModelConfigured" size="xs" type="green">
-										Default
-									</FwbBadge>
+									<div
+										v-if="
+											(settings.provider === provider.value && isModelConfigured) ||
+											enabledModelCount(provider.value) > 0
+										"
+										class="flex flex-col gap-2"
+									>
+										<FwbBadge v-if="enabledModelCount(provider.value) > 0" size="xs" type="indigo">
+											{{ enabledModelCount(provider.value) }} enabled
+										</FwbBadge>
+										<FwbBadge v-if="settings.provider === provider.value && isModelConfigured" size="xs" type="green">
+											Default
+										</FwbBadge>
+									</div>
 								</button>
 								<p v-if="!filteredProviderList.length" class="px-1 py-2 text-xs text-body-subtle">
 									No providers match.
@@ -696,7 +738,7 @@ function onKeydown(event: KeyboardEvent): void {
 											isElectron() ? '.' : '; the web app keeps it for this session only.'
 										}}
 									</p>
-									<div class="mt-3 flex flex-col gap-2 sm:flex-row">
+									<div v-if="showKeyForm(detailProvider.value)" class="mt-3 flex flex-col gap-2 sm:flex-row">
 										<div class="flex-1">
 											<FwbInput
 												v-model="keyInputs[detailProvider.value]"
@@ -724,6 +766,16 @@ function onKeydown(event: KeyboardEvent): void {
 											</FwbButton>
 										</div>
 									</div>
+									<FwbButton
+										v-else
+										color="light"
+										pill
+										class="mt-3 w-full"
+										:disabled="!!keyBusy[detailProvider.value]"
+										@click="startKeyEdit(detailProvider.value)"
+									>
+										Reconfigure key
+									</FwbButton>
 									<p v-if="keyMsgs[detailProvider.value]" class="mt-2 text-xs text-body-subtle">
 										{{ keyMsgs[detailProvider.value] }}
 									</p>
@@ -823,10 +875,7 @@ function onKeydown(event: KeyboardEvent): void {
 											?
 										</span>
 									</template>
-									<template #content>
-										Used for chat, tailoring, and cover letters in every job. Only enabled models are listed — manage
-										them under Providers.
-									</template>
+									<template #content> Only enabled models are listed — manage them under Providers. </template>
 								</FwbTooltip>
 							</div>
 							<div class="mt-4 flex flex-col gap-3">
@@ -880,7 +929,9 @@ function onKeydown(event: KeyboardEvent): void {
 						</FwbCard>
 						<FwbCard class="p-5" v-if="allEnabledModels.length">
 							<div class="flex items-center gap-2">
-								<h3 class="text-sm font-semibold text-heading">Reasoning effort</h3>
+								<h3 class="text-sm font-semibold text-heading">
+									{{ thinkingControl.kind === 'toggle' ? 'Thinking' : 'Reasoning effort' }}
+								</h3>
 								<FwbTooltip placement="right">
 									<template #trigger>
 										<span
@@ -889,10 +940,7 @@ function onKeydown(event: KeyboardEvent): void {
 											?
 										</span>
 									</template>
-									<template #content>
-										How hard the model thinks before answering. Off disables reasoning; higher levels spend more
-										thinking tokens for harder tasks. Only models with adjustable reasoning show the slider.
-									</template>
+									<template #content> How hard the model thinks before answering. </template>
 								</FwbTooltip>
 								<span
 									class="ml-auto rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-fg-brand tabular-nums"
@@ -900,7 +948,7 @@ function onKeydown(event: KeyboardEvent): void {
 									{{ thinkingLabel }}
 								</span>
 							</div>
-							<div v-if="supportedThinking.length > 1" class="mt-4">
+							<div v-if="thinkingControl.kind === 'slider'" class="mt-4">
 								<div class="flex items-center gap-2">
 									<span class="shrink-0 text-[11px] text-body-subtle">Off</span>
 									<input
@@ -921,6 +969,22 @@ function onKeydown(event: KeyboardEvent): void {
 								<p class="mt-2 text-xs text-body-subtle">
 									Effort {{ thinkingLabel.toLowerCase()
 									}}<span v-if="thinkingNativeHint"> · sends “{{ thinkingNativeHint }}” to the provider</span>.
+								</p>
+							</div>
+							<div v-else-if="thinkingControl.kind === 'toggle'" class="mt-4">
+								<div class="flex items-center gap-3">
+									<FwbToggle
+										:model-value="thinkingOn"
+										aria-label="Thinking"
+										:title="`Thinking: ${thinkingOn ? 'on' : 'off'}`"
+										@update:model-value="(v) => setThinkingOn(v as boolean)"
+									/>
+									<span class="text-xs font-medium text-body">{{ thinkingOn ? 'On' : 'Off' }}</span>
+								</div>
+								<p class="mt-2 text-xs text-body-subtle">
+									Think {{ thinkingOn ? 'on' : 'off'
+									}}<span v-if="thinkingNativeHint"> · sends “{{ thinkingNativeHint }}” to the provider</span
+									><span v-else> · uses the provider's default effort</span>.
 								</p>
 							</div>
 							<p v-else class="mt-4 text-xs text-body-subtle">This model doesn't support adjustable reasoning.</p>

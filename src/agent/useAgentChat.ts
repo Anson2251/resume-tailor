@@ -5,7 +5,7 @@ import type { Job, MasterResume } from '../data/types'
 import type { ChatThread } from './threads'
 import { uid } from '../data/resume'
 import { getApiKey } from './keyring'
-import { DEFAULT_MODEL, contextCharsFor, resolveModel, streamFn, type ModelChoice } from './models'
+import { CHARS_PER_TOKEN, DEFAULT_MODEL, contextCharsFor, resolveModel, streamFn, type ModelChoice } from './models'
 import { resolveSystemPrompt, loadAgentSettings } from './agentSettings'
 import {
 	draftingPartials,
@@ -51,6 +51,22 @@ export function runStartId(thread: ChatThread, id: string): string {
 		cur = parent
 	}
 	return cur
+}
+
+/**
+ * Provider-reported token usage for one assistant turn, taken from the API
+ * response (`message_end`). The run's last turn carries the full-request
+ * accounting (system prompt + history + tool results) — earlier turns are
+ * overwritten by later ones, so this is the conversation's window high-water
+ * mark. Null until the first response lands (the panel falls back to a
+ * transcript estimate) and whenever the active branch changes.
+ */
+export interface TurnUsage {
+	input: number
+	output: number
+	cacheRead: number
+	cacheWrite: number
+	totalTokens: number
 }
 
 const TOOL_ARGS_DISPLAY_CHARS = 16000
@@ -334,6 +350,7 @@ export function useAgentChat(
 	const sending = ref(false)
 	const draftId = ref<string | null>(null)
 	const error = ref<string | null>(null)
+	const lastUsage = ref<TurnUsage | null>(null)
 	/**
 	 * True while an assistant turn is actively streaming (between its
 	 * message_start and message_end). The panel shows the typing dots when
@@ -365,6 +382,22 @@ export function useAgentChat(
 	})
 
 	const buildSystemPrompt = (): string => composeSystemPrompt(basePrompt.value, job, master)
+
+	/**
+	 * Rough input-token estimate for the live transcript (chars/4), shown
+	 * until the API reports real usage. Includes the system prompt plus the
+	 * visible branch's text, reasoning, and tool args/results.
+	 */
+	const estimatedInputTokens = computed(() => {
+		let chars = buildSystemPrompt().length
+		for (const msg of messages.value) {
+			chars += msg.text.length + (msg.reasoning?.length ?? 0)
+			for (const call of msg.toolCalls ?? []) {
+				chars += (call.args?.length ?? 0) + (call.result?.length ?? 0)
+			}
+		}
+		return Math.max(1, Math.ceil(chars / CHARS_PER_TOKEN))
+	})
 
 	// The assistant node of the current turn being streamed. A run produces
 	// one node per assistant turn (wisp-pro parity: a new message per tool
@@ -429,6 +462,9 @@ export function useAgentChat(
 	// switches replay the newly active conversation's thread the same way.
 	watch([activeLeafId, () => job.activeConversationId], ([leaf]) => {
 		agent.sessionId = convo.value.id
+		// A new branch means new accounting: drop the reported number so the
+		// panel falls back to estimating the selected branch's transcript.
+		lastUsage.value = null
 		if (!sending.value) syncTranscript(convo.value.thread, leaf)
 	})
 
@@ -503,7 +539,21 @@ export function useAgentChat(
 			// The loop also emits these for the echoed user message and for
 			// tool results — only assistant turns belong in the draft nodes.
 			if (role !== 'assistant') return
-			if (event.type === 'message_end') assistantStreaming.value = false
+			if (event.type === 'message_end') {
+				assistantStreaming.value = false
+				const raw = (event.message as { usage?: Partial<Record<keyof TurnUsage, unknown>> } | undefined)?.usage
+				const input = typeof raw?.input === 'number' && Number.isFinite(raw.input) ? raw.input : undefined
+				if (input !== undefined) {
+					const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+					lastUsage.value = {
+						input,
+						output: num(raw?.output),
+						cacheRead: num(raw?.cacheRead),
+						cacheWrite: num(raw?.cacheWrite),
+						totalTokens: num(raw?.totalTokens),
+					}
+				}
+			}
 			const turn = currentTurn()
 			if (!turn) return
 			// Partials of one turn are cumulative, so REPLACE the turn fields.
@@ -690,6 +740,8 @@ export function useAgentChat(
 		assistantStreaming,
 		error,
 		draftId,
+		lastUsage,
+		estimatedInputTokens,
 		siblingInfo,
 		send,
 		stop,

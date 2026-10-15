@@ -19,10 +19,11 @@ import {
 	Send16Regular,
 	Toolbox16Regular,
 } from '../data/icons'
-import { findModelChoice, listProviders, modelLabel, resolveThinkingLevel } from '../agent/models'
+import { findModelChoice, listProviders, modelLabel, resolveModel, resolveThinkingLevel } from '../agent/models'
 import { getApiKey } from '../agent/keyring'
 import { useAgentSettings } from '../agent/agentSettings'
 import { getSiblings, toolArgsJson, toolResultJson, type ChatMsg } from '../agent/threads'
+import { loadProviderSettings } from '../agent/providerSettings'
 import {
 	activeConversation,
 	blankConversation,
@@ -116,7 +117,18 @@ async function refreshKeyState(): Promise<void> {
 	}
 }
 
-const showKeyTip = computed(() => keyState.value === 'missing')
+// Onboarding gate: with no enabled model at all Mira can't run, so guide to
+// Settings (add a key + enable models) instead of prompting for one
+// provider's key. The key tip below only shows once models are enabled.
+const hasEnabledModels = computed(() => loadProviderSettings().enabledModels.length > 0)
+const showSetupTip = computed(() => !hasEnabledModels.value)
+const showKeyTip = computed(() => hasEnabledModels.value && keyState.value === 'missing')
+
+// The inventory can change in Settings while the panel stays mounted —
+// re-check the key when it does so the tip follows without a remount.
+watch(hasEnabledModels, () => {
+	void refreshKeyState()
+})
 const activeProviderName = computed(
 	() => listProviders().find((p) => p.value === settings.provider)?.name ?? settings.provider,
 )
@@ -234,6 +246,59 @@ const chat = useAgentChat(
 		systemPrompt: settings.systemPrompt,
 		thinkingLevel: activeThinkingLevel.value,
 	},
+)
+
+// --- Context window usage: API-reported tokens, transcript estimate fallback ---
+// lastUsage.input is the previous request's full accounting (system prompt +
+// history + tool results), i.e. the window high-water mark. Before the first
+// response there is no reported number, so estimate from the live transcript.
+const contextWindowTokens = computed(() => resolveModel(settings.provider, settings.modelId)?.contextWindow ?? 0)
+const reportedInputTokens = computed(() => chat.lastUsage.value?.input ?? null)
+const shownInputTokens = computed(() => reportedInputTokens.value ?? chat.estimatedInputTokens.value)
+const usageExact = computed(() => reportedInputTokens.value !== null)
+const usageFraction = computed(() =>
+	contextWindowTokens.value > 0 ? shownInputTokens.value / contextWindowTokens.value : 0,
+)
+const usageLevel = computed((): 'ok' | 'warn' | 'danger' =>
+	usageFraction.value >= 0.9 ? 'danger' : usageFraction.value >= 0.7 ? 'warn' : 'ok',
+)
+
+function formatTokenCount(n: number): string {
+	if (!Number.isFinite(n) || n < 0) return '0'
+	if (n < 1000) return `${Math.round(n)}`
+	if (n < 10000) return `${(n / 1000).toFixed(1)}k`
+	if (n < 1000000) return `${Math.round(n / 1000)}k`
+	return `${(n / 1000000).toFixed(1)}M`
+}
+
+const usageLabel = computed(() => {
+	if (!isConfigured.value || shownInputTokens.value <= 0) return null
+	const window = contextWindowTokens.value > 0 ? `/${formatTokenCount(contextWindowTokens.value)}` : ' tokens'
+	const pct = contextWindowTokens.value > 0 ? ` · ${Math.round(usageFraction.value * 100)}%` : ''
+	return `${usageExact.value ? '' : '≈'}${formatTokenCount(shownInputTokens.value)}${window}${pct}`
+})
+
+const usageTitle = computed(() => {
+	const fmt = (n: number): string => Math.round(n).toLocaleString('en-US')
+	const u = chat.lastUsage.value
+	if (u) {
+		const cached = u.cacheRead + u.cacheWrite
+		const window = contextWindowTokens.value > 0 ? ` of ${fmt(contextWindowTokens.value)}` : ''
+		return `Context window (last API response): ${fmt(u.input)} input · ${fmt(u.output)} output · ${fmt(cached)} cached${window} (${Math.round(usageFraction.value * 100)}%)`
+	}
+	return `Context window (estimated from transcript): ≈${fmt(shownInputTokens.value)} input tokens — exact numbers appear after the next response.`
+})
+
+const usageTextClass = computed(() =>
+	usageLevel.value === 'danger'
+		? 'text-red-600 dark:text-red-400'
+		: usageLevel.value === 'warn'
+			? 'text-amber-600 dark:text-amber-400'
+			: 'text-body-subtle',
+)
+
+const usageBarClass = computed(() =>
+	usageLevel.value === 'danger' ? 'bg-red-500' : usageLevel.value === 'warn' ? 'bg-amber-500' : 'bg-brand',
 )
 
 const convo = computed(() => activeConversation(props.job.conversations, props.job.activeConversationId))
@@ -563,7 +628,23 @@ function saveEdit(id: string): void {
 		</div>
 
 		<div
-			v-if="showKeyTip"
+			v-if="showSetupTip"
+			class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-default px-6 py-10 text-center"
+		>
+			<span class="inline-flex rounded-full bg-brand-soft p-3 text-fg-brand">
+				<Icon size="24"><ChatMultiple16Regular /></Icon>
+			</span>
+			<h3 class="text-sm font-semibold text-heading">Set up Mira to start tailoring</h3>
+			<p class="max-w-72 text-xs leading-relaxed text-body-subtle">
+				Open Settings to add a provider key, then enable the models you want. Keys stay in your OS keychain on desktop,
+				and in this session only on web.
+			</p>
+			<div class="no-print flex items-center gap-2">
+				<FwbButton size="sm" @click="emit('open-settings')">Open settings</FwbButton>
+			</div>
+		</div>
+		<div
+			v-else-if="showKeyTip"
 			class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-default px-6 py-10 text-center"
 		>
 			<span class="inline-flex rounded-full bg-brand-soft p-3 text-fg-brand">
@@ -921,6 +1002,7 @@ function saveEdit(id: string): void {
 							>{{ thinkingPillLabel.split(' ').pop()?.toLocaleUpperCase() }} ·
 						</span>
 						<span v-if="isConfigured" :class="thinkingPillLabel ? '' : 'ml-auto'">{{ activeModelLabel }}</span>
+						<span v-if="usageLabel" :title="usageTitle" :class="usageTextClass"> · {{ usageLabel }}</span>
 					</span>
 					<span v-else class="ml-auto">No model configured — open settings to choose one.</span>
 					<div>
@@ -941,6 +1023,22 @@ function saveEdit(id: string): void {
 							<Icon size="16"><Send16Regular /></Icon>
 						</FwbButton>
 					</div>
+				</div>
+
+				<div
+					v-if="isConfigured && usageFraction > 0 && contextWindowTokens > 0"
+					class="no-print h-1 overflow-hidden rounded-full bg-neutral-tertiary"
+					:title="usageTitle"
+					role="progressbar"
+					:aria-valuenow="Math.round(usageFraction * 100)"
+					aria-valuemin="0"
+					aria-valuemax="100"
+				>
+					<div
+						class="h-full rounded-full transition-all"
+						:class="usageBarClass"
+						:style="{ width: `${(Math.min(1, usageFraction) * 100).toFixed(1)}%` }"
+					/>
 				</div>
 
 				<div class="no-print flex gap-2">

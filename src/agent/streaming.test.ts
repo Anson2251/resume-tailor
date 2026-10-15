@@ -1,4 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
+import { nextTick, reactive } from 'vue'
+import { blankConversation } from './conversations'
 import { setApiKey } from './keyring'
 import { DEFAULT_MODEL } from './models'
 import { blankResume } from '../data/resume'
@@ -188,6 +190,35 @@ it('streams a real pi-ai request with the keyring key', async () => {
 	const texts = threadTexts(job)
 	expect(texts).toContain('Tailor my bullets.')
 	expect(texts).toContain('Tailored.')
+})
+
+it('records provider-reported usage and resets it on conversation switch', async () => {
+	mockFetch([textTurn('Tailored.')])
+	await setApiKey('anthropic', 'sk-test-key')
+	const master = blankResume()
+	const job = reactive(blankJob('Test job', master))
+	const seen = { overrides: [] as [string, Record<string, string | boolean>][] }
+	const chat = useAgentChat(job, master, testMutate(seen), DEFAULT_MODEL, {
+		systemPrompt: 'Test system prompt.',
+	})
+
+	// Before the first response there is no reported number, only an estimate.
+	expect(chat.lastUsage.value).toBe(null)
+	expect(chat.estimatedInputTokens.value).toBeGreaterThan(0)
+
+	await chat.send('Tailor my bullets.')
+	expect(chat.error.value).toBe(null)
+	// The mock SSE reports input_tokens: 1 on message_start.
+	expect(chat.lastUsage.value?.input).toBe(1)
+	expect(chat.lastUsage.value?.output).toBeGreaterThanOrEqual(0)
+
+	// A new conversation means new accounting: the reported number drops so
+	// the panel falls back to estimating the selected branch.
+	const fresh = blankConversation()
+	job.conversations.push(fresh)
+	job.activeConversationId = fresh.id
+	await nextTick()
+	expect(chat.lastUsage.value).toBe(null)
 })
 
 it('shows a preparing card while the model drafts the tool call', async () => {
