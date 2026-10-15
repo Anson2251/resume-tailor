@@ -19,79 +19,10 @@
 				if (t === 'dark') document.documentElement.classList.add('dark')
 			} catch (e) {}
 		</script>
-		<style>
-			/* Boot splash: static pre-Vue placeholder so the window is never blank
-			   while the bundle loads and the workspace file is read. Vue removes
-			   it on mount; colors mirror the AppSplash component. */
-			#boot-splash {
-				position: fixed;
-				inset: 0;
-				display: flex;
-				flex-direction: column;
-				align-items: center;
-				justify-content: center;
-				background: #f1f5f9;
-				font-family:
-					ui-sans-serif,
-					system-ui,
-					-apple-system,
-					'Segoe UI',
-					Roboto,
-					sans-serif;
-			}
-			.dark #boot-splash,
-			html.dark #boot-splash {
-				background: #020617;
-			}
-			#boot-splash .mark {
-				width: 56px;
-				height: 56px;
-				border-radius: 16px;
-				background: linear-gradient(135deg, #38bdf8, #818cf8 60%, #c084fc);
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				font-size: 28px;
-				font-weight: 800;
-				color: #0f172a;
-			}
-			#boot-splash h1 {
-				margin-top: 16px;
-				font-size: 18px;
-				font-weight: 800;
-				letter-spacing: -0.02em;
-				color: #0f172a;
-			}
-			html.dark #boot-splash h1 {
-				color: #f1f5f9;
-			}
-			#boot-splash p {
-				margin-top: 4px;
-				font-size: 12px;
-				color: #64748b;
-			}
-			#boot-splash .spinner {
-				width: 28px;
-				height: 28px;
-				margin-top: 20px;
-				border-radius: 50%;
-				border: 3px solid #cbd5e1;
-				border-top-color: #0ea5e9;
-				animation: boot-spin 0.9s linear infinite;
-			}
-			html.dark #boot-splash .spinner {
-				border-color: #334155;
-				border-top-color: #38bdf8;
-			}
-			@keyframes boot-spin {
-				to {
-					transform: rotate(360deg);
-				}
-			}
-		</style>
-		<script type="module" crossorigin src="./assets/index-aAsZCM5a.js"></script>
-		<link rel="modulepreload" crossorigin href="./assets/event-stream-DUYe9uYC.js">
-		<link rel="stylesheet" crossorigin href="./assets/index-GdQOtdbi.css">
+		<style>#boot-splash{background:#f1f5f9;flex-direction:column;justify-content:center;align-items:center;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;position:fixed;inset:0}.dark #boot-splash,html.dark #boot-splash{background:#020617}#boot-splash .mark{color:#0f172a;background:linear-gradient(135deg,#38bdf8,#818cf8 60%,#c084fc);border-radius:16px;justify-content:center;align-items:center;width:56px;height:56px;font-size:28px;font-weight:800;display:flex}#boot-splash h1{letter-spacing:-.02em;color:#0f172a;margin-top:16px;font-size:18px;font-weight:800}html.dark #boot-splash h1{color:#f1f5f9}#boot-splash p{color:#64748b;margin-top:4px;font-size:12px}#boot-splash .spinner{border:3px solid #cbd5e1;border-top-color:#0ea5e9;border-radius:50%;width:28px;height:28px;margin-top:20px;animation:.9s linear infinite boot-spin}html.dark #boot-splash .spinner{border-color:#38bdf8 #334155 #334155}@keyframes boot-spin{to{transform:rotate(360deg)}}</style>
+		<script type="module" crossorigin src="./assets/index-CoEFu8L3.js"></script>
+		<link rel="modulepreload" crossorigin href="./assets/event-stream-DaeZx1Nh.js">
+		<link rel="stylesheet" crossorigin href="./assets/index-Laau6QmV.css">
 	</head>
 	<body>
 		<div id="app"></div>
