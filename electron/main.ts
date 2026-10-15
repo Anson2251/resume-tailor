@@ -268,6 +268,39 @@ function createMainWindow(): void {
 	// header's top strip (it would otherwise sit there as dead space).
 	mainWindow.on('enter-full-screen', () => sendFullscreenChanged(true))
 	mainWindow.on('leave-full-screen', () => sendFullscreenChanged(false))
+	configureDevCorsBypass(mainWindow)
+}
+
+// ---------------------------------------------------------------------------
+// Dev-only CORS bypass for LLM provider APIs.
+// The dev renderer loads from the Vite server (origin http://localhost:5173)
+// and calls providers directly via fetch(), so providers that don't return
+// CORS headers (e.g. opencode.ai zen) fail preflight in dev. Packaged builds
+// load from file:// and are unaffected, so this is a no-op there — webSecurity
+// stays enabled and packaged behavior is untouched.
+// ---------------------------------------------------------------------------
+function configureDevCorsBypass(win: BrowserWindow): void {
+	if (app.isPackaged) return
+	win.webContents.session.webRequest.onHeadersReceived({ urls: ['https://*/*'] }, (details, callback) => {
+		const headers: Record<string, string[]> = { ...(details.responseHeaders ?? {}) }
+		const has = (name: string): boolean => Object.keys(headers).some((k) => k.toLowerCase() === name)
+		if (!has('access-control-allow-origin')) headers['Access-Control-Allow-Origin'] = ['*']
+		if (details.method === 'OPTIONS') {
+			if (!has('access-control-allow-methods'))
+				headers['Access-Control-Allow-Methods'] = ['GET, POST, PUT, PATCH, DELETE, OPTIONS']
+			if (!has('access-control-allow-headers')) headers['Access-Control-Allow-Headers'] = ['*']
+			if (!has('access-control-max-age')) headers['Access-Control-Max-Age'] = ['86400']
+			// Some providers (e.g. opencode.ai) answer the CORS preflight with a
+			// non-2xx status, which fails the check even with the headers above.
+			// The preflight body is ignored by Chromium, so report it as 200;
+			// the real POST that follows still carries the server's own status.
+			if (details.statusCode < 200 || details.statusCode >= 300) {
+				callback({ responseHeaders: headers, statusLine: 'HTTP/1.1 200 OK' })
+				return
+			}
+		}
+		callback({ responseHeaders: headers })
+	})
 }
 
 function sendFullscreenChanged(fullscreen: boolean): void {

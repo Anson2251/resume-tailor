@@ -383,6 +383,10 @@ export function useAgentChat(
 			messages: threadToTranscript(convo.value.thread, getDefaultLeaf(convo.value.thread), model),
 		},
 		streamFn,
+		// opencode providers require an `x-opencode-session` routing header;
+		// pi-ai derives it from `sessionId`, so bind it to the active
+		// conversation (kept in sync on switches below).
+		sessionId: convo.value.id,
 		getApiKey: async (provider: string) => (await getApiKey(provider)) ?? undefined,
 		convertToLlm: (msgs: AgentMessage[]) =>
 			msgs.flatMap((m) => {
@@ -424,6 +428,7 @@ export function useAgentChat(
 	// request sees the selected branch instead of a stale transcript. Session
 	// switches replay the newly active conversation's thread the same way.
 	watch([activeLeafId, () => job.activeConversationId], ([leaf]) => {
+		agent.sessionId = convo.value.id
 		if (!sending.value) syncTranscript(convo.value.thread, leaf)
 	})
 
